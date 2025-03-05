@@ -24,7 +24,16 @@ import androidx.lifecycle.lifecycleScope
 import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.data.ExerciseEntity
 import kotlinx.coroutines.launch
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 
 sealed class Screen(val route: String) {
     object Home : Screen("home")
@@ -33,10 +42,48 @@ sealed class Screen(val route: String) {
 
 
 class MainActivity : ComponentActivity() {
+    // Define the permissions you need
+    private val requiredPermissions = arrayOf(
+        Manifest.permission.WRITE_EXTERNAL_STORAGE,
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    )
+
+    // Register a launcher for requesting multiple permissions
+    private val requestPermissionsLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            val allGranted = permissions.entries.all { it.value }
+            if (allGranted) {
+                // All permissions granted
+                println("All permissions granted")
+            } else {
+                // Some or all permissions denied
+                println("Some or all permissions denied")
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         enableEdgeToEdge()
         setContent {
+            // Check and request permissions when the activity is created
+            val permissionsGranted = remember { mutableStateOf(false) }
+
+            LaunchedEffect(Unit) {
+                if (!hasPermissions()) {
+                    requestPermissionsLauncher.launch(requiredPermissions)
+                } else {
+                    permissionsGranted.value = true
+                }
+            }
+
+            if (permissionsGranted.value) {
+                // Your app's UI goes here
+                Text("Permissions granted! App is ready.")
+            } else {
+                Text("Requesting permissions...")
+            }
+
             GymTrackerTheme {
 
                 //creates a NavController to manage navigation
@@ -53,6 +100,13 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    // Check if all required permissions are granted
+    private fun hasPermissions(): Boolean {
+        return requiredPermissions.all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
         }
     }
 }
@@ -190,11 +244,22 @@ fun WorkoutCreationScreen(navController: NavController) {
         Button(
             onClick = {
                 scope.launch {
-                    exercisesList.forEach { exercise ->
-                        dao.insert(ExerciseEntity(name = exercise.name, sets = exercise.sets, reps = exercise.reps))
+                    try {
+                        exercisesList.forEach { exercise ->
+                            dao.insert(
+                                ExerciseEntity(
+                                    name = exercise.name,
+                                    sets = exercise.sets,
+                                    reps = exercise.reps
+                                )
+                            )
+                        }
+                        println("Workout Saved!")
+                        navController.popBackStack()
+                    } catch (e: Exception){
+                        println("Error saving workout: ${e.message}")
+
                     }
-                    println("Workout Saved!")
-                    navController.popBackStack()
                 }
             },
             modifier = Modifier.fillMaxWidth()
