@@ -25,13 +25,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.example.gymtracker.data.ExerciseEntity
 import com.example.gymtracker.data.WorkoutExerciseCrossRef
-
 
 @Composable
 fun LoadWorkoutScreen(navController: NavController) {
@@ -53,8 +58,7 @@ fun LoadWorkoutScreen(navController: NavController) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
-            ,
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
