@@ -67,7 +67,6 @@ dependencies {
     implementation(libs.androidx.room.runtime)
 
     // Room dependencies
-
     kapt(libs.room.compiler) // Use kapt for the Room compiler
     //implementation(libs.androidx.compose.material3)
 
