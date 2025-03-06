@@ -2,6 +2,9 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("kotlin-kapt")
+    //alias(libs.plugins.ksp)
+    //id("com.google.devtools.ksp") version "2.0.0-1.0.17"
 }
 
 android {
@@ -49,6 +52,10 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.navigation.runtime.ktx)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.room.common)
+    implementation(libs.androidx.room.ktx)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -56,4 +63,14 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+    //
+    implementation(libs.androidx.room.runtime)
+
+    // Room dependencies
+
+    kapt(libs.room.compiler) // Use kapt for the Room compiler
+    //implementation(libs.androidx.compose.material3)
+
+
+    //ksp(libs.androidx.room.compiler) // Use ksp for Kotlin Symbol Processing
 }
