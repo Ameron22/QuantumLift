@@ -30,10 +30,15 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.text.style.TextOverflow
+import com.example.gymtracker.data.WorkoutEntity
+import com.example.gymtracker.data.WorkoutExerciseCrossRef
 
 sealed class Screen(val route: String) {
     object Home : Screen("home")
@@ -42,47 +47,12 @@ sealed class Screen(val route: String) {
 
 
 class MainActivity : ComponentActivity() {
-    // Define the permissions you need
-    private val requiredPermissions = arrayOf(
-        Manifest.permission.WRITE_EXTERNAL_STORAGE,
-        Manifest.permission.READ_EXTERNAL_STORAGE
-    )
-
-    // Register a launcher for requesting multiple permissions
-    private val requestPermissionsLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-            val allGranted = permissions.entries.all { it.value }
-            if (allGranted) {
-                // All permissions granted
-                println("All permissions granted")
-            } else {
-                // Some or all permissions denied
-                println("Some or all permissions denied")
-            }
-        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         enableEdgeToEdge()
         setContent {
-            // Check and request permissions when the activity is created
-            val permissionsGranted = remember { mutableStateOf(false) }
-
-            LaunchedEffect(Unit) {
-                if (!hasPermissions()) {
-                    requestPermissionsLauncher.launch(requiredPermissions)
-                } else {
-                    permissionsGranted.value = true
-                }
-            }
-
-            if (permissionsGranted.value) {
-                // Your app's UI goes here
-                Text("Permissions granted! App is ready.")
-            } else {
-                Text("Requesting permissions...")
-            }
 
             GymTrackerTheme {
 
@@ -102,13 +72,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
-    // Check if all required permissions are granted
-    private fun hasPermissions(): Boolean {
-        return requiredPermissions.all {
-            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-        }
-    }
 }
 
 @Composable
@@ -122,7 +85,7 @@ fun CreateWorkoutButton(onClick: () -> Unit) {
 }
 
 
-data class Exercise(val name: String, val sets: String, val reps: String)
+data class Exercise(val name: String, val sets: String, val reps: String, val muscle: String, val part: String)
 
 @Composable
 fun WorkoutCreationScreen(navController: NavController) {
@@ -131,77 +94,136 @@ fun WorkoutCreationScreen(navController: NavController) {
     var currentExercise by remember { mutableStateOf("") }
     var currentSets by remember { mutableStateOf("") }
     var currentReps by remember { mutableStateOf("") }
-    var editIndex by remember { mutableStateOf<Int?>(null) } // Track which exercise is being edited
+    var currentMuscle by remember { mutableStateOf("") }
+    var currentPart by remember { mutableStateOf("") }
+    var editIndex by remember { mutableStateOf<Int?>(null) }
 
     val context = LocalContext.current
     val db = remember { AppDatabase.getDatabase(context) }
     val dao = remember { db.exerciseDao() }
-    val scope = rememberCoroutineScope() // This replaces lifecycleScope
+    val scope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
             text = "Create a New Workout",
             modifier = Modifier.padding(top = 32.dp),
             style = MaterialTheme.typography.headlineMedium
-
         )
 
-        // Workout Name Input
         OutlinedTextField(
             value = workoutName,
             onValueChange = { workoutName = it },
             label = { Text("Workout Name") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = TextFieldDefaults.colors(
+                focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                focusedContainerColor = MaterialTheme.colorScheme.background,
+                unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
+            )
         )
 
-        // Current Exercise Input
         OutlinedTextField(
             value = currentExercise,
             onValueChange = { currentExercise = it },
             label = { Text("Exercise Name") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = TextFieldDefaults.colors(
+                focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                focusedContainerColor = MaterialTheme.colorScheme.background,
+                unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
+            )
         )
 
-        // Sets Input
         OutlinedTextField(
             value = currentSets,
             onValueChange = { currentSets = it },
             label = { Text("Sets") },
             modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
+            colors = TextFieldDefaults.colors(
+                focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                focusedContainerColor = MaterialTheme.colorScheme.background,
+                unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
+            )
         )
 
-        // Reps Input
         OutlinedTextField(
             value = currentReps,
             onValueChange = { currentReps = it },
             label = { Text("Reps") },
             modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
+            colors = TextFieldDefaults.colors(
+                focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                focusedContainerColor = MaterialTheme.colorScheme.background,
+                unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
+            )
         )
 
-        // Add/Update Exercise Button
+        OutlinedTextField(
+            value = currentMuscle,
+            onValueChange = { currentMuscle = it },
+            label = { Text("Muscle Group") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = TextFieldDefaults.colors(
+                focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                focusedContainerColor = MaterialTheme.colorScheme.background,
+                unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
+            )
+        )
+
+        OutlinedTextField(
+            value = currentPart,
+            onValueChange = { currentPart = it },
+            label = { Text("Specific Part") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = TextFieldDefaults.colors(
+                focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                focusedContainerColor = MaterialTheme.colorScheme.background,
+                unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
+            )
+        )
+
         Button(
             onClick = {
-                if (currentExercise.isNotEmpty() && currentSets.isNotEmpty() && currentReps.isNotEmpty()) {
+                if (currentExercise.isNotEmpty() && currentSets.isNotEmpty() && currentReps.isNotEmpty() && currentMuscle.isNotEmpty() && currentPart.isNotEmpty()) {
                     if (editIndex == null) {
-                        // Add new exercise
-                        exercisesList = exercisesList + Exercise(currentExercise, currentSets, currentReps)
+                        exercisesList = exercisesList + Exercise(currentExercise, currentSets, currentReps, currentMuscle, currentPart)
                     } else {
-                        // Update existing exercise
                         exercisesList = exercisesList.toMutableList().also {
-                            it[editIndex!!] = Exercise(currentExercise, currentSets, currentReps)
+                            it[editIndex!!] = Exercise(currentExercise, currentSets, currentReps, currentMuscle, currentPart)
                         }
-                        editIndex = null // Reset index
+                        editIndex = null
                     }
                     currentExercise = ""
                     currentSets = ""
                     currentReps = ""
+                    currentMuscle = ""
+                    currentPart = ""
                 }
             },
             modifier = Modifier.fillMaxWidth()
@@ -209,7 +231,6 @@ fun WorkoutCreationScreen(navController: NavController) {
             Text(if (editIndex == null) "Add Exercise" else "Update Exercise")
         }
 
-        // List Exercises with Edit and Delete Buttons
         exercisesList.forEachIndexed { index, exercise ->
             Row(
                 modifier = Modifier
@@ -217,48 +238,63 @@ fun WorkoutCreationScreen(navController: NavController) {
                     .padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("${exercise.name}: ${exercise.sets} Sets, ${exercise.reps} Reps")
+                Text(
+                    text = "${exercise.name}: ${exercise.sets} Sets, ${exercise.reps} Reps, ${exercise.muscle} - ${exercise.part}",
+                    modifier = Modifier
+                        .weight(1f) // Takes remaining space
+                        .padding(end = 8.dp), // Add padding to separate from buttons
+                    maxLines = 2, // Limit to 2 lines (optional)
+                    overflow = TextOverflow.Ellipsis // Add ellipsis if text overflows
+                    )
 
                 Row {
                     Button(onClick = {
                         currentExercise = exercise.name
                         currentSets = exercise.sets
                         currentReps = exercise.reps
+                        currentMuscle = exercise.muscle
+                        currentPart = exercise.part
                         editIndex = index
-                    }) {
+                    },
+                        modifier = Modifier.width(80.dp) // Fixed width for the button
+                    ) {
                         Text("Edit")
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
 
                     Button(onClick = {
                         exercisesList = exercisesList.filterIndexed { i, _ -> i != index }
-                    }) {
+                    },
+                        modifier = Modifier.width(100.dp) // Fixed width for the button
+                    ) {
                         Text("Delete")
                     }
                 }
             }
         }
 
-        // Save Workout Button
         Button(
             onClick = {
                 scope.launch {
                     try {
+                        val workoutId = dao.insertWorkout(WorkoutEntity(name = workoutName)).toInt()
                         exercisesList.forEach { exercise ->
-                            dao.insert(
+                            val exerciseId = dao.insertExercise(
                                 ExerciseEntity(
                                     name = exercise.name,
                                     sets = exercise.sets,
-                                    reps = exercise.reps
+                                    reps = exercise.reps,
+                                    muscle = exercise.muscle,
+                                    part = exercise.part
                                 )
-                            )
+                            ).toInt()
+                            dao.insertWorkoutExerciseCrossRef(WorkoutExerciseCrossRef(workoutId, exerciseId))
                         }
                         println("Workout Saved!")
                         navController.popBackStack()
-                    } catch (e: Exception){
+                    } catch (e: Exception) {
                         println("Error saving workout: ${e.message}")
-
                     }
                 }
             },

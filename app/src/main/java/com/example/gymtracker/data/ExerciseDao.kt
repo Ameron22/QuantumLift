@@ -4,12 +4,16 @@ import androidx.room.*
 
 @Dao
 interface ExerciseDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertExercise(exercise: ExerciseEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWorkout(workout: WorkoutEntity): Long
+
     @Insert
-    suspend fun insert(exercise: ExerciseEntity)
+    suspend fun insertWorkoutExerciseCrossRef(crossRef: WorkoutExerciseCrossRef)
 
-    @Query("SELECT * FROM exercises")
-    suspend fun getAllExercises(): List<ExerciseEntity>
-
-    @Delete
-    suspend fun deleteExercise(exercise: ExerciseEntity)
+    @Transaction
+    @Query("SELECT * FROM WorkoutEntity WHERE id = :workoutId")
+    fun getWorkoutWithExercises(workoutId: Int): List<WorkoutWithExercises>
 }
