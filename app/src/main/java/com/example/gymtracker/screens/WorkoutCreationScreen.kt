@@ -174,7 +174,7 @@ fun WorkoutCreationScreen(navController: NavController) {
                     modifier = Modifier
                         .weight(1f) // Takes remaining space
                         .padding(end = 8.dp), // Add padding to separate from buttons
-                    maxLines = 2, // Limit to 2 lines (optional)
+                    maxLines = 3, // Limit to 2 lines (optional)
                     overflow = TextOverflow.Ellipsis // Add ellipsis if text overflows
                 )
 

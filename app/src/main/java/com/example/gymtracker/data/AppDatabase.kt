@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [ExerciseEntity::class, WorkoutEntity::class, WorkoutExerciseCrossRef::class],
-    version = 1,
+    version = 2,
     exportSchema = false // Disable schema export
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -21,7 +21,9 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "app_database"
-                ).build()
+                )
+                    .fallbackToDestructiveMigration() // THIS LINE IS THE SOLUTION!
+                    .build()
                 INSTANCE = instance
                 instance
             }
