@@ -9,11 +9,13 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.gymtracker.ui.theme.GymTrackerTheme
 import com.example.gymtracker.screens.HomeScreen // Import HomeScreen
+import com.example.gymtracker.screens.LoadWorkoutScreen
 import com.example.gymtracker.screens.WorkoutCreationScreen // Import WorkoutCreationScreen
 
 sealed class Screen(val route: String) {
     object Home : Screen("home")
     object WorkoutCreation : Screen("workout_creation")
+    object LoadWorkout : Screen("load_workout")
 }
 
 
@@ -38,6 +40,9 @@ class MainActivity : ComponentActivity() {
                     }
                     composable(Screen.WorkoutCreation.route) {
                         WorkoutCreationScreen(navController)
+                    }
+                    composable(Screen.LoadWorkout.route) {
+                        LoadWorkoutScreen(navController)
                     }
                 }
             }

@@ -13,17 +13,20 @@ import com.example.gymtracker.Screen
 @Composable
 fun HomeScreen(navController: NavController) {
     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-            Column(
-                    modifier = Modifier
-                            .padding(innerPadding)
-                            .fillMaxSize(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-        CreateWorkoutButton(
+        Column(
+                modifier = Modifier
+                        .padding(innerPadding)
+                        .fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            CreateWorkoutButton(
                 onClick = { navController.navigate(Screen.WorkoutCreation.route) }
-        )
-    }
+            )
+            LoadWorkoutButton(
+                onClick = { navController.navigate(Screen.LoadWorkout.route) }
+            )
+        }
     }
 }
 
@@ -34,5 +37,14 @@ fun CreateWorkoutButton(onClick: () -> Unit) {
         modifier = Modifier.padding(16.dp)
     ) {
         Text("Create Workout")
+    }
+}
+@Composable
+fun LoadWorkoutButton(onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.padding(16.dp)
+    ) {
+        Text("Load Workout")
     }
 }
