@@ -15,32 +15,11 @@ import androidx.navigation.NavController
 import androidx.compose.ui.platform.LocalContext
 import com.example.gymtracker.data.AppDatabase
 import androidx.compose.material3.*
-import com.example.gymtracker.data.WorkoutEntity
-import kotlinx.coroutines.launch
-
-
-import com.example.gymtracker.Screen
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.navigation.NavHostController
-import androidx.navigation.NavType
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.navArgument
-import com.example.gymtracker.data.ExerciseEntity
-import com.example.gymtracker.data.WorkoutExerciseCrossRef
 import com.example.gymtracker.data.WorkoutWithExercises
 
 
@@ -79,41 +58,67 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
                     .padding(vertical = 8.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = exercise.name,
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    Row(
-                        modifier = Modifier.padding(top = 4.dp).fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                Row(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Left side: Exercise details (name, muscle, and parts)
+                    Column(
+                        modifier = Modifier.weight(1f) // Takes remaining space
                     ) {
                         Text(
-                            text = "${exercise.muscle} - ${exercise.part}",
-                            style = MaterialTheme.typography.bodySmall
+                            text = exercise.name,
+                            style = MaterialTheme.typography.bodyLarge
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            var sets by remember { mutableStateOf(exercise.sets) }
-                            var reps by remember { mutableStateOf(exercise.reps) }
+                        Text(
+                            text = "${exercise.muscle} - ${exercise.part.joinToString()}",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
 
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                IconButton(onClick = { sets+=1 }) {
-                                    Icon(imageVector = Icons.Default.KeyboardArrowUp, contentDescription = "Increase Sets")
-                                }
-                                Text("$sets Sets")
-                                IconButton(onClick = { if (sets > 1) sets-=1 }) {
-                                    Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Sets")
-                                }
+                    // Right side: Sets and reps
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        var sets by remember { mutableStateOf(exercise.sets) }
+                        var reps by remember { mutableStateOf(exercise.reps) }
+
+                        // Sets Column
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            IconButton(onClick = { sets += 1 }) {
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowUp,
+                                    contentDescription = "Increase Sets"
+                                )
                             }
+                            Text("$sets Sets")
+                            IconButton(onClick = { if (sets > 1) sets -= 1 }) {
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "Decrease Sets"
+                                )
+                            }
+                        }
 
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                IconButton(onClick = { reps+=1 }) {
-                                    Icon(imageVector = Icons.Default.KeyboardArrowUp, contentDescription = "Increase Reps")
-                                }
-                                Text("$reps Reps")
-                                IconButton(onClick = { if (reps > 1) reps-=1 }) {
-                                    Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Reps")
-                                }
+                        // Reps Column
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            IconButton(onClick = { reps += 1 }) {
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowUp,
+                                    contentDescription = "Increase Reps"
+                                )
+                            }
+                            Text("$reps Reps")
+                            IconButton(onClick = { if (reps > 1) reps -= 1 }) {
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "Decrease Reps"
+                                )
                             }
                         }
                     }

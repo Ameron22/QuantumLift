@@ -8,6 +8,6 @@ data class ExerciseEntity(
     val sets: Int,
     val reps: Int,
     val muscle: String, // Primary muscle group
-    val part: String // Specific part of the muscle
+    val part: List<String> // Specific parts of the muscle
 
 )

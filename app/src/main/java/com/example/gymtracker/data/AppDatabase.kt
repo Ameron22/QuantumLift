@@ -2,12 +2,14 @@ package com.example.gymtracker.data
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 
 @Database(
     entities = [ExerciseEntity::class, WorkoutEntity::class, WorkoutExerciseCrossRef::class],
-    version = 3, // Increase version number when schema changes ( you need to change version when you make changes to DB)
+    version = 4, // Increase version number when schema changes ( you need to change version when you make changes to DB)
     exportSchema = false // Disable schema export
 )
+@TypeConverters(Converter::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun exerciseDao(): ExerciseDao
 
