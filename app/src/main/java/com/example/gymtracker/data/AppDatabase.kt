@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [ExerciseEntity::class, WorkoutEntity::class, WorkoutExerciseCrossRef::class],
-    version = 2,
+    version = 3, // Increase version number when schema changes ( you need to change version when you make changes to DB)
     exportSchema = false // Disable schema export
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -22,7 +22,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "app_database"
                 )
-                    .fallbackToDestructiveMigration() // THIS LINE IS THE SOLUTION!
+                    .fallbackToDestructiveMigration() // THIS LINE IS THE SOLUTION (this line destroys old databases, used when version changes)
                     .build()
                 INSTANCE = instance
                 instance

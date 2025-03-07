@@ -46,12 +46,17 @@ fun LoadWorkoutScreen(navController: NavController) {
     val scope = rememberCoroutineScope()
 
     // State to hold the list of workouts
-    var workouts: List<WorkoutEntity> by remember { mutableStateOf<List<WorkoutEntity>>(emptyList()) }
+    var workouts: List<WorkoutEntity> by remember { mutableStateOf(emptyList()) }
+    var exercisesMap: Map<Int, List<ExerciseEntity>> by remember { mutableStateOf(emptyMap()) }
 
     // Fetch workouts when the screen is loaded
     LaunchedEffect(Unit) {
         scope.launch {
             workouts = dao.getAllWorkouts()
+            exercisesMap = workouts.associate { workout ->
+                val workoutWithExercises = dao.getWorkoutWithExercises(workout.id)
+                workout.id to workoutWithExercises.flatMap { it.exercises }
+            }
         }
     }
 
@@ -81,7 +86,11 @@ fun LoadWorkoutScreen(navController: NavController) {
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(workouts) { workout ->
-                    WorkoutItem(workout = workout, onClick = {
+                    val exercises = exercisesMap[workout.id] ?: emptyList()
+                    WorkoutItem(
+                        workout = workout,
+                        exercises = exercises,
+                        onClick = {
                         // Handle workout selection (e.g., navigate to details)
                         navController.navigate("workoutDetails/${workout.id}")
                     })
@@ -92,7 +101,7 @@ fun LoadWorkoutScreen(navController: NavController) {
 }
 
 @Composable
-fun WorkoutItem(workout: WorkoutEntity, onClick: () -> Unit) {
+fun WorkoutItem(workout: WorkoutEntity,exercises: List<ExerciseEntity>, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -112,7 +121,7 @@ fun WorkoutItem(workout: WorkoutEntity, onClick: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "ID: ${workout.id}",
+                text = exercises.joinToString { it.name },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
