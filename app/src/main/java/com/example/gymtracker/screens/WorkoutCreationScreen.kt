@@ -4,8 +4,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
@@ -24,8 +30,8 @@ fun WorkoutCreationScreen(navController: NavController) {
     var workoutName by remember { mutableStateOf("") }
     var exercisesList by remember { mutableStateOf(listOf<Exercise>()) }
     var currentExercise by remember { mutableStateOf("") }
-    var currentSets by remember { mutableStateOf("") }
-    var currentReps by remember { mutableStateOf("") }
+    var currentSets by remember { mutableIntStateOf(3) }
+    var currentReps by remember { mutableIntStateOf(12) }
     var currentMuscle by remember { mutableStateOf("") }
     var currentPart by remember { mutableStateOf("") }
     var editIndex by remember { mutableStateOf<Int?>(null) }
@@ -77,39 +83,33 @@ fun WorkoutCreationScreen(navController: NavController) {
                 unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
             )
         )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Sets")
+                Row {
+                    IconButton(onClick = { if (currentSets > 1) currentSets-- }) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Decrease Sets")
+                    }
+                    Text(currentSets.toString(), Modifier.padding(horizontal = 8.dp))
+                    IconButton(onClick = { if (currentSets < 50) currentSets++ }) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Increase Sets")
+                    }
+                }
+            }
 
-        OutlinedTextField(
-            value = currentSets,
-            onValueChange = { currentSets = it },
-            label = { Text("Sets") },
-            modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
-            colors = TextFieldDefaults.colors(
-                focusedTextColor = MaterialTheme.colorScheme.onBackground,
-                unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
-                focusedContainerColor = MaterialTheme.colorScheme.background,
-                unfocusedContainerColor = MaterialTheme.colorScheme.background,
-                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
-            )
-        )
-
-        OutlinedTextField(
-            value = currentReps,
-            onValueChange = { currentReps = it },
-            label = { Text("Reps") },
-            modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
-            colors = TextFieldDefaults.colors(
-                focusedTextColor = MaterialTheme.colorScheme.onBackground,
-                unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
-                focusedContainerColor = MaterialTheme.colorScheme.background,
-                unfocusedContainerColor = MaterialTheme.colorScheme.background,
-                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
-            )
-        )
-
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Reps")
+                Row {
+                    IconButton(onClick = { if (currentReps > 1) currentReps-- }) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Decrease Reps")
+                    }
+                    Text(currentReps.toString(), Modifier.padding(horizontal = 8.dp))
+                    IconButton(onClick = { if (currentSets < 50) currentReps++ }) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Increase Reps")
+                    }
+                }
+            }
+        }
         OutlinedTextField(
             value = currentMuscle,
             onValueChange = { currentMuscle = it },
@@ -142,7 +142,7 @@ fun WorkoutCreationScreen(navController: NavController) {
 
         Button(
             onClick = {
-                if (currentExercise.isNotEmpty() && currentSets.isNotEmpty() && currentReps.isNotEmpty() && currentMuscle.isNotEmpty() && currentPart.isNotEmpty()) {
+                if (currentExercise.isNotEmpty() && currentMuscle.isNotEmpty() && currentPart.isNotEmpty()) {
                     if (editIndex == null) {
                         exercisesList = exercisesList + Exercise(currentExercise, currentSets, currentReps, currentMuscle, currentPart)
                     } else {
@@ -152,8 +152,8 @@ fun WorkoutCreationScreen(navController: NavController) {
                         editIndex = null
                     }
                     currentExercise = ""
-                    currentSets = ""
-                    currentReps = ""
+                    currentSets = 3
+                    currentReps = 12
                     currentMuscle = ""
                     currentPart = ""
                 }
@@ -237,5 +237,5 @@ fun WorkoutCreationScreen(navController: NavController) {
     }
 }
 
-data class Exercise(val name: String, val sets: String, val reps: String, val muscle: String, val part: String)
+data class Exercise(val name: String, val sets: Int, val reps: Int, val muscle: String, val part: String)
 
