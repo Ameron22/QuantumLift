@@ -20,8 +20,6 @@ import com.example.gymtracker.data.AppDatabase
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.remember
@@ -29,12 +27,29 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import com.example.gymtracker.data.ExerciseEntity
+import com.example.gymtracker.data.ExerciseSessionEntity
+import com.example.gymtracker.data.WorkoutEntity
+import com.example.gymtracker.data.WorkoutSessionEntity
 import com.example.gymtracker.data.WorkoutWithExercises
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
+
+data class ExerciseState(
+    val exercise: ExerciseEntity,
+    var isCompleted: Boolean = false
+)
+
+data class WorkoutState(
+    val workout: WorkoutEntity,
+    val exercises: List<ExerciseState>,
+    var isFinished: Boolean = false
+)
 
 @Composable
 fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
+    val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val db = remember { AppDatabase.getDatabase(context) }
     val dao = remember { db.exerciseDao() }
@@ -48,8 +63,11 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
     var isTimerRunning by remember { mutableStateOf(false) }
     var isBreakRunning by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(false) } // New state for pause/resume
+    var firstStart by remember { mutableStateOf(true) }
+    var startTimeWorkout: Long by remember { mutableLongStateOf(0L) }
 
     // Function to start the timer for an exercise
+    @Composable
     fun startTimer(exercise: ExerciseEntity) {
         activeExercise = exercise
 
@@ -65,9 +83,47 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
             10
         }
         remainingTime = exerciseTime
+        if (firstStart) {
+            firstStart = false
+            startTimeWorkout = System.currentTimeMillis()
+            val workoutSession = WorkoutSessionEntity(
+                workoutId = workoutWithExercises?.firstOrNull()?.workout?.id, // ID of the workout being performed
+                startTime = System.currentTimeMillis(), // Current timestamp
+                duration = 0, // Will be updated when the workout ends
+                workoutName = workoutWithExercises?.firstOrNull()?.workout?.name // Optional
+            )
+            val sessionId = dao.insertWorkoutSession(workoutSession)
 
+            val workoutState = remember(workoutWithExercises) {
+                WorkoutState(
+                    WorkoutState(
+                        workout = workoutWithExercises?.workout ?: throw IllegalStateException("Workout not found"),
+                    exercises = workoutWithExercises.exercises.map { exercise ->
+                        ExerciseState(exercise = exercise, isCompleted = false)
+                    }
+                )
+            }
+
+        }
     }
 
+    fun CoroutineScope.SaveExerciseSession() {
+        // Ensure activeExercise is not null
+        val exercise = activeExercise ?: return
+        val exerciseSession = ExerciseSessionEntity(
+            sessionId = workoutWithExercises!!.firstOrNull()?.workout?.id, // ID of the workout session
+            exerciseId = (activeExercise?.id)?.toLong() , // ID of the exercise
+            sets = activeExercise?.sets ,
+            repsOrTime = if (activeExercise?.reps!! > 50) activeExercise?.reps!! - 1000 else activeExercise?.reps,
+            muscleGroup = activeExercise!!.muscle,
+            muscleParts = activeExercise!!.part,
+            completedSets = activeExercise!!.sets - remainingSets,
+            completedRepsOrTime =activeExercise!!.reps ,
+            notes = "" // For later implementation
+        )
+
+        dao.insertExerciseSession(exerciseSession)
+    }
     // Countdown logic
     LaunchedEffect(isTimerRunning, isPaused) {
         while (isTimerRunning) {
@@ -81,7 +137,6 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
                         isBreakRunning = false
                         if (remainingSets > 0) {
                             // Start the next set
-                            remainingSets--
                             remainingTime = exerciseTime // Reset to exercise time
                         } else {
                             // All sets and breaks are done
@@ -92,6 +147,7 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
                     } else {
                         // Exercise timer finished
                         if (remainingSets > 1) {
+                            remainingSets--
                             // Start the break (only if it's not the last set)
                             isBreakRunning = true
                             remainingTime = breakTime // Set to break time
@@ -99,12 +155,33 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
                             // Last set completed, stop the timer
                             activeExercise = null
                             isTimerRunning = false
+                            coroutineScope.launch {
+                                SaveExerciseSession() // Save exercise details in a coroutine
+                            }
                             break // Exit the loop
                         }
                     }
                 }
             } else {
                 delay(100) // Small delay to avoid busy-waiting
+            }
+        }
+    }
+    fun CoroutineScope.EndWorkoutSession(sessionId: Long){
+        val endTime = System.currentTimeMillis()
+        val duration = (endTime - startTimeWorkout) / 1000 // Convert to seconds
+
+        dao.updateWorkoutSessionDuration(sessionId, duration)
+    }
+
+    fun checkWorkoutCompletion() {
+        val allExercisesCompleted = workoutState.exercises.all { it.isCompleted }
+
+        if (allExercisesCompleted) {
+            workoutState.isFinished = true
+            // Optionally, save the workout session to the database
+            coroutineScope.launch {
+                EndWorkoutSession() // Save exercise details in a coroutine
             }
         }
     }
@@ -179,6 +256,9 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
                                     isBreakRunning = false
                                     remainingTime = 0
                                     remainingSets = 0
+                                    coroutineScope.launch {
+                                        SaveExerciseSession() // Save exercise details in a coroutine
+                                    }
                                 },
                                 modifier = Modifier
                                     .size(64.dp) // Big stop button

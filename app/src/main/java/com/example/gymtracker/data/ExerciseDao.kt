@@ -18,4 +18,9 @@ interface ExerciseDao {
     suspend fun getWorkoutWithExercises(workoutId: Int): List<WorkoutWithExercises>
     @Query("SELECT * FROM WorkoutEntity")
     suspend  fun getAllWorkouts(): List<WorkoutEntity>
-}
+    @Insert
+    fun insertWorkoutSession(entity: WorkoutSessionEntity)
+    @Insert
+    fun insertExerciseSession(entity: ExerciseSessionEntity)
+    @Query("UPDATE WorkoutSessionEntity SET duration = :duration WHERE sessionId = :sessionId")
+    suspend fun updateWorkoutSessionDuration(sessionId: Long, duration: Long)
