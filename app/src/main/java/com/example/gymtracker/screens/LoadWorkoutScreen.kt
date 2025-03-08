@@ -28,6 +28,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
@@ -98,6 +99,13 @@ fun LoadWorkoutScreen(navController: NavController) {
                     keyboardType = KeyboardType.Text,
                     imeAction = ImeAction.Done
                 ),
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search Icon",
+                        modifier = Modifier.size(20.dp) // Adjust icon size
+                    )
+                },
                 trailingIcon = {
                     if (searchText.isNotEmpty()) {
                         IconButton(

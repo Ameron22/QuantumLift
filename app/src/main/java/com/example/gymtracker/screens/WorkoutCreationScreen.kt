@@ -1,30 +1,24 @@
 package com.example.gymtracker.screens
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import androidx.room.TypeConverter
 import com.example.gymtracker.data.AppDatabase
-import com.example.gymtracker.data.Converter
 import com.example.gymtracker.data.ExerciseEntity
 import com.example.gymtracker.data.WorkoutEntity
 import com.example.gymtracker.data.WorkoutExerciseCrossRef
@@ -37,7 +31,10 @@ fun WorkoutCreationScreen(navController: NavController) {
     var exercisesList by remember { mutableStateOf(listOf<Exercise>()) }
     var currentExercise by remember { mutableStateOf("") }
     var currentSets by remember { mutableIntStateOf(3) }
-    var currentReps by remember { mutableIntStateOf(12) }
+    var currentRepsTime by remember { mutableIntStateOf(12) }
+    var currentMinutes by remember { mutableIntStateOf(1) } // Minutes (default: 1)
+    var currentSeconds by remember { mutableIntStateOf(0) } // Seconds (default: 0)
+    var useTime by remember { mutableStateOf(false) } // Switch between reps and time
     var currentMuscle by remember { mutableStateOf("") }
     var currentPart by remember { mutableStateOf("") }
     var editIndex by remember { mutableStateOf<Int?>(null) }
@@ -99,29 +96,69 @@ fun WorkoutCreationScreen(navController: NavController) {
                 unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
             )
         )
+        // Switch between Reps and Time
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("Reps/Time")
+            Switch(
+                checked = useTime,
+                onCheckedChange = { useTime = it }
+            )
+        }
+
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Sets")
-                Row {
-                    IconButton(onClick = { if (currentSets > 1) currentSets-- }) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Decrease Sets")
-                    }
-                    Text(currentSets.toString(), Modifier.padding(horizontal = 8.dp))
-                    IconButton(onClick = { if (currentSets < 50) currentSets++ }) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Increase Sets")
-                    }
+                IconButton(onClick = { if (currentSets < 50) currentSets++ }) {
+                    Icon(imageVector = Icons.Default.KeyboardArrowUp, contentDescription = "Increase Sets")
+                }
+                Text("$currentSets Sets", Modifier.padding(horizontal = 8.dp))
+                IconButton(onClick = { if (currentSets > 1) currentSets-- }) {
+                    Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Sets")
                 }
             }
 
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Reps")
-                Row {
-                    IconButton(onClick = { if (currentReps > 1) currentReps-- }) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Decrease Reps")
+            if (useTime) {
+                // Time Input
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Minutes
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            IconButton(onClick = { if (currentMinutes < 59) currentMinutes++ }) {
+                                Icon(imageVector = Icons.Default.KeyboardArrowUp, contentDescription = "Increase Minutes")
+                            }
+                            Text("$currentMinutes min", Modifier.padding(horizontal = 8.dp))
+                            IconButton(onClick = { if (currentMinutes > 0) currentMinutes-- }) {
+                                Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Minutes")
+                            }
+                        }
+
+                        // Seconds
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            IconButton(onClick = { if (currentSeconds < 59) currentSeconds++ }) {
+                                Icon(imageVector = Icons.Default.KeyboardArrowUp, contentDescription = "Increase Seconds")
+                            }
+                            Text("$currentSeconds sec", Modifier.padding(horizontal = 8.dp))
+                            IconButton(onClick = { if (currentSeconds > 0) currentSeconds-- }) {
+                                Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Seconds")
+                            }
+                        }
                     }
-                    Text(currentReps.toString(), Modifier.padding(horizontal = 8.dp))
-                    IconButton(onClick = { if (currentSets < 50) currentReps++ }) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Increase Reps")
+                }
+            } else {
+                // Reps Input
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    IconButton(onClick = { if (currentRepsTime < 50) currentRepsTime++ }) {
+                        Icon(imageVector = Icons.Default.KeyboardArrowUp, contentDescription = "Increase Reps")
+                    }
+                    Text("$currentRepsTime Reps", Modifier.padding(horizontal = 8.dp))
+                    IconButton(onClick = { if (currentRepsTime > 1) currentRepsTime-- }) {
+                        Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Reps")
                     }
                 }
             }
@@ -259,21 +296,33 @@ fun WorkoutCreationScreen(navController: NavController) {
         }
         Button(
             onClick = {
+
+                // Save exercise with reps or time
+                val reps = if (useTime) {
+                    // Convert time to seconds and add a threshold (e.g., 1000 to ensure it's > 50)
+                    (currentMinutes * 60 + currentSeconds) + 1000
+                } else {
+                    // Use reps as is
+                    currentRepsTime
+                }
+
                 if (currentExercise.isNotEmpty() && currentMuscle.isNotEmpty() && selectedParts.isNotEmpty()) {
                     if (editIndex == null) {
-                        exercisesList = exercisesList + Exercise(currentExercise, currentSets, currentReps, currentMuscle, selectedParts)
+                        exercisesList = exercisesList + Exercise(currentExercise, currentSets, reps, currentMuscle, selectedParts)
                     } else {
                         exercisesList = exercisesList.toMutableList().also {
-                            it[editIndex!!] = Exercise(currentExercise, currentSets, currentReps, currentMuscle, selectedParts)
+                            it[editIndex!!] = Exercise(currentExercise, currentSets, reps, currentMuscle, selectedParts)
                         }
                         editIndex = null
                     }
                     currentExercise = ""
                     currentSets = 3
-                    currentReps = 12
+                    currentRepsTime = 12
                     currentMuscle = ""
                     currentPart = ""
                     selectedParts = emptyList()
+                    currentMinutes = 1
+                    currentSeconds = 0
                 }
             },
             modifier = Modifier.fillMaxWidth()
@@ -288,8 +337,21 @@ fun WorkoutCreationScreen(navController: NavController) {
                     .padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                // Print exercise with reps or time
+                val textReps = if (exercise.reps > 50) {
+                    // Convert time to seconds and subtract the threshold (e.g., 1000)
+                    val timeInSeconds = exercise.reps - 1000
+                    val minutes = timeInSeconds / 60
+                    val seconds = timeInSeconds % 60
+                    // Format as mm:ss
+                    var time = String.format("%02d:%02d", minutes, seconds)
+                    "${exercise.name}: ${exercise.sets} Sets, ${time} Time, ${exercise.muscle} - ${exercise.part}"
+                } else {
+                    // Use reps as is
+                    "${exercise.name}: ${exercise.sets} Sets, ${exercise.reps} Reps, ${exercise.muscle} - ${exercise.part}"
+                }
                 Text(
-                    text = "${exercise.name}: ${exercise.sets} Sets, ${exercise.reps} Reps, ${exercise.muscle} - ${exercise.part}",
+                    text = textReps,
                     modifier = Modifier
                         .weight(1f) // Takes remaining space
                         .padding(end = 8.dp), // Add padding to separate from buttons
@@ -298,27 +360,25 @@ fun WorkoutCreationScreen(navController: NavController) {
                 )
 
                 Row {
-                    Button(onClick = {
+                    IconButton(onClick = {
                         currentExercise = exercise.name
                         currentSets = exercise.sets
-                        currentReps = exercise.reps
+                        currentRepsTime = exercise.reps
                         currentMuscle = exercise.muscle
                         selectedParts = exercise.part
                         editIndex = index
                     },
                         modifier = Modifier.width(80.dp) // Fixed width for the button
                     ) {
-                        Text("Edit")
+                        Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit")
                     }
 
                     Spacer(modifier = Modifier.width(10.dp))
 
-                    Button(onClick = {
+                    IconButton(onClick = {
                         exercisesList = exercisesList.filterIndexed { i, _ -> i != index }
-                    },
-                        modifier = Modifier.width(100.dp) // Fixed width for the button
-                    ) {
-                        Text("Delete")
+                    }) {
+                        Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete")
                     }
                 }
             }
