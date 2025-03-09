@@ -26,6 +26,9 @@ fun HomeScreen(navController: NavController) {
             LoadWorkoutButton(
                 onClick = { navController.navigate(Screen.LoadWorkout.route) }
             )
+            LoadHistoryButton(
+                onClick = { navController.navigate(Screen.LoadHistory.route) }
+            )
         }
     }
 }
@@ -48,3 +51,13 @@ fun LoadWorkoutButton(onClick: () -> Unit) {
         Text("Load Workout")
     }
 }
+@Composable
+fun LoadHistoryButton(onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.padding(16.dp)
+    ) {
+        Text("Load History")
+    }
+}
+

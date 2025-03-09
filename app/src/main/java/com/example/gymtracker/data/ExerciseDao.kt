@@ -1,6 +1,7 @@
 package com.example.gymtracker.data
 
 import androidx.room.*
+import com.example.gymtracker.classes.WorkoutSessionWithMusclesStress
 
 @Dao
 interface ExerciseDao {
@@ -16,11 +17,21 @@ interface ExerciseDao {
     @Transaction
     @Query("SELECT * FROM WorkoutEntity WHERE id = :workoutId")
     suspend fun getWorkoutWithExercises(workoutId: Int): List<WorkoutWithExercises>
+
     @Query("SELECT * FROM WorkoutEntity")
-    suspend  fun getAllWorkouts(): List<WorkoutEntity>
+    suspend fun getAllWorkouts(): List<WorkoutEntity>
+
     @Insert
     fun insertWorkoutSession(entity: WorkoutSessionEntity)
+
     @Insert
     fun insertExerciseSession(entity: ExerciseSessionEntity)
-    @Query("UPDATE WorkoutSessionEntity SET duration = :duration WHERE sessionId = :sessionId")
+
+    @Query("UPDATE workout_sessions Set duration = :duration WHERE sessionId = :sessionId")
     suspend fun updateWorkoutSessionDuration(sessionId: Long, duration: Long)
+
+    @Query("SELECT * FROM workout_sessions")
+    suspend fun getAllWorkoutSessions(): List<WorkoutSessionEntity>
+    @Query("SELECT ws.sessionId, ws.workoutId, ws.startTime, ws.duration, ws.workoutName, es.muscleGroup AS muscleGroup, SUM(es.sets * es.repsOrTime) AS totalStress FROM workout_sessions ws LEFT JOIN exercise_sessions es ON ws.sessionId = es.sessionId GROUP BY ws.sessionId, es.muscleGroup")
+    suspend fun getAllWorkoutSessionsWithMuscleStress(): List<WorkoutSessionWithMusclesStress>
+}

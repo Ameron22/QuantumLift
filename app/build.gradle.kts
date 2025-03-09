@@ -68,6 +68,7 @@ dependencies {
 
     // Room dependencies
     kapt(libs.room.compiler) // Use kapt for the Room compiler
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
     //implementation(libs.androidx.compose.material3)
 
 
