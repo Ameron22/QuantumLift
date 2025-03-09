@@ -65,6 +65,7 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
     var isPaused by remember { mutableStateOf(false) }
     var firstStart by remember { mutableStateOf(true) }
     var startTimeWorkout: Long by remember { mutableLongStateOf(0L) }
+    var workoutState by remember { mutableStateOf<WorkoutState?>(null) }
 
     // Function to start the timer for an exercise
     fun startTimer(exercise: ExerciseEntity) {
@@ -91,15 +92,17 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
             )
             coroutineScope.launch(Dispatchers.IO) { // Use Dispatchers.IO for database operations
                 dao.insertWorkoutSession(workoutSession)
-                val workoutState = WorkoutState(
-                    workout = workoutWithExercises?.firstOrNull()?.workout ?: throw IllegalStateException("Workout not found"),
-                    exercises = workoutWithExercises?.flatMap { it.exercises }?.map { exercise ->
-                        ExerciseState(exercise = exercise, isCompleted = false)
-                    } ?: emptyList()
-                )
             }
+            workoutState = WorkoutState(
+                workout = workoutWithExercises?.firstOrNull()?.workout ?: throw IllegalStateException("Workout not found"),
+                exercises = workoutWithExercises?.flatMap { it.exercises }?.map { exercise ->
+                    ExerciseState(exercise = exercise, isCompleted = false)
+                } ?: emptyList()
+            )
         }
     }
+
+
 
     fun CoroutineScope.SaveExerciseSession() {
         val exercise = activeExercise ?: return
@@ -114,9 +117,14 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
             completedRepsOrTime = activeExercise?.reps ?: 0,
             notes = ""
         )
+        // Print the data before insertion
+        println("ExerciseSession to be inserted: $exerciseSession")
 
         coroutineScope.launch {
             dao.insertExerciseSession(exerciseSession)
+            // Fetch and print all ExerciseSessionEntity objects
+            val allSessions = dao.getAllExerciseSessions()
+            println("All ExerciseSessions in the database: $allSessions")
         }
     }
 
@@ -147,6 +155,9 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
                             coroutineScope.launch {
                                 SaveExerciseSession()
                             }
+                            coroutineScope.launch {
+                                checkWorkoutCompletion(workoutState)
+                            }
                             break
                         }
                     }
@@ -165,12 +176,11 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
             dao.updateWorkoutSessionDuration(sessionId, duration)
         }
     }
+    fun CoroutineScope.checkWorkoutCompletion(state: WorkoutState) {
+        val allExercisesCompleted = workoutState?.exercises?.all { it.isCompleted }
 
-    fun checkWorkoutCompletion(workoutState: WorkoutState) {
-        val allExercisesCompleted = workoutState.exercises.all { it.isCompleted }
-
-        if (allExercisesCompleted) {
-            workoutState.isFinished = true
+        if (allExercisesCompleted == false) {
+            workoutState!!.isFinished = true
             coroutineScope.launch {
                 EndWorkoutSession((workoutWithExercises?.firstOrNull()?.workout?.id ?: 0).toLong())
             }
@@ -387,3 +397,4 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
         }
     }
 }
+
