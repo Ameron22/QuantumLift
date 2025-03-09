@@ -37,6 +37,7 @@ fun WorkoutCreationScreen(navController: NavController) {
     var useTime by remember { mutableStateOf(false) } // Switch between reps and time
     var currentMuscle by remember { mutableStateOf("") }
     var currentPart by remember { mutableStateOf("") }
+    var weight by remember { mutableIntStateOf(5) }
     var editIndex by remember { mutableStateOf<Int?>(null) }
 
     val context = LocalContext.current
@@ -151,6 +152,16 @@ fun WorkoutCreationScreen(navController: NavController) {
                     }
                 }
             } else {
+                //Weight Input
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    IconButton(onClick = { if (weight < 500) weight++ }) {
+                        Icon(imageVector = Icons.Default.KeyboardArrowUp, contentDescription = "Increase Reps")
+                    }
+                    Text("$weight Kg", Modifier.padding(horizontal = 8.dp))
+                    IconButton(onClick = { if (weight > 1) weight-- }) {
+                        Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Reps")
+                    }
+                }
                 // Reps Input
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     IconButton(onClick = { if (currentRepsTime < 50) currentRepsTime++ }) {
@@ -308,10 +319,10 @@ fun WorkoutCreationScreen(navController: NavController) {
 
                 if (currentExercise.isNotEmpty() && currentMuscle.isNotEmpty() && selectedParts.isNotEmpty()) {
                     if (editIndex == null) {
-                        exercisesList = exercisesList + Exercise(currentExercise, currentSets, reps, currentMuscle, selectedParts)
+                        exercisesList = exercisesList + Exercise(currentExercise, currentSets, weight, reps, currentMuscle, selectedParts)
                     } else {
                         exercisesList = exercisesList.toMutableList().also {
-                            it[editIndex!!] = Exercise(currentExercise, currentSets, reps, currentMuscle, selectedParts)
+                            it[editIndex!!] = Exercise(currentExercise, currentSets, weight, reps, currentMuscle, selectedParts)
                         }
                         editIndex = null
                     }
@@ -323,6 +334,7 @@ fun WorkoutCreationScreen(navController: NavController) {
                     selectedParts = emptyList()
                     currentMinutes = 1
                     currentSeconds = 0
+                    weight = 5
                 }
             },
             modifier = Modifier.fillMaxWidth()
@@ -348,7 +360,7 @@ fun WorkoutCreationScreen(navController: NavController) {
                     "${exercise.name}: ${exercise.sets} Sets, ${time} Time, ${exercise.muscle} - ${exercise.part}"
                 } else {
                     // Use reps as is
-                    "${exercise.name}: ${exercise.sets} Sets, ${exercise.reps} Reps, ${exercise.muscle} - ${exercise.part}"
+                    "${exercise.name}: ${exercise.sets} Sets, ${exercise.reps} Reps, ${exercise.weight} Kg, ${exercise.muscle} - ${exercise.part}"
                 }
                 Text(
                     text = textReps,
@@ -394,6 +406,7 @@ fun WorkoutCreationScreen(navController: NavController) {
                                 ExerciseEntity(
                                     name = exercise.name,
                                     sets = exercise.sets,
+                                    weight = exercise.weight,
                                     reps = exercise.reps,
                                     muscle = exercise.muscle,
                                     part = exercise.part
@@ -415,5 +428,5 @@ fun WorkoutCreationScreen(navController: NavController) {
     }
 }
 
-data class Exercise(val name: String, val sets: Int, val reps: Int, val muscle: String, val part: List<String>)
+data class Exercise(val name: String, val sets: Int, val weight: Int, val reps: Int, val muscle: String, val part: List<String>)
 

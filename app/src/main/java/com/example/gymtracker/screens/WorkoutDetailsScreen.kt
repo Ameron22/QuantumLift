@@ -337,6 +337,7 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
                         ) {
                             var sets by remember { mutableStateOf(exercise.sets) }
                             var reps by remember { mutableStateOf(exercise.reps) }
+                            var weight by remember { mutableStateOf(exercise.weight) }
 
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("$sets Sets", Modifier.padding(horizontal = 16.dp))
@@ -362,6 +363,9 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
                                     }
                                 }
                             } else {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("$weight Kg")
+                                }
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("$reps Reps")
                                 }
