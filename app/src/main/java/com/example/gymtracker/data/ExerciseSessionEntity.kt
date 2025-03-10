@@ -10,6 +10,7 @@ data class ExerciseSessionEntity(
     val exerciseId: Long?, // Foreign key to ExerciseEntity
     val sets: Int?,
     val repsOrTime: Int?, // Reps or time in seconds
+    val weight: Int?,
     val muscleGroup: String,
     val muscleParts: List<String>, // Store as JSON or use a separate table
     val completedSets: Int,

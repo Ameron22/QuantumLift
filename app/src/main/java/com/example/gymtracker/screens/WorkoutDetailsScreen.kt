@@ -117,6 +117,7 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
             exerciseId = activeExercise?.id?.toLong() ?: 0,
             sets = activeExercise?.sets ?: 0,
             repsOrTime = if (activeExercise?.reps!! > 50) activeExercise?.reps!! - 1000 else activeExercise?.reps ?: 0,
+            weight = activeExercise?.weight ?: 0,
             muscleGroup = activeExercise?.muscle ?: "",
             muscleParts = activeExercise?.part ?: emptyList(),
             completedSets = activeExercise?.sets?.minus(remainingSets) ?: 0,

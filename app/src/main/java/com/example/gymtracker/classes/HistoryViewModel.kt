@@ -41,10 +41,20 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
                             )
                         }
 
+                        // Calculate muscle stress based on repsOrTime and weight
+                        val muscleStress = if (session.repsOrTime > 50) {
+                            // If repsOrTime represents time (in seconds), ignore weight
+                            session.sets * (session.repsOrTime-1000)
+                        } else {
+                            // If repsOrTime represents reps, include weight
+                            session.sets * session.repsOrTime * session.weight
+                        }
+
                         // Add muscle group stress data
                         val existingSession = sessionMap[sessionId]!!
                         (existingSession.muscleGroups as MutableMap)[session.muscleGroup] =
-                            session.totalStress
+                            (existingSession.muscleGroups[session.muscleGroup] ?: 0) + muscleStress
+
                     }
 
                     // Update StateFlow with the new list

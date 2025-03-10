@@ -7,5 +7,7 @@ data class WorkoutSessionWithMusclesStress(
     val duration: Long,
     val workoutName: String?,
     val muscleGroup: String, // Muscle group name
-    val totalStress: Int // Total stress for this muscle group
+    val sets: Int, // Number of sets
+    val repsOrTime: Int, // Reps or time per set
+    val weight: Int // Weight used
 )

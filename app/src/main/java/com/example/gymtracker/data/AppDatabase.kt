@@ -11,7 +11,7 @@ import androidx.room.TypeConverters
         WorkoutSessionEntity::class, // Add this
         ExerciseSessionEntity::class // Add this
     ],
-    version = 7, // Increase version number when schema changes ( you need to change version when you make changes to DB)
+    version = 8, // Increase version number when schema changes ( you need to change version when you make changes to DB)
     exportSchema = false // Disable schema export
 )
 @TypeConverters(Converter::class)

@@ -40,6 +40,9 @@ interface ExerciseDao {
 
     @Query("SELECT * FROM workout_sessions")
     suspend fun getAllWorkoutSessions(): List<WorkoutSessionEntity>
-    @Query("SELECT ws.sessionId, ws.workoutId, ws.startTime, ws.duration, ws.workoutName, es.muscleGroup AS muscleGroup, SUM(es.sets * es.repsOrTime) AS totalStress FROM workout_sessions ws INNER JOIN exercise_sessions es ON ws.sessionId = es.sessionId GROUP BY ws.sessionId, es.muscleGroup")
+    @Query("SELECT ws.sessionId, ws.workoutId, ws.startTime, ws.duration, ws.workoutName, es.muscleGroup , es.sets , es.repsOrTime, es.weight " +
+            "FROM workout_sessions ws INNER JOIN exercise_sessions es " +
+            "ON ws.sessionId = es.sessionId " +
+            "GROUP BY ws.sessionId, es.muscleGroup")
     fun getAllWorkoutSessionsWithMuscleStress(): Flow <List<WorkoutSessionWithMusclesStress>>
 }
