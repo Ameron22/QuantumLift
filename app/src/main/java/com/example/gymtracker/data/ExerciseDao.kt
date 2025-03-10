@@ -2,9 +2,14 @@ package com.example.gymtracker.data
 
 import androidx.room.*
 import com.example.gymtracker.classes.WorkoutSessionWithMusclesStress
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ExerciseDao {
+    // Add this method to check if the database is empty
+    @Query("SELECT COUNT(*) FROM WorkoutEntity")
+    suspend fun getWorkoutCount(): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExercise(exercise: ExerciseEntity): Long
 
@@ -22,7 +27,7 @@ interface ExerciseDao {
     suspend fun getAllWorkouts(): List<WorkoutEntity>
 
     @Insert
-    fun insertWorkoutSession(entity: WorkoutSessionEntity)
+    fun insertWorkoutSession(entity: WorkoutSessionEntity): Long
 
     @Insert
     fun insertExerciseSession(entity: ExerciseSessionEntity)
@@ -35,6 +40,6 @@ interface ExerciseDao {
 
     @Query("SELECT * FROM workout_sessions")
     suspend fun getAllWorkoutSessions(): List<WorkoutSessionEntity>
-    @Query("SELECT ws.sessionId, ws.workoutId, ws.startTime, ws.duration, ws.workoutName, es.muscleGroup AS muscleGroup, SUM(es.sets * es.repsOrTime) AS totalStress FROM workout_sessions ws LEFT JOIN exercise_sessions es ON ws.sessionId = es.sessionId GROUP BY ws.sessionId, es.muscleGroup")
-    suspend fun getAllWorkoutSessionsWithMuscleStress(): List<WorkoutSessionWithMusclesStress>
+    @Query("SELECT ws.sessionId, ws.workoutId, ws.startTime, ws.duration, ws.workoutName, es.muscleGroup AS muscleGroup, SUM(es.sets * es.repsOrTime) AS totalStress FROM workout_sessions ws INNER JOIN exercise_sessions es ON ws.sessionId = es.sessionId GROUP BY ws.sessionId, es.muscleGroup")
+    fun getAllWorkoutSessionsWithMuscleStress(): Flow <List<WorkoutSessionWithMusclesStress>>
 }

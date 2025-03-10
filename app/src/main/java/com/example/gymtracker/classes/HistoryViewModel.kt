@@ -20,33 +20,36 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
 
     private fun loadWorkoutSessions() {
         viewModelScope.launch (Dispatchers.IO){
-            val sessionsWithStress = dao.getAllWorkoutSessionsWithMuscleStress()
+            dao.getAllWorkoutSessionsWithMuscleStress()
+                .collect { sessionsWithStress ->
 
-            // Create a map to store aggregated results
-            val sessionMap = mutableMapOf<Long, WorkoutSessionWithMuscles>()
+                    // Create a map to store aggregated results
+                    val sessionMap = mutableMapOf<Long, WorkoutSessionWithMuscles>()
 
-            for (session in sessionsWithStress) {
-                val sessionId = session.sessionId
+                    for (session in sessionsWithStress) {
+                        val sessionId = session.sessionId
 
-                // If the sessionId is not yet in the map, create a new entry
-                if (!sessionMap.containsKey(sessionId)) {
-                    sessionMap[sessionId] = WorkoutSessionWithMuscles(
-                        sessionId = sessionId,
-                        workoutId = session.workoutId,
-                        startTime = session.startTime,
-                        duration = session.duration,
-                        workoutName = session.workoutName,
-                        muscleGroups = mutableMapOf() // Will be filled later
-                    )
+                        // If the sessionId is not yet in the map, create a new entry
+                        if (!sessionMap.containsKey(sessionId)) {
+                            sessionMap[sessionId] = WorkoutSessionWithMuscles(
+                                sessionId = sessionId,
+                                workoutId = session.workoutId,
+                                startTime = session.startTime,
+                                duration = session.duration,
+                                workoutName = session.workoutName,
+                                muscleGroups = mutableMapOf() // Will be filled later
+                            )
+                        }
+
+                        // Add muscle group stress data
+                        val existingSession = sessionMap[sessionId]!!
+                        (existingSession.muscleGroups as MutableMap)[session.muscleGroup] =
+                            session.totalStress
+                    }
+
+                    // Update StateFlow with the new list
+                    _workoutSessions.value = sessionMap.values.toList()
                 }
-
-                // Add muscle group stress data
-                val existingSession = sessionMap[sessionId]!!
-                (existingSession.muscleGroups as MutableMap)[session.muscleGroup] = session.totalStress
-            }
-
-            // Convert map values to a list and update StateFlow
-            _workoutSessions.value = sessionMap.values.toList()
         }
     }
 

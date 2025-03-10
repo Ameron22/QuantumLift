@@ -54,6 +54,8 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
     val db = remember { AppDatabase.getDatabase(context) }
     val dao = remember { db.exerciseDao() }
     var workoutWithExercises by remember { mutableStateOf<List<WorkoutWithExercises>?>(null) }
+    // State for sessionId
+    var sessionId by remember { mutableStateOf<Long?>(null) }
 
     var activeExercise by remember { mutableStateOf<ExerciseEntity?>(null) }
     var remainingSets by remember { mutableIntStateOf(0) }
@@ -91,8 +93,9 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
                 workoutName = workoutWithExercises?.firstOrNull()?.workout?.name ?: ""
             )
             coroutineScope.launch(Dispatchers.IO) {
-                dao.insertWorkoutSession(workoutSession)
-                println("WorkoutSession inserted: $workoutSession")
+                sessionId = dao.insertWorkoutSession(workoutSession) // Insert and get the generated ID
+                println("WorkoutSession inserted with ID: $sessionId")
+                // Store this ID somewhere (e.g., in workoutState) to use in SaveExerciseSession
             }
             workoutState = WorkoutState(
                 workout = workoutWithExercises?.firstOrNull()?.workout
@@ -110,7 +113,7 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
         val exercise = activeExercise ?: return
         println("Still Saving exercise session...")
         val exerciseSession = ExerciseSessionEntity(
-            sessionId = workoutWithExercises?.firstOrNull()?.workout?.id ?: 0,
+            sessionId = sessionId?:0,
             exerciseId = activeExercise?.id?.toLong() ?: 0,
             sets = activeExercise?.sets ?: 0,
             repsOrTime = if (activeExercise?.reps!! > 50) activeExercise?.reps!! - 1000 else activeExercise?.reps ?: 0,
@@ -159,6 +162,7 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
         val allExercisesCompleted = workoutState!!.exercises.all { it.isCompleted }
 
         if (allExercisesCompleted) {
+            println("All exercises completed...")
             workoutState!!.isFinished = true
             launch(Dispatchers.IO) {
                 // Call EndWorkoutSession with the CoroutineScope
