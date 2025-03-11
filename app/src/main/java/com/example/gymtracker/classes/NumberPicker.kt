@@ -1,7 +1,5 @@
 package com.example.gymtracker.classes
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -28,22 +26,34 @@ fun NumberPicker(
     modifier: Modifier = Modifier,
     unit: String = ""
 ) {
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = value - range.first)
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = value - range.first-2)
     val coroutineScope = rememberCoroutineScope()
 
     // Automatically update the value when the middle item changes
     LaunchedEffect(listState.firstVisibleItemIndex) {
-        val middleIndex = listState.firstVisibleItemIndex + 3 // Adjust based on your UI
+        val middleIndex = listState.firstVisibleItemIndex + 2 // Adjust based on your UI
         val newValue = range.first + middleIndex
+
         if (newValue in range) {
             onValueChange(newValue)
         }
     }
 
+    // Detect when scrolling stops and snap to the nearest item
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (!listState.isScrollInProgress) {
+            // Scroll has stopped, snap to the nearest item
+            val middleIndex = listState.firstVisibleItemIndex + 2
+            coroutineScope.launch {
+                listState.scrollToItem(middleIndex)
+            }
+        }
+    }
+
     Box(
         modifier = modifier
-            .height(200.dp)
-            .fillMaxWidth()
+            .height(215.dp)
+            .width(120.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
     ) {
@@ -51,7 +61,7 @@ fun NumberPicker(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 2.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -64,7 +74,8 @@ fun NumberPicker(
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp)
+                        .padding(vertical = 10.dp)
+                        .padding(horizontal = 11.dp)
                         .clickable {
                             coroutineScope.launch {
                                 listState.scrollToItem(index)

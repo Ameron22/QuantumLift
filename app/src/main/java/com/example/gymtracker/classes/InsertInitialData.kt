@@ -39,10 +39,10 @@ class InsertInitialData {
             val session2Id = dao.insertWorkoutSession(SessionWorkoutEntity(workoutId = workout2Id.toInt(), startTime = System.currentTimeMillis() - 172800000, duration = 1500, workoutName = "Upper Body Workout"))
             val session3Id = dao.insertWorkoutSession(SessionWorkoutEntity(workoutId = workout3Id.toInt(), startTime = System.currentTimeMillis() - 259200000, duration = 1200, workoutName = "Lower Body Workout"))
 
-            // Insert Exercise Sessions
+          /*  // Insert Exercise Sessions
             dao.insertExerciseSession(SessionEntityExercise(sessionId = session1Id, exerciseId = exercise1Id, sets = 3, repsOrTime = 15, muscleGroup = "Chest", muscleParts = listOf("Upper Chest", "Middle Chest"), completedSets = 3, completedRepsOrTime = 15, weight = 5))
             dao.insertExerciseSession(SessionEntityExercise(sessionId = session1Id, exerciseId = exercise2Id, sets = 3, repsOrTime = 10, muscleGroup = "Back", muscleParts = listOf("Upper Back", "Lats"), completedSets = 3, completedRepsOrTime = 10, weight = 5))
             dao.insertExerciseSession(SessionEntityExercise(sessionId = session2Id, exerciseId = exercise1Id, sets = 3, repsOrTime = 15, muscleGroup = "Chest", muscleParts = listOf("Upper Chest", "Middle Chest"), completedSets = 3, completedRepsOrTime = 15, weight = 5))
-        }
+      */  }
     }
 }

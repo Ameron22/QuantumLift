@@ -14,4 +14,13 @@ class Converter {
     fun toStringList(value: String): List<String> {
         return value.split(delimiter) // Convert String back to List<String>
     }
+    @TypeConverter
+    fun fromIntList(value: List<Int?>): String {
+        return value.joinToString(",") // Convert List<Int?> to a comma-separated String
+    }
+
+    @TypeConverter
+    fun toIntList(value: String): List<Int?> {
+        return value.split(",").map { it.toIntOrNull() } // Convert String back to List<Int?>
+    }
 }

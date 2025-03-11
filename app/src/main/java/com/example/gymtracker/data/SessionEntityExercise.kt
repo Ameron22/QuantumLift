@@ -6,15 +6,13 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "exercise_sessions")
 data class SessionEntityExercise(
     @PrimaryKey(autoGenerate = true) val exerciseSessionId: Long = 0,
-    val sessionId: Long?, // Foreign key to WorkoutSessionEntity
-    val exerciseId: Long?, // Foreign key to ExerciseEntity
-    val sets: Int?,
-    val repsOrTime: Int?, // Reps or time in seconds
-    val weight: Int?,
-    val muscleGroup: String,
-    val muscleParts: List<String>, // Store as JSON or use a separate table
-    val completedSets: Int,
-
-    val completedRepsOrTime: Int,
-    val notes: String? = null // Optional notes
+    val sessionId: Long, // Foreign key to the workout session
+    val exerciseId: Long, // Foreign key to the exercise
+    val sets: Int, // Total number of sets
+    val repsOrTime: List<Int?>, // List of reps or time for each set (nullable)
+    val weight: List<Int?>, // List of weights for each set (nullable)
+    val muscleGroup: String, // Muscle group targeted
+    val muscleParts: List<String>, // Specific muscle parts targeted
+    val completedSets: Int, // Number of completed sets
+    val notes: String // Additional notes
 )

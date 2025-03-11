@@ -71,11 +71,22 @@ class MainActivity : ComponentActivity() {
                         WorkoutDetailsScreen(workoutId = workoutId, navController = navController)
                     }
                     composable(
-                        "exerciseDetails/{exerciseId}",
-                        arguments = listOf(navArgument("exerciseId") { type = NavType.IntType })
-                    ) {backStackEntry ->
+                        "exerciseDetails/{exerciseId}/{workoutSessionId}",
+                        arguments = listOf(
+                            navArgument("exerciseId") { type = NavType.IntType },
+                            navArgument("workoutSessionId") { type = NavType.LongType } // Add workoutSessionId as a Long argument
+                        )
+                    ) { backStackEntry ->
+                        // Retrieve exerciseId and workoutSessionId from the backStackEntry
                         val exerciseId = backStackEntry.arguments?.getInt("exerciseId") ?: 0
-                        ExerciseScreen(exerciseId = exerciseId, navController)
+                        val workoutSessionId = backStackEntry.arguments?.getLong("workoutSessionId") ?: 0L
+
+                        // Pass the arguments to ExerciseScreen
+                        ExerciseScreen(
+                            exerciseId = exerciseId,
+                            workoutSessionId = workoutSessionId,
+                            navController = navController
+                        )
                     }
 
                 }

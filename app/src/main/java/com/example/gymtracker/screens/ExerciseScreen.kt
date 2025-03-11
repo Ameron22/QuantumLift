@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,12 +16,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,10 +37,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,7 +52,7 @@ import androidx.navigation.NavController
 import com.example.gymtracker.classes.NumberPicker
 import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.data.EntityExercise
-import com.example.gymtracker.data.SessionWorkoutEntity
+import com.example.gymtracker.data.SessionEntityExercise
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -61,11 +60,13 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ExerciseScreen(exerciseId: Int, navController: NavController) {
+fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavController) {
+    val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val db = remember { AppDatabase.getDatabase(context) }
     val dao = remember { db.exerciseDao() }
     var exercise by remember { mutableStateOf<EntityExercise?>(null) }
+    var sessionId by remember { mutableStateOf<Long?>(null) }
     var showWeightPicker by remember { mutableStateOf(false) }
     var showRepsPicker by remember { mutableStateOf(false) }
 
@@ -77,6 +78,7 @@ fun ExerciseScreen(exerciseId: Int, navController: NavController) {
     var isTimerRunning by remember { mutableStateOf(false) }
     var isBreakRunning by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(false) }
+    var setTimeReps = 60// Default time in seconds for reps
 
     // Map to store weights for each set (set number to weight)
     val setWeights = remember { mutableStateMapOf<Int, Int>() }
@@ -96,14 +98,38 @@ fun ExerciseScreen(exerciseId: Int, navController: NavController) {
                         setWeights[set] = ex.weight
                     }
                 }
-                if (ex.reps < 50) {
-                    for (set in 1..ex.sets) {
-                        setReps[set] = ex.reps
-                    }
+
+                for (set in 1..ex.sets) {
+                    setReps[set] = ex.reps
                 }
             }
         } catch (e: Exception) {
             Log.e("ExerciseScreen", "Database error: ${e.message}")
+        }
+    }
+
+    // Function to save exercise session
+    fun saveExerciseSession() {
+        val exercise = exercise ?: return
+
+        // Convert repsOrTime and weight to lists
+        val repsOrTimeList = (1..exercise.sets).map { setReps[it] ?: 0 } // Use setReps map
+        val weightList = (1..exercise.sets).map { setWeights[it] ?: 0 } // Use setWeights map
+
+        val exerciseSession = SessionEntityExercise(
+            sessionId = workoutSessionId,
+            exerciseId = exercise.id.toLong(),
+            sets = exercise.sets,
+            repsOrTime = repsOrTimeList, // List of reps or time for each set
+            weight = weightList, // List of weights for each set
+            muscleGroup = exercise.muscle,
+            muscleParts = exercise.part,
+            completedSets = exercise.sets,
+            notes = ""
+        )
+
+        coroutineScope.launch(Dispatchers.IO) {
+            dao.insertExerciseSession(exerciseSession)
         }
     }
 
@@ -124,15 +150,16 @@ fun ExerciseScreen(exerciseId: Int, navController: NavController) {
                             } else {
                                 isTimerRunning = false
                                 activeSetIndex = null
+                                saveExerciseSession()
                             }
                         }else{
                             isTimerRunning = false
                             activeSetIndex = null
+                            saveExerciseSession()
                         }
                     } else {
                         isBreakRunning = true
                         remainingTime = breakTime
-
                     }
                 }
             } else {
@@ -147,13 +174,19 @@ fun ExerciseScreen(exerciseId: Int, navController: NavController) {
         exerciseTime = if (exercise?.reps!! > 50) {
             exercise?.reps!! - 1000
         } else {
-            10
+            setTimeReps
         }
         remainingTime = exerciseTime
         isTimerRunning = true
         isBreakRunning = false
         isPaused = false
     }
+
+
+
+
+
+
 
     // UI
     Scaffold(
@@ -254,6 +287,34 @@ fun ExerciseScreen(exerciseId: Int, navController: NavController) {
                         }
                     }
                 }
+            }   else {
+                // Save Exercise Button
+                BottomAppBar(
+                    modifier = Modifier.fillMaxWidth(),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Save Exercise Button
+                        Button(
+                            onClick = {
+                                saveExerciseSession()
+                                navController.popBackStack() // Navigate back after saving
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                        ) {
+                            Text("Save Exercise")
+                        }
+                    }
+                }
             }
         }
     ) { paddingValues ->
@@ -301,14 +362,19 @@ fun ExerciseScreen(exerciseId: Int, navController: NavController) {
                                             )
                                         },
                                         text = {
-                                            NumberPicker(
-                                                value = setWeights[set] ?: ex.weight,
-                                                range = 0..200,
-                                                onValueChange = { weight ->
-                                                    setWeights[set] = weight
-                                                },
-                                                unit = "Kg"
-                                            )
+                                            Box(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                contentAlignment = Alignment.Center // Center the NumberPicker
+                                            ) {
+                                                NumberPicker(
+                                                    value = setWeights[set] ?: ex.weight,
+                                                    range = 0..200,
+                                                    onValueChange = { weight ->
+                                                        setWeights[set] = weight
+                                                    },
+                                                    unit = "Kg"
+                                                )
+                                            }
                                         },
                                         confirmButton = {
                                             TextButton(onClick = {
@@ -352,14 +418,19 @@ fun ExerciseScreen(exerciseId: Int, navController: NavController) {
                                             )
                                         },
                                         text = {
-                                            NumberPicker(
-                                                value = setReps[set] ?: ex.reps,
-                                                range = 0..50,
-                                                onValueChange = { reps ->
-                                                    setReps[set] = reps
-                                                },
-                                                unit = "reps"
-                                            )
+                                            Box(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                contentAlignment = Alignment.Center // Center the NumberPicker
+                                            ) {
+                                                NumberPicker(
+                                                    value = setReps[set] ?: ex.reps,
+                                                    range = 0..50,
+                                                    onValueChange = { reps ->
+                                                        setReps[set] = reps
+                                                    },
+                                                    unit = "reps"
+                                                )
+                                            }
                                         },
                                         confirmButton = {
                                             TextButton(onClick = {
@@ -372,19 +443,85 @@ fun ExerciseScreen(exerciseId: Int, navController: NavController) {
                                         containerColor = MaterialTheme.colorScheme.surface
                                     )
                                 }
+                                Text(
+                                    text = "${setReps[set] ?: ex.reps} Reps",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            showRepsPicker = true
+                                            editingSetIndex = set
+                                        }
+                                        .padding(horizontal = 8.dp),
+                                    textAlign = TextAlign.Center
+                                )
+                            } else {
+
+                                val timeInSeconds = setReps[set]?.minus(1000) ?: 60
+                                var minutes by remember { mutableIntStateOf(timeInSeconds / 60) }
+                                var seconds by remember { mutableIntStateOf(timeInSeconds % 60) }
+
+                                if (showRepsPicker && editingSetIndex == set) {
+                                    AlertDialog(
+                                        onDismissRequest = {
+                                            showRepsPicker = false
+                                            editingSetIndex = null
+                                        },
+                                        title = {
+                                            Text(
+                                                "Select Time mm:ss",
+                                                style = MaterialTheme.typography.titleLarge
+                                            )
+                                        },
+                                        text = {
+                                            Row(
+                                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                NumberPicker(
+                                                    value = minutes,
+                                                    range = 0..59,
+                                                    onValueChange = { newMinutes ->
+                                                        minutes = newMinutes
+                                                        setReps[set] = (newMinutes * 60 + seconds) + 1000
+                                                    },
+                                                    unit = ""
+                                                )
+                                                NumberPicker(
+                                                    value = seconds,
+                                                    range = 0..59,
+                                                    onValueChange = { newSeconds ->
+                                                        seconds = newSeconds
+                                                        setReps[set] = (minutes * 60 + newSeconds) + 1000
+                                                    },
+                                                    unit = ""
+                                                )
+                                            }
+                                        },
+                                        confirmButton = {
+                                            TextButton(onClick = {
+                                                showRepsPicker = false
+                                                editingSetIndex = null
+                                            }) {
+                                                Text("OK")
+                                            }
+                                        },
+                                        containerColor = MaterialTheme.colorScheme.surface
+                                    )
+                                }
+                                Text(
+                                    text = String.format("%02d:%02d", minutes, seconds), // Display as mm:ss
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            showRepsPicker = true
+                                            editingSetIndex = set
+                                        }
+                                        .padding(horizontal = 8.dp),
+                                    textAlign = TextAlign.Center
+                                )
                             }
-                            Text(
-                                text = "${setReps[set] ?: ex.reps} Reps",
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable {
-                                        showRepsPicker = true
-                                        editingSetIndex = set
-                                    }
-                                    .padding(horizontal = 8.dp),
-                                textAlign = TextAlign.Center
-                            )
 
                             IconButton(onClick = { startTimer(set) }) {
                                 Icon(
