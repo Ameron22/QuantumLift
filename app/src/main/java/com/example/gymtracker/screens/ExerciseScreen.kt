@@ -1,6 +1,7 @@
 package com.example.gymtracker.screens
 
 import android.util.Log
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,17 +12,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -30,6 +37,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -44,6 +53,10 @@ import androidx.navigation.NavController
 import com.example.gymtracker.classes.NumberPicker
 import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.data.EntityExercise
+import com.example.gymtracker.data.SessionWorkoutEntity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,6 +69,14 @@ fun ExerciseScreen(exerciseId: Int, navController: NavController) {
     var showWeightPicker by remember { mutableStateOf(false) }
     var showRepsPicker by remember { mutableStateOf(false) }
 
+    // Timer related states
+    var activeSetIndex by remember { mutableStateOf<Int?>(null) }
+    var remainingTime by remember { mutableIntStateOf(0) }
+    var exerciseTime by remember { mutableIntStateOf(0) }
+    var breakTime by remember { mutableIntStateOf(10) }
+    var isTimerRunning by remember { mutableStateOf(false) }
+    var isBreakRunning by remember { mutableStateOf(false) }
+    var isPaused by remember { mutableStateOf(false) }
 
     // Map to store weights for each set (set number to weight)
     val setWeights = remember { mutableStateMapOf<Int, Int>() }
@@ -86,6 +107,54 @@ fun ExerciseScreen(exerciseId: Int, navController: NavController) {
         }
     }
 
+    // Timer logic
+    LaunchedEffect(isTimerRunning, isPaused) {
+        while (isTimerRunning) {
+            if (!isPaused) {
+                if (remainingTime > 0) {
+                    delay(1000)
+                    remainingTime--
+                } else {
+                    if (isBreakRunning) {
+                        if (activeSetIndex!! <= exercise?.sets ?: 0) {
+                            isBreakRunning = false
+                            activeSetIndex = activeSetIndex?.let { it + 1 }
+                            if (activeSetIndex != null && activeSetIndex!! <= exercise?.sets ?: 0) {
+                                remainingTime = exerciseTime
+                            } else {
+                                isTimerRunning = false
+                                activeSetIndex = null
+                            }
+                        }else{
+                            isTimerRunning = false
+                            activeSetIndex = null
+                        }
+                    } else {
+                        isBreakRunning = true
+                        remainingTime = breakTime
+
+                    }
+                }
+            } else {
+                delay(100)
+            }
+        }
+    }
+
+    // Function to start the timer for a specific set
+    fun startTimer(setIndex: Int) {
+        activeSetIndex = setIndex
+        exerciseTime = if (exercise?.reps!! > 50) {
+            exercise?.reps!! - 1000
+        } else {
+            10
+        }
+        remainingTime = exerciseTime
+        isTimerRunning = true
+        isBreakRunning = false
+        isPaused = false
+    }
+
     // UI
     Scaffold(
         topBar = {
@@ -100,6 +169,92 @@ fun ExerciseScreen(exerciseId: Int, navController: NavController) {
                     }
                 }
             )
+        },
+        bottomBar = {
+            if (activeSetIndex != null) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (remainingTime > 0) {
+                        LinearProgressIndicator(
+                            progress = {
+                                if (isBreakRunning) {
+                                    remainingTime.toFloat() / breakTime
+                                } else {
+                                    remainingTime.toFloat() / exerciseTime
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp),
+                            color = if (isBreakRunning) Color.Blue else Color.Green
+                        )
+                    }
+
+                    BottomAppBar(
+                        modifier = Modifier.fillMaxWidth(),
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    text = "Set: ${activeSetIndex}",
+                                    style = MaterialTheme.typography.headlineMedium
+                                )
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    isTimerRunning = false
+                                    isBreakRunning = false
+                                    remainingTime = 0
+                                    activeSetIndex = null
+                                },
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .background(
+                                        color = MaterialTheme.colorScheme.error,
+                                        shape = CircleShape
+                                    )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = "Stop",
+                                    tint = MaterialTheme.colorScheme.onError,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { isPaused = !isPaused }
+                            ) {
+                                Text(
+                                    text = String.format("%02d:%02d", remainingTime / 60, remainingTime % 60),
+                                    style = MaterialTheme.typography.headlineMedium
+                                )
+                                if (isPaused) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Paused",
+                                        modifier = Modifier.padding(start = 8.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     ) { paddingValues ->
         Column(
@@ -230,6 +385,14 @@ fun ExerciseScreen(exerciseId: Int, navController: NavController) {
                                     .padding(horizontal = 8.dp),
                                 textAlign = TextAlign.Center
                             )
+
+                            IconButton(onClick = { startTimer(set) }) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = "Start Set",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                     }
                 }
