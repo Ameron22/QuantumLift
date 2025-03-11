@@ -22,12 +22,14 @@ import com.example.gymtracker.screens.LoadHistoryScreen
 import com.example.gymtracker.screens.LoadWorkoutScreen
 import com.example.gymtracker.screens.WorkoutCreationScreen // Import WorkoutCreationScreen
 import com.example.gymtracker.screens.WorkoutDetailsScreen
+import com.example.gymtracker.screens.ExerciseScreen
 
 sealed class Screen(val route: String) {
     object Home : Screen("home")
     object WorkoutCreation : Screen("workout_creation")
     object LoadWorkout : Screen("load_workout")
     object LoadHistory : Screen("load_history")
+    object ExerciseDetails : Screen("exercise_details")
 }
 
 
@@ -68,6 +70,14 @@ class MainActivity : ComponentActivity() {
                         val workoutId = backStackEntry.arguments?.getInt("workoutId") ?: 0
                         WorkoutDetailsScreen(workoutId = workoutId, navController = navController)
                     }
+                    composable(
+                        "exerciseDetails/{exerciseId}",
+                        arguments = listOf(navArgument("exerciseId") { type = NavType.IntType })
+                    ) {backStackEntry ->
+                        val exerciseId = backStackEntry.arguments?.getInt("exerciseId") ?: 0
+                        ExerciseScreen(exerciseId = exerciseId, navController)
+                    }
+
                 }
             }
         }

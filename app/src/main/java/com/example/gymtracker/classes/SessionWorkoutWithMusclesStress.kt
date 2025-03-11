@@ -1,6 +1,6 @@
 package com.example.gymtracker.classes
 
-data class WorkoutSessionWithMusclesStress(
+data class SessionWorkoutWithMusclesStress(
     val sessionId: Long,
     val workoutId: Int?,
     val startTime: Long,

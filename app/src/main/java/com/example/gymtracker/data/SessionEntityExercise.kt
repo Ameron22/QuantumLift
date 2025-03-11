@@ -4,7 +4,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 //This table will store details for each exercise performed during the workout session.
 @Entity(tableName = "exercise_sessions")
-data class ExerciseSessionEntity(
+data class SessionEntityExercise(
     @PrimaryKey(autoGenerate = true) val exerciseSessionId: Long = 0,
     val sessionId: Long?, // Foreign key to WorkoutSessionEntity
     val exerciseId: Long?, // Foreign key to ExerciseEntity

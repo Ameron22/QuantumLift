@@ -4,7 +4,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 //This table will store metadata for each workout session.
 @Entity(tableName = "workout_sessions")
-data class WorkoutSessionEntity(
+data class SessionWorkoutEntity(
     @PrimaryKey(autoGenerate = true) val sessionId: Long = 0,
     val workoutId: Int?, // Foreign key to WorkoutEntity
     val startTime: Long, // Timestamp in milliseconds

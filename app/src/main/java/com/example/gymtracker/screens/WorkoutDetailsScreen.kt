@@ -26,10 +26,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
-import com.example.gymtracker.data.ExerciseEntity
-import com.example.gymtracker.data.ExerciseSessionEntity
-import com.example.gymtracker.data.WorkoutEntity
-import com.example.gymtracker.data.WorkoutSessionEntity
+import com.example.gymtracker.data.EntityExercise
+import com.example.gymtracker.data.SessionEntityExercise
+import com.example.gymtracker.data.EntityWorkout
+import com.example.gymtracker.data.SessionWorkoutEntity
 import com.example.gymtracker.data.WorkoutWithExercises
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,12 +38,12 @@ import kotlinx.coroutines.launch
 
 
 data class ExerciseState(
-    val exercise: ExerciseEntity,
+    val exercise: EntityExercise,
     var isCompleted: Boolean = false
 )
 
 data class WorkoutState(
-    val workout: WorkoutEntity,
+    val workout: EntityWorkout,
     val exercises: List<ExerciseState>,
     var isFinished: Boolean = false
 )
@@ -57,7 +57,7 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
     // State for sessionId
     var sessionId by remember { mutableStateOf<Long?>(null) }
 
-    var activeExercise by remember { mutableStateOf<ExerciseEntity?>(null) }
+    var activeExercise by remember { mutableStateOf<EntityExercise?>(null) }
     var remainingSets by remember { mutableIntStateOf(0) }
     var remainingTime by remember { mutableIntStateOf(0) }
     var exerciseTime by remember { mutableIntStateOf(0) }
@@ -70,7 +70,7 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
     var workoutState by remember { mutableStateOf<WorkoutState?>(null) }
 
     // Function to start the timer for an exercise
-    fun startTimer(exercise: ExerciseEntity) {
+    fun startTimer(exercise: EntityExercise) {
         activeExercise = exercise
 
         remainingSets = exercise.sets
@@ -86,7 +86,7 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
         if (firstStart) {
             firstStart = false
             startTimeWorkout = System.currentTimeMillis()
-            val workoutSession = WorkoutSessionEntity(
+            val workoutSession = SessionWorkoutEntity(
                 workoutId = workoutWithExercises?.firstOrNull()?.workout?.id ?: 0,
                 startTime = System.currentTimeMillis(),
                 duration = 0,
@@ -112,7 +112,7 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
         println("Saving exercise session...")
         val exercise = activeExercise ?: return
         println("Still Saving exercise session...")
-        val exerciseSession = ExerciseSessionEntity(
+        val exerciseSession = SessionEntityExercise(
             sessionId = sessionId?:0,
             exerciseId = activeExercise?.id?.toLong() ?: 0,
             sets = activeExercise?.sets ?: 0,
@@ -337,8 +337,10 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = 8.dp)
+                        .clickable { navController.navigate("exerciseDetails/${exercise.id}") },
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+
                 ) {
                     Row(
                         modifier = Modifier
@@ -389,8 +391,10 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
                                     }
                                 }
                             } else {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("$weight Kg")
+                                if(exercise.weight!=0) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("$weight Kg")
+                                    }
                                 }
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("$reps Reps")

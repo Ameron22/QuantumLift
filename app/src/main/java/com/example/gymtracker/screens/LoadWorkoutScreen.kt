@@ -12,7 +12,7 @@ import androidx.navigation.NavController
 import androidx.compose.ui.platform.LocalContext
 import com.example.gymtracker.data.AppDatabase
 import androidx.compose.material3.*
-import com.example.gymtracker.data.WorkoutEntity
+import com.example.gymtracker.data.EntityWorkout
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,7 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
-import com.example.gymtracker.data.ExerciseEntity
+import com.example.gymtracker.data.EntityExercise
 
 @Composable
 fun LoadWorkoutScreen(navController: NavController) {
@@ -35,8 +35,8 @@ fun LoadWorkoutScreen(navController: NavController) {
     val scope = rememberCoroutineScope()
 
     // State to hold the list of workouts
-    var workouts: List<WorkoutEntity> by remember { mutableStateOf(emptyList()) }
-    var exercisesMap: Map<Int, List<ExerciseEntity>> by remember { mutableStateOf(emptyMap()) }
+    var workouts: List<EntityWorkout> by remember { mutableStateOf(emptyList()) }
+    var exercisesMap: Map<Int, List<EntityExercise>> by remember { mutableStateOf(emptyMap()) }
 
     // State for search text
     var searchText by remember { mutableStateOf("") }
@@ -149,7 +149,7 @@ fun LoadWorkoutScreen(navController: NavController) {
 }
 
 @Composable
-fun WorkoutItem(workout: WorkoutEntity,exercises: List<ExerciseEntity>, onClick: () -> Unit) {
+fun WorkoutItem(workout: EntityWorkout, exercises: List<EntityExercise>, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()

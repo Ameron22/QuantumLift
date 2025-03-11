@@ -3,16 +3,14 @@ package com.example.gymtracker.classes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtracker.data.ExerciseDao
-import com.example.gymtracker.classes.ProgressData
-import com.example.gymtracker.data.WorkoutSessionEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
-    private val _workoutSessions = MutableStateFlow<List<WorkoutSessionWithMuscles>>(emptyList())
-    val workoutSessions: StateFlow<List<WorkoutSessionWithMuscles>> get() = _workoutSessions
+    private val _workoutSessions = MutableStateFlow<List<SessionWorkoutWithMuscles>>(emptyList())
+    val workoutSessions: StateFlow<List<SessionWorkoutWithMuscles>> get() = _workoutSessions
 
     init {
         loadWorkoutSessions()
@@ -24,14 +22,14 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
                 .collect { sessionsWithStress ->
 
                     // Create a map to store aggregated results
-                    val sessionMap = mutableMapOf<Long, WorkoutSessionWithMuscles>()
+                    val sessionMap = mutableMapOf<Long, SessionWorkoutWithMuscles>()
 
                     for (session in sessionsWithStress) {
                         val sessionId = session.sessionId
 
                         // If the sessionId is not yet in the map, create a new entry
                         if (!sessionMap.containsKey(sessionId)) {
-                            sessionMap[sessionId] = WorkoutSessionWithMuscles(
+                            sessionMap[sessionId] = SessionWorkoutWithMuscles(
                                 sessionId = sessionId,
                                 workoutId = session.workoutId,
                                 startTime = session.startTime,

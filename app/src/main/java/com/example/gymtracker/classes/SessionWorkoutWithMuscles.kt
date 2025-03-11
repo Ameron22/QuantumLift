@@ -1,8 +1,6 @@
 package com.example.gymtracker.classes
 
-import com.example.gymtracker.screens.Exercise
-
-data class WorkoutSessionWithMuscles(
+data class SessionWorkoutWithMuscles(
     val sessionId: Long,
     val workoutId: Int?,
     val startTime: Long,

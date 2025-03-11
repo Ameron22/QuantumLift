@@ -5,13 +5,13 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
 @Database(
-    entities = [ExerciseEntity::class,
-        WorkoutEntity::class,
-        WorkoutExerciseCrossRef::class,
-        WorkoutSessionEntity::class, // Add this
-        ExerciseSessionEntity::class // Add this
+    entities = [EntityExercise::class,
+        EntityWorkout::class,
+        CrossRefWorkoutExercise::class,
+        SessionWorkoutEntity::class, // Add this
+        SessionEntityExercise::class // Add this
     ],
-    version = 8, // Increase version number when schema changes ( you need to change version when you make changes to DB)
+    version = 10, // Increase version number when schema changes ( you need to change version when you make changes to DB)
     exportSchema = false // Disable schema export
 )
 @TypeConverters(Converter::class)

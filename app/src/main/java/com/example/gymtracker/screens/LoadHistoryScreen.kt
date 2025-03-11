@@ -10,11 +10,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.gymtracker.classes.HistoryViewModel
-import com.example.gymtracker.classes.WorkoutSessionWithMuscles
+import com.example.gymtracker.classes.SessionWorkoutWithMuscles
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -71,7 +70,7 @@ fun LoadHistoryScreen(navController: NavController, viewModel: HistoryViewModel)
 
 
 @Composable
-fun WorkoutSessionCard(session: WorkoutSessionWithMuscles) {
+fun WorkoutSessionCard(session: SessionWorkoutWithMuscles) {
     val formattedDate = Instant.ofEpochMilli(session.startTime)
         .atZone(ZoneId.systemDefault()) // Use device's time zone
         .format(DateTimeFormatter.ofPattern("MMMM dd, yyyy")) // e.g., "March 10, 2025"

@@ -19,9 +19,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.gymtracker.data.AppDatabase
-import com.example.gymtracker.data.ExerciseEntity
-import com.example.gymtracker.data.WorkoutEntity
-import com.example.gymtracker.data.WorkoutExerciseCrossRef
+import com.example.gymtracker.data.EntityExercise
+import com.example.gymtracker.data.EntityWorkout
+import com.example.gymtracker.data.CrossRefWorkoutExercise
 import kotlinx.coroutines.launch
 
 
@@ -400,10 +400,10 @@ fun WorkoutCreationScreen(navController: NavController) {
             onClick = {
                 scope.launch {
                     try {
-                        val workoutId = dao.insertWorkout(WorkoutEntity(name = workoutName)).toInt()
+                        val workoutId = dao.insertWorkout(EntityWorkout(name = workoutName)).toInt()
                         exercisesList.forEach { exercise ->
                             val exerciseId = dao.insertExercise(
-                                ExerciseEntity(
+                                EntityExercise(
                                     name = exercise.name,
                                     sets = exercise.sets,
                                     weight = exercise.weight,
@@ -412,7 +412,7 @@ fun WorkoutCreationScreen(navController: NavController) {
                                     part = exercise.part
                                 )
                             ).toInt()
-                            dao.insertWorkoutExerciseCrossRef(WorkoutExerciseCrossRef(workoutId, exerciseId))
+                            dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(workoutId, exerciseId))
                         }
                         println("Workout Saved!")
                         navController.popBackStack()

@@ -5,7 +5,7 @@ import androidx.room.*
     primaryKeys = ["workoutId", "exerciseId"],
     indices = [Index(value = ["exerciseId"])]
 )
-data class WorkoutExerciseCrossRef(
+data class CrossRefWorkoutExercise(
     val workoutId: Int,
     val exerciseId: Int
 )
