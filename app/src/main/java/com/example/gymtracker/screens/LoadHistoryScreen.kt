@@ -13,10 +13,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.gymtracker.classes.HistoryViewModel
 import com.example.gymtracker.classes.SessionWorkoutWithMuscles
+import com.example.gymtracker.components.BottomNavBar
+import com.example.gymtracker.components.WorkoutHistoryCard
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -27,58 +30,74 @@ private val ItemPadding = 8.dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoadHistoryScreen(navController: NavController, viewModel: HistoryViewModel) {
-    val muscleSoreness by viewModel.muscleSoreness.collectAsState()
     val workoutSessions by viewModel.workoutSessions.collectAsState()
+    val muscleSoreness by viewModel.muscleSoreness.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { 
-                    Text(
-                        text = "Workout History",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                },
+                title = { Text("History") },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
                 )
             )
-        }
-    ) { innerPadding ->
-        Column(
+        },
+        bottomBar = { BottomNavBar(navController) }
+    ) { paddingValues ->
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Recent Workouts
-            Text(
-                text = "Recent Workouts",
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-            workoutSessions.forEach { session ->
-                WorkoutSessionCard(session)
+            // Display muscle soreness section
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Muscle Recovery Status",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        muscleSoreness.forEach { (muscle, soreness) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(text = muscle)
+                                Text(
+                                    text = soreness,
+                                    color = when (soreness) {
+                                        "Very Sore" -> Color.Red
+                                        "Slightly Sore" -> Color.Yellow
+                                        else -> Color.Green
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
-            // Muscle Soreness
-            Text(
-                text = "Muscle Soreness",
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-            MuscleGroupOverview(muscleSoreness)
+            // Display workout history
+            items(workoutSessions) { session ->
+                WorkoutHistoryCard(
+                    session = session,
+                    onClick = { /* Handle click if needed */ }
+                )
+            }
         }
     }
 }

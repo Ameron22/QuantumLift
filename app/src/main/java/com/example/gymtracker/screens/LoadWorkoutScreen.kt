@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.ui.Alignment
@@ -27,138 +28,55 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import com.example.gymtracker.data.EntityExercise
+import kotlinx.coroutines.Dispatchers
+import com.example.gymtracker.components.BottomNavBar
+import com.example.gymtracker.components.WorkoutCard
+import com.example.gymtracker.navigation.Screen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoadWorkoutScreen(navController: NavController) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getDatabase(context) }
-    val dao = remember { db.exerciseDao() }
+    val workouts = remember { mutableStateOf(listOf<EntityWorkout>()) }
     val scope = rememberCoroutineScope()
 
-    // State to hold the list of workouts
-    var workouts: List<EntityWorkout> by remember { mutableStateOf(emptyList()) }
-    var exercisesMap: Map<Int, List<EntityExercise>> by remember { mutableStateOf(emptyMap()) }
-
-    // State for search text
-    var searchText by remember { mutableStateOf("") }
-
-    // Fetch workouts when the screen is loaded
     LaunchedEffect(Unit) {
-        scope.launch {
-            workouts = dao.getAllWorkouts()
-            exercisesMap = workouts.associate { workout ->
-                val workoutWithExercises = dao.getWorkoutWithExercises(workout.id)
-                workout.id to workoutWithExercises.flatMap { it.exercises }
-            }
+        scope.launch(Dispatchers.IO) {
+            val dao = AppDatabase.getDatabase(context).exerciseDao()
+            workouts.value = dao.getAllWorkouts()
         }
-    }
-
-    // Filter workouts based on search text
-    val filteredWorkouts = workouts.filter { workout ->
-        workout.name.contains(searchText, ignoreCase = true)
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { 
-                    Text(
-                        text = "Load Workout",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                },
+                title = { Text("Workouts") },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
                 )
             )
+        },
+        bottomBar = { BottomNavBar(navController) },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { navController.navigate(Screen.WorkoutCreation.route) }
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Add Workout")
+            }
         }
-    ) { innerPadding ->
-        Column(
+    ) { paddingValues ->
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(paddingValues)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                OutlinedTextField(
-                    value = searchText,
-                    onValueChange = { searchText = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Search workouts...") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "Search"
-                        )
-                    },
-                    trailingIcon = {
-                        if (searchText.isNotEmpty()) {
-                            IconButton(onClick = { searchText = "" }) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Clear search"
-                                )
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Text,
-                        imeAction = ImeAction.Search
-                    ),
-                    colors = TextFieldDefaults.colors(
-                        focusedTextColor = MaterialTheme.colorScheme.onBackground,
-                        unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
-                        focusedContainerColor = MaterialTheme.colorScheme.background,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.background,
-                        focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                        unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
-                    )
+            items(workouts.value) { workout ->
+                WorkoutCard(
+                    workout = workout,
+                    onClick = { navController.navigate(Screen.Routes.workoutDetails(workout.id)) }
                 )
-            }
-
-            // Display the list of filtered workouts
-            if (workouts.isEmpty()) {
-                Text(
-                    text = if (searchText.isEmpty()) "No workouts found." else "No matching workouts found.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(16.dp)
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(filteredWorkouts) { workout ->
-                        val exercises = exercisesMap[workout.id] ?: emptyList()
-                        WorkoutItem(
-                            workout = workout,
-                            exercises = exercises,
-                            onClick = {
-                                // Handle workout selection (e.g., navigate to details)
-                                navController.navigate("workoutDetails/${workout.id}")
-                            }
-                        )
-                    }
-                }
             }
         }
     }

@@ -95,14 +95,24 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
 
     // Function to end the workout session
     fun endWorkoutSession() {
-        val endTime = System.currentTimeMillis()
-        val duration = (endTime - (startTimeWorkout ?: return)) / 1000
+        if (sessionId == null) {
+            // If no session was started, don't do anything
+            return
+        }
 
         coroutineScope.launch(Dispatchers.IO) {
             sessionId?.let { id ->
-                dao.updateWorkoutSessionDuration(id, duration)
-                Log.d("WorkoutDetailsScreen", "Workout session duration updated: $duration seconds")
-                showSaveNotification = true
+                // Get the session from the database to get its start time
+                val session = dao.getWorkoutSession(id)
+                if (session != null) {
+                    val endTime = System.currentTimeMillis()
+                    val duration = (endTime - session.startTime) / 1000
+                    dao.updateWorkoutSessionDuration(id, duration)
+                    Log.d("WorkoutDetailsScreen", "Workout session duration updated: $duration seconds")
+                    withContext(Dispatchers.Main) {
+                        showSaveNotification = true
+                    }
+                }
             }
         }
     }
@@ -116,10 +126,21 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
         }
     }
 
-    // Fetch workout data
+    // Fetch workout data and session data
     LaunchedEffect(workoutId) {
         try {
             workoutWithExercises = dao.getWorkoutWithExercises(workoutId)
+            // Check if there's an active session for this workout
+            val sessions = dao.getWorkoutSessionsByWorkoutId(workoutId)
+            if (sessions.isNotEmpty()) {
+                val latestSession = sessions.maxByOrNull { it.startTime }
+                if (latestSession != null && latestSession.duration == 0L) {
+                    // Found an active session
+                    sessionId = latestSession.sessionId
+                    startTimeWorkout = latestSession.startTime
+                    workoutStarted = true
+                }
+            }
         } catch (e: Exception) {
             Log.e("WorkoutDetailsScreen", "Database error: ${e.message}")
         }

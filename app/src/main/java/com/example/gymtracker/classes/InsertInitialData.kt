@@ -2,47 +2,129 @@ package com.example.gymtracker.classes
 
 import com.example.gymtracker.data.ExerciseDao
 import com.example.gymtracker.data.EntityExercise
-import com.example.gymtracker.data.SessionEntityExercise
 import com.example.gymtracker.data.EntityWorkout
 import com.example.gymtracker.data.CrossRefWorkoutExercise
-import com.example.gymtracker.data.SessionWorkoutEntity
 
 class InsertInitialData {
     suspend fun insertInitialData(dao: ExerciseDao) {
         // Check if the database is empty
         if (dao.getWorkoutCount() == 0) {
             // Insert Workouts
-            val workout1Id = dao.insertWorkout(EntityWorkout(name = "Full Body Workout"))
-            val workout2Id = dao.insertWorkout(EntityWorkout(name = "Upper Body Workout"))
-            val workout3Id = dao.insertWorkout(EntityWorkout(name = "Lower Body Workout"))
-            val workout4Id = dao.insertWorkout(EntityWorkout(name = "Cardio Workout"))
-            val workout5Id = dao.insertWorkout(EntityWorkout(name = "Core Workout"))
+            val pushWorkoutId = dao.insertWorkout(EntityWorkout(name = "Push Day"))
+            val pullWorkoutId = dao.insertWorkout(EntityWorkout(name = "Pull Day"))
+            val legsWorkoutId = dao.insertWorkout(EntityWorkout(name = "Leg Day"))
+            val quickUpperId = dao.insertWorkout(EntityWorkout(name = "Quick Upper Body"))
+            val coreCardioId = dao.insertWorkout(EntityWorkout(name = "Core & Cardio"))
 
-            // Insert Exercises
-            val exercise1Id = dao.insertExercise(EntityExercise(name = "Push-ups", sets = 3, reps = 15, weight = 0, muscle = "Chest", part = listOf("Upper Chest", "Middle Chest")))
-            val exercise2Id = dao.insertExercise(EntityExercise(name = "Pull-ups", sets = 3, reps = 10, weight = 0, muscle = "Back", part = listOf("Upper Back", "Lats")))
-            val exercise3Id = dao.insertExercise(EntityExercise(name = "Squats", sets = 4, reps = 12, weight = 20, muscle = "Legs", part = listOf("Quadriceps", "Glutes")))
-            val exercise4Id = dao.insertExercise(EntityExercise(name = "Plank", sets = 3, reps = 1940, weight = 0, muscle = "Core", part = listOf("Abs", "Obliques")))
-            val exercise5Id = dao.insertExercise(EntityExercise(name = "Running", sets = 1, reps = 1800, weight = 0, muscle = "Cardio", part = listOf("Legs")))
+            // Insert Exercises with realistic data
+            // Push exercises
+            val benchPressId = dao.insertExercise(
+                EntityExercise(
+                    name = "Bench Press",
+                    sets = 4,
+                    reps = 8,
+                    weight = 60,
+                    muscle = "Chest",
+                    part = listOf("Upper Chest", "Middle Chest", "Front Deltoids")
+                )
+            )
+            val shoulderPressId = dao.insertExercise(
+                EntityExercise(
+                    name = "Shoulder Press",
+                    sets = 3,
+                    reps = 10,
+                    weight = 40,
+                    muscle = "Shoulders",
+                    part = listOf("Front Deltoids", "Middle Deltoids")
+                )
+            )
+            val tricepExtensionId = dao.insertExercise(
+                EntityExercise(
+                    name = "Tricep Extension",
+                    sets = 3,
+                    reps = 12,
+                    weight = 25,
+                    muscle = "Arms",
+                    part = listOf("Triceps")
+                )
+            )
+
+            // Pull exercises
+            val latPulldownId = dao.insertExercise(
+                EntityExercise(
+                    name = "Lat Pulldown",
+                    sets = 4,
+                    reps = 10,
+                    weight = 50,
+                    muscle = "Back",
+                    part = listOf("Lats", "Upper Back")
+                )
+            )
+            val bicepCurlId = dao.insertExercise(
+                EntityExercise(
+                    name = "Bicep Curl",
+                    sets = 3,
+                    reps = 12,
+                    weight = 15,
+                    muscle = "Arms",
+                    part = listOf("Biceps")
+                )
+            )
+
+            // Legs exercises
+            val squatId = dao.insertExercise(
+                EntityExercise(
+                    name = "Barbell Squat",
+                    sets = 4,
+                    reps = 8,
+                    weight = 80,
+                    muscle = "Legs",
+                    part = listOf("Quadriceps", "Glutes", "Hamstrings")
+                )
+            )
+
+            // Core & Cardio exercises
+            val plankId = dao.insertExercise(
+                EntityExercise(
+                    name = "Plank",
+                    sets = 3,
+                    reps = 1060, // 1 minute = 1060 (60 seconds + 1000 to indicate time)
+                    weight = 0,
+                    muscle = "Core",
+                    part = listOf("Abs", "Lower Back")
+                )
+            )
+            val hiitId = dao.insertExercise(
+                EntityExercise(
+                    name = "HIIT Running",
+                    sets = 1,
+                    reps = 1900, // 15 minutes = 1900 (900 seconds + 1000 to indicate time)
+                    weight = 0,
+                    muscle = "Cardio",
+                    part = listOf("Full Body")
+                )
+            )
 
             // Associate Exercises with Workouts
-            dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(workout1Id.toInt(), exercise1Id.toInt()))
-            dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(workout1Id.toInt(), exercise2Id.toInt()))
-            dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(workout2Id.toInt(), exercise1Id.toInt()))
-            dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(workout2Id.toInt(), exercise2Id.toInt()))
-            dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(workout3Id.toInt(), exercise3Id.toInt()))
-            dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(workout4Id.toInt(), exercise5Id.toInt()))
-            dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(workout5Id.toInt(), exercise4Id.toInt()))
+            // Push Day (3 exercises)
+            dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(pushWorkoutId.toInt(), benchPressId.toInt()))
+            dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(pushWorkoutId.toInt(), shoulderPressId.toInt()))
+            dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(pushWorkoutId.toInt(), tricepExtensionId.toInt()))
 
-            // Insert Workout Sessions
-            val session1Id = dao.insertWorkoutSession(SessionWorkoutEntity(workoutId = workout1Id.toInt(), startTime = System.currentTimeMillis() - 86400000, duration = 1800, workoutName = "Full Body Workout"))
-            val session2Id = dao.insertWorkoutSession(SessionWorkoutEntity(workoutId = workout2Id.toInt(), startTime = System.currentTimeMillis() - 172800000, duration = 1500, workoutName = "Upper Body Workout"))
-            val session3Id = dao.insertWorkoutSession(SessionWorkoutEntity(workoutId = workout3Id.toInt(), startTime = System.currentTimeMillis() - 259200000, duration = 1200, workoutName = "Lower Body Workout"))
+            // Pull Day (2 exercises)
+            dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(pullWorkoutId.toInt(), latPulldownId.toInt()))
+            dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(pullWorkoutId.toInt(), bicepCurlId.toInt()))
 
-          /*  // Insert Exercise Sessions
-            dao.insertExerciseSession(SessionEntityExercise(sessionId = session1Id, exerciseId = exercise1Id, sets = 3, repsOrTime = 15, muscleGroup = "Chest", muscleParts = listOf("Upper Chest", "Middle Chest"), completedSets = 3, completedRepsOrTime = 15, weight = 5))
-            dao.insertExerciseSession(SessionEntityExercise(sessionId = session1Id, exerciseId = exercise2Id, sets = 3, repsOrTime = 10, muscleGroup = "Back", muscleParts = listOf("Upper Back", "Lats"), completedSets = 3, completedRepsOrTime = 10, weight = 5))
-            dao.insertExerciseSession(SessionEntityExercise(sessionId = session2Id, exerciseId = exercise1Id, sets = 3, repsOrTime = 15, muscleGroup = "Chest", muscleParts = listOf("Upper Chest", "Middle Chest"), completedSets = 3, completedRepsOrTime = 15, weight = 5))
-      */  }
+            // Leg Day (1 exercise)
+            dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(legsWorkoutId.toInt(), squatId.toInt()))
+
+            // Quick Upper Body (2 exercises)
+            dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(quickUpperId.toInt(), benchPressId.toInt()))
+            dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(quickUpperId.toInt(), latPulldownId.toInt()))
+
+            // Core & Cardio (2 exercises)
+            dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(coreCardioId.toInt(), plankId.toInt()))
+            dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(coreCardioId.toInt(), hiitId.toInt()))
+        }
     }
 }

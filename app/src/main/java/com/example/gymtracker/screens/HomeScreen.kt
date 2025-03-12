@@ -16,11 +16,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.gymtracker.Screen
+import com.example.gymtracker.navigation.Screen
 import com.example.gymtracker.classes.InsertInitialData
 import com.example.gymtracker.data.AppDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import com.example.gymtracker.components.BottomNavBar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,14 +53,13 @@ fun HomeScreen(navController: NavController) {
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
                 )
             )
-        }
-    ) { innerPadding ->
+        },
+        bottomBar = { BottomNavBar(navController) }
+    ) { paddingValues ->
         Column(
             modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxSize()
+                .padding(paddingValues)
         ) {
             CreateWorkoutButton(
                 onClick = { navController.navigate(Screen.WorkoutCreation.route) }

@@ -43,9 +43,16 @@ interface ExerciseDao {
 
     @Query("SELECT * FROM workout_sessions")
     suspend fun getAllWorkoutSessions(): List<SessionWorkoutEntity>
+
     @Query("SELECT ws.sessionId, ws.workoutId, ws.startTime, ws.duration, ws.workoutName, es.muscleGroup , es.sets , es.repsOrTime, es.weight " +
             "FROM workout_sessions ws INNER JOIN exercise_sessions es " +
             "ON ws.sessionId = es.sessionId " +
             "GROUP BY ws.sessionId, es.muscleGroup")
     fun getAllWorkoutSessionsWithMuscleStress(): Flow <List<SessionWorkoutWithMusclesStress>>
+
+    @Query("SELECT * FROM workout_sessions WHERE workoutId = :workoutId")
+    suspend fun getWorkoutSessionsByWorkoutId(workoutId: Int): List<SessionWorkoutEntity>
+
+    @Query("SELECT * FROM workout_sessions WHERE sessionId = :sessionId")
+    suspend fun getWorkoutSession(sessionId: Long): SessionWorkoutEntity?
 }
