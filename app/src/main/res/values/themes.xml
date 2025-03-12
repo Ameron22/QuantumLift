@@ -2,10 +2,15 @@
 <resources>
 
     <style name="Theme.QuantumLift" parent="android:Theme.Material.Light.NoActionBar" />
-    
+
     <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <!-- Set the background color of the splash screen -->
         <item name="windowSplashScreenBackground">@color/black</item>
-        <item name="postSplashScreenTheme">@style/Theme.QuantumLift</item>
+
+        <!-- Set your custom vector drawable as the splash screen icon -->
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/quantumlift</item>
+
+        <!-- Set the theme to use after the splash screen exits -->
+        <item name="postSplashScreenTheme">@style/Theme.QuantumLift</item>
     </style>
 </resources>

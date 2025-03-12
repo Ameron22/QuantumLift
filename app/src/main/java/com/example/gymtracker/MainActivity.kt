@@ -1,11 +1,15 @@
 package com.example.gymtracker
 
+import android.animation.ObjectAnimator
 import android.os.Bundle
+import android.view.View
+import android.view.animation.OvershootInterpolator
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
+import androidx.core.animation.doOnEnd
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -44,7 +48,34 @@ class MainActivity : ComponentActivity() {
             setKeepOnScreenCondition {
                 viewModel.isLoading.value
             }
+            setOnExitAnimationListener { splashScreenView  ->
+                val zoomX = ObjectAnimator.ofFloat(
+                    splashScreenView .iconView,
+                    View.SCALE_X,
+                    0.3f,
+                    0.0f
+                ).apply {
+                    interpolator = OvershootInterpolator()
+                    duration = 500L
+                    doOnEnd { splashScreenView.remove() }
+                }
 
+                val zoomY = ObjectAnimator.ofFloat(
+                    splashScreenView.iconView,
+                    View.SCALE_Y,
+                    0.3f,
+                    0.0f
+                ).apply {
+                    interpolator = OvershootInterpolator()
+                    duration = 500L
+                    doOnEnd { splashScreenView.remove() }
+                }
+
+                // Start the animations
+                zoomX.start()
+                zoomY.start()
+
+            }
         }
         super.onCreate(savedInstanceState)
 
