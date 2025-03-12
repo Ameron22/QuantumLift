@@ -4,13 +4,21 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtracker.data.ExerciseDao
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading =_isLoading.asStateFlow()
     private val _workoutSessions = MutableStateFlow<List<SessionWorkoutWithMuscles>>(emptyList())
     val workoutSessions: StateFlow<List<SessionWorkoutWithMuscles>> get() = _workoutSessions
+
+    // Add a StateFlow for muscle soreness
+    private val _muscleSoreness = MutableStateFlow<Map<String, String>>(emptyMap())
+    val muscleSoreness: StateFlow<Map<String, String>> get() = _muscleSoreness
 
     init {
         loadWorkoutSessions()
@@ -57,8 +65,12 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
 
                     // Update StateFlow with the new list
                     _workoutSessions.value = sessionMap.values.toList()
+                    // Update muscle soreness whenever workout sessions change
+                    _muscleSoreness.value = calculateMuscleSoreness()
                 }
+            //delay(3000L)
         }
+        _isLoading.value = false
     }
 
     // Calculate muscle soreness dynamically

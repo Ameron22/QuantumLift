@@ -6,11 +6,17 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,14 +31,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
 import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.EntityWorkout
 import com.example.gymtracker.data.SessionWorkoutEntity
 import com.example.gymtracker.data.WorkoutWithExercises
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 data class ExerciseState(
     val exercise: EntityExercise,
@@ -44,6 +54,8 @@ data class WorkoutState(
     val exercises: List<ExerciseState>,
     var isFinished: Boolean = false
 )
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
     val coroutineScope = rememberCoroutineScope()
@@ -51,14 +63,11 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
     val db = remember { AppDatabase.getDatabase(context) }
     val dao = remember { db.exerciseDao() }
     var workoutWithExercises by remember { mutableStateOf<List<WorkoutWithExercises>?>(null) }
-    // State for sessionId
     var sessionId by remember { mutableStateOf<Long?>(null) }
-
-    var activeExercise by remember { mutableStateOf<EntityExercise?>(null) }
     var startTimeWorkout: Long by remember { mutableLongStateOf(0L) }
     var workoutStarted by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(false) } // Loading state
-
+    var isLoading by remember { mutableStateOf(false) }
+    var showSaveNotification by remember { mutableStateOf(false) }
 
     // Function to start the workout session
     fun startWorkoutSession(exId: Int) {
@@ -72,14 +81,13 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
         )
 
         coroutineScope.launch(Dispatchers.IO) {
-            isLoading = true // Set loading state
-            sessionId = dao.insertWorkoutSession(workoutSession) // Insert and get the sessionId
-            startTimeWorkout = System.currentTimeMillis() // Record the start time
+            isLoading = true
+            sessionId = dao.insertWorkoutSession(workoutSession)
+            startTimeWorkout = System.currentTimeMillis()
             println("Workout session started with ID: $sessionId")
-            isLoading = false // Reset loading state
-            // Navigate to ExerciseScreen after sessionId is set
+            isLoading = false
             withContext(Dispatchers.Main) {
-                isLoading = false // Reset loading state
+                isLoading = false
                 navController.navigate("exerciseDetails/${exId}/${sessionId}")
             }
         }
@@ -93,9 +101,19 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
         coroutineScope.launch(Dispatchers.IO) {
             sessionId?.let { id ->
                 dao.updateWorkoutSessionDuration(id, duration)
+                Log.d("WorkoutDetailsScreen", "Workout session duration updated: $duration seconds")
+                showSaveNotification = true
             }
         }
+    }
 
+    // Auto-dismiss notification after 3 seconds
+    LaunchedEffect(showSaveNotification) {
+        if (showSaveNotification) {
+            delay(3000)
+            showSaveNotification = false
+            navController.popBackStack()
+        }
     }
 
     // Fetch workout data
@@ -119,131 +137,166 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
 
     // UI
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { 
+                    Text(
+                        text = workoutWithExercises?.firstOrNull()?.workout?.name ?: "Loading...",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                )
+            )
+        },
         bottomBar = {
-            if (activeExercise == null) {
-                BottomAppBar(
-                    modifier = Modifier.fillMaxWidth(),
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            BottomAppBar(
+                modifier = Modifier.fillMaxWidth(),
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
+                    Button(
+                        onClick = { endWorkoutSession() },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
                     ) {
-                        Button(
-                            onClick = {
-                                endWorkoutSession()
-                                navController.popBackStack() // Navigate back after saving
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                        ) {
-                            Text("Save Workout")
-                        }
+                        Text("Save Workout")
                     }
                 }
             }
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(
-                text = workoutWithExercises?.firstOrNull()?.workout?.name ?: "Loading...",
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
-            workoutWithExercises?.flatMap { it.exercises }?.forEach { exercise ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp)
-                        .clickable {
-                            if (!workoutStarted) {
-                                startWorkoutSession(exercise.id)
-                                workoutStarted = true
-                            } else {
-                                if (sessionId != null) {
-                                    navController.navigate("exerciseDetails/${exercise.id}/${sessionId}")
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                workoutWithExercises?.flatMap { it.exercises }?.forEach { exercise ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .clickable {
+                                if (!workoutStarted) {
+                                    startWorkoutSession(exercise.id)
+                                    workoutStarted = true
                                 } else {
-                                    println("Workout session not started yet. Please wait.")
+                                    if (sessionId != null) {
+                                        navController.navigate("exerciseDetails/${exercise.id}/${sessionId}")
+                                    } else {
+                                        println("Workout session not started yet. Please wait.")
+                                    }
                                 }
                             }
-                        }
-                        .graphicsLayer {
-                            // Apply brightness effect
-                            this.alpha = brightness
-                        },
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .padding(8.dp)
-                            .fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(12.dp)
+                            ),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                        ) {
                             Text(
                                 text = exercise.name,
-                                style = MaterialTheme.typography.bodyLarge
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "${exercise.muscle} - ${exercise.part.joinToString()}",
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(top = 4.dp)
+                                text = "${exercise.sets} sets × ${if (exercise.reps > 50) "${(exercise.reps-1000)/60}:${(exercise.reps-1000)%60} min" else "${exercise.reps} reps"}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
                         }
+                    }
+                }
+            }
 
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+            // Save Notification
+            if (showSaveNotification) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.7f))
+                        .clickable { showSaveNotification = false },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .padding(32.dp)
+                            .border(
+                                width = 2.dp,
+                                color = MaterialTheme.colorScheme.primary,
+                                shape = RoundedCornerShape(16.dp)
+                            ),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            var sets by remember { mutableStateOf(exercise.sets) }
-                            var reps by remember { mutableStateOf(exercise.reps) }
-                            var weight by remember { mutableStateOf(exercise.weight) }
-
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("$sets Sets", Modifier.padding(horizontal = 16.dp))
-                            }
-
-                            if (exercise.reps > 50) {
-                                val timeInSeconds = exercise.reps - 1000
-                                var minutes by remember { mutableIntStateOf(timeInSeconds / 60) }
-                                var seconds by remember { mutableIntStateOf(timeInSeconds % 60) }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Text("$minutes min")
-                                        }
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Text("$seconds sec")
-                                        }
-                                    }
-                                }
-                            } else {
-                                if(exercise.weight!=0) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("$weight Kg")
-                                    }
-                                }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("$reps Reps")
-                                }
-                            }
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Success",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Text(
+                                text = "Workout Completed!",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = workoutWithExercises?.firstOrNull()?.workout?.name ?: "",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Duration: ${TimeUnit.SECONDS.toMinutes(((System.currentTimeMillis() - startTimeWorkout) / 1000))} minutes",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                            Text(
+                                text = SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(System.currentTimeMillis()),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            )
                         }
                     }
                 }

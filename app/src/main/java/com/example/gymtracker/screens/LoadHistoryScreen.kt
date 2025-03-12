@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,53 +24,64 @@ import java.time.format.DateTimeFormatter
 private val SectionSpacing = 16.dp
 private val ItemPadding = 8.dp
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoadHistoryScreen(navController: NavController, viewModel: HistoryViewModel) {
+    val muscleSoreness by viewModel.muscleSoreness.collectAsState()
     val workoutSessions by viewModel.workoutSessions.collectAsState()
-    // Calculate muscle soreness and progress data dynamically
-    val muscleSoreness by remember { derivedStateOf { viewModel.calculateMuscleSoreness() } }
 
-
-
-    // Render the UI
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(SectionSpacing)
-            //.verticalScroll(rememberScrollState())
-    ) {
-        // Workout Sessions List
-        Text(
-            text = "Workout Sessions",
-            style = MaterialTheme.typography.headlineMedium
-        )
-        LazyColumn(
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { 
+                    Text(
+                        text = "Workout History",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                )
+            )
+        }
+    ) { innerPadding ->
+        Column(
             modifier = Modifier
-                .weight(1f) // Flexible height for dynamic content
-                .padding(top = 8.dp)
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            items(workoutSessions) { session ->
+            // Recent Workouts
+            Text(
+                text = "Recent Workouts",
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            workoutSessions.forEach { session ->
                 WorkoutSessionCard(session)
             }
+
+            // Muscle Soreness
+            Text(
+                text = "Muscle Soreness",
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            MuscleGroupOverview(muscleSoreness)
         }
-
-        // Muscle Soreness
-        Spacer(modifier = Modifier.height(SectionSpacing))
-        Text(
-            text = "Muscle Soreness",
-            style = MaterialTheme.typography.headlineMedium
-        )
-        MuscleGroupOverview(muscleSoreness)
-/*
-        // Progress Graphs    Later
-        Text("Progress Over Time", style = MaterialTheme.typography.headlineMedium)
-        ProgressGraphs(progressData)
-
-         For later
-         */
     }
 }
-
 
 @Composable
 fun WorkoutSessionCard(session: SessionWorkoutWithMuscles) {

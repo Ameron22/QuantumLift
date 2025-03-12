@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.NavHostController
@@ -16,13 +17,14 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.gymtracker.classes.HistoryViewModel
 import com.example.gymtracker.data.ExerciseDao
-import com.example.gymtracker.ui.theme.GymTrackerTheme
+import com.example.gymtracker.ui.theme.QuantumLiftTheme
 import com.example.gymtracker.screens.HomeScreen // Import HomeScreen
 import com.example.gymtracker.screens.LoadHistoryScreen
 import com.example.gymtracker.screens.LoadWorkoutScreen
 import com.example.gymtracker.screens.WorkoutCreationScreen // Import WorkoutCreationScreen
 import com.example.gymtracker.screens.WorkoutDetailsScreen
 import com.example.gymtracker.screens.ExerciseScreen
+import kotlinx.coroutines.delay
 
 sealed class Screen(val route: String) {
     object Home : Screen("home")
@@ -35,15 +37,21 @@ sealed class Screen(val route: String) {
 
 class MainActivity : ComponentActivity() {
     private val viewModel: HistoryViewModel by viewModels {
-        HistoryViewModelFactory((application as GymTrackerApp).database.exerciseDao())
+        HistoryViewModelFactory((application as QuantumLiftApp).database.exerciseDao())
     }
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen().apply {
+            setKeepOnScreenCondition {
+                viewModel.isLoading.value
+            }
+
+        }
         super.onCreate(savedInstanceState)
 
         enableEdgeToEdge()
         setContent {
 
-            GymTrackerTheme {
+            QuantumLiftTheme {
 
                 //creates a NavController to manage navigation
                 val navController = rememberNavController()
@@ -77,18 +85,10 @@ class MainActivity : ComponentActivity() {
                             navArgument("workoutSessionId") { type = NavType.LongType } // Add workoutSessionId as a Long argument
                         )
                     ) { backStackEntry ->
-                        // Retrieve exerciseId and workoutSessionId from the backStackEntry
                         val exerciseId = backStackEntry.arguments?.getInt("exerciseId") ?: 0
                         val workoutSessionId = backStackEntry.arguments?.getLong("workoutSessionId") ?: 0L
-
-                        // Pass the arguments to ExerciseScreen
-                        ExerciseScreen(
-                            exerciseId = exerciseId,
-                            workoutSessionId = workoutSessionId,
-                            navController = navController
-                        )
+                        ExerciseScreen(exerciseId = exerciseId, workoutSessionId = workoutSessionId, navController = navController)
                     }
-
                 }
             }
         }

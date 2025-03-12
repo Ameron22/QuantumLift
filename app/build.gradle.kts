@@ -71,7 +71,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.accompanist.pager)
     //implementation(libs.androidx.compose.material3)
-
+    implementation(libs.androidx.core.splashscreen) // Latest stable version
 
     //ksp(libs.androidx.room.compiler) // Use ksp for Kotlin Symbol Processing
 }
