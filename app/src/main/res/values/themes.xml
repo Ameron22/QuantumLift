@@ -7,9 +7,12 @@
         <!-- Set the background color of the splash screen -->
         <item name="windowSplashScreenBackground">@color/black</item>
 
-        <!-- Set your custom vector drawable as the splash screen icon -->
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/avd_bicepanim</item>
-        <item name="windowSplashScreenAnimationDuration">1000</item>
+        <!-- Use the static drawable -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/test_square</item>
+
+        <!-- Set the animation duration -->
+        <item name="windowSplashScreenAnimationDuration">0</item>
+
         <!-- Set the theme to use after the splash screen exits -->
         <item name="postSplashScreenTheme">@style/Theme.QuantumLift</item>
     </style>

@@ -1,19 +1,13 @@
 package com.example.gymtracker
 
-import android.animation.ObjectAnimator
 import android.os.Bundle
-import android.view.View
-import android.view.animation.OvershootInterpolator
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.runtime.Composable
-import androidx.core.animation.doOnEnd
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.compose.runtime.*
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -22,13 +16,7 @@ import androidx.navigation.navArgument
 import com.example.gymtracker.classes.HistoryViewModel
 import com.example.gymtracker.data.ExerciseDao
 import com.example.gymtracker.ui.theme.QuantumLiftTheme
-import com.example.gymtracker.screens.HomeScreen
-import com.example.gymtracker.screens.LoadHistoryScreen
-import com.example.gymtracker.screens.LoadWorkoutScreen
-import com.example.gymtracker.screens.WorkoutCreationScreen
-import com.example.gymtracker.screens.WorkoutDetailsScreen
-import com.example.gymtracker.screens.ExerciseScreen
-import com.example.gymtracker.screens.AchievementsScreen
+import com.example.gymtracker.screens.*
 import com.example.gymtracker.navigation.Screen
 import com.example.gymtracker.classes.InsertInitialData
 import com.example.gymtracker.data.AppDatabase
@@ -38,52 +26,19 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val viewModel: HistoryViewModel by viewModels {
-        HistoryViewModelFactory((application as QuantumLiftApp).database.exerciseDao())
-    }
-    override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen().apply {
-            setKeepOnScreenCondition {
-                viewModel.isLoading.value
-            }
-            setOnExitAnimationListener { splashScreenView  ->
-                val zoomX = ObjectAnimator.ofFloat(
-                    splashScreenView.iconView,
-                    View.SCALE_X,
-                    1.0f,
-                    1.3f
-                ).apply {
-                    interpolator = OvershootInterpolator()
-                    duration = 1000L
-                    doOnEnd { 
-                        val fadeOut = ObjectAnimator.ofFloat(
-                            splashScreenView.iconView,
-                            View.ALPHA,
-                            1f,
-                            0f
-                        ).apply {
-                            duration = 500L
-                            doOnEnd { splashScreenView.remove() }
-                        }
-                        fadeOut.start()
-                    }
+        object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                if (modelClass.isAssignableFrom(HistoryViewModel::class.java)) {
+                    @Suppress("UNCHECKED_CAST")
+                    return HistoryViewModel((application as QuantumLiftApp).database.exerciseDao()) as T
                 }
-
-                val zoomY = ObjectAnimator.ofFloat(
-                    splashScreenView.iconView,
-                    View.SCALE_Y,
-                    1.0f,
-                    1.3f
-                ).apply {
-                    interpolator = OvershootInterpolator()
-                    duration = 1000L
-                }
-
-                zoomX.start()
-                zoomY.start()
+                throw IllegalArgumentException("Unknown ViewModel class")
             }
         }
-        super.onCreate(savedInstanceState)
+    }
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         // Initialize database and DAO
@@ -135,15 +90,5 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-    }
-}
-
-class HistoryViewModelFactory(private val dao: ExerciseDao) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(HistoryViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return HistoryViewModel(dao) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
