@@ -2,115 +2,191 @@ package com.example.gymtracker.classes
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.Lifecycle
 import com.example.gymtracker.data.ExerciseDao
+import com.example.gymtracker.data.RecoveryFactors
+import com.example.gymtracker.data.SessionEntityExercise
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.math.min
+import kotlin.math.max
 
 class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
     private val _isLoading = MutableStateFlow(true)
-    val isLoading =_isLoading.asStateFlow()
+    val isLoading = _isLoading.asStateFlow()
     private val _workoutSessions = MutableStateFlow<List<SessionWorkoutWithMuscles>>(emptyList())
     val workoutSessions: StateFlow<List<SessionWorkoutWithMuscles>> get() = _workoutSessions
 
     // Add a StateFlow for muscle soreness
-    private val _muscleSoreness = MutableStateFlow<Map<String, String>>(emptyMap())
-    val muscleSoreness: StateFlow<Map<String, String>> get() = _muscleSoreness
+    private val _muscleSoreness = MutableStateFlow<Map<String, MuscleSorenessData>>(emptyMap())
+    val muscleSoreness: StateFlow<Map<String, MuscleSorenessData>> get() = _muscleSoreness
 
     init {
         loadWorkoutSessions()
     }
 
     private fun loadWorkoutSessions() {
-        viewModelScope.launch (Dispatchers.IO){
-            dao.getAllWorkoutSessionsWithMuscleStress()
-                .collect { sessionsWithStress ->
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                dao.getAllExerciseSessions()
+                    .collectLatest { sessions ->
+                        // Create a map to store aggregated results
+                        val sessionMap = mutableMapOf<Long, SessionWorkoutWithMuscles>()
+                        val muscleDataMap = mutableMapOf<String, MuscleData>()
 
-                    // Create a map to store aggregated results
-                    val sessionMap = mutableMapOf<Long, SessionWorkoutWithMuscles>()
+                        for (session in sessions) {
+                            val sessionId = session.sessionId
 
-                    for (session in sessionsWithStress) {
-                        val sessionId = session.sessionId
+                            // Get the workout session to get the correct startTime
+                            val workoutSession = dao.getWorkoutSession(sessionId)
 
-                        // If the sessionId is not yet in the map, create a new entry
-                        if (!sessionMap.containsKey(sessionId)) {
-                            sessionMap[sessionId] = SessionWorkoutWithMuscles(
-                                sessionId = sessionId,
-                                workoutId = session.workoutId,
-                                startTime = session.startTime,
-                                duration = session.duration,
-                                workoutName = session.workoutName,
-                                muscleGroups = mutableMapOf() // Will be filled later
-                            )
+                            // If the sessionId is not yet in the map, create a new entry
+                            if (!sessionMap.containsKey(sessionId)) {
+                                if (workoutSession != null) {
+                                    sessionMap[sessionId] = SessionWorkoutWithMuscles(
+                                        sessionId = sessionId,
+                                        workoutId = session.exerciseId.toInt(),
+                                        startTime = workoutSession.startTime,
+                                        duration = workoutSession.duration,
+                                        workoutName = workoutSession.workoutName,
+                                        muscleGroups = mutableMapOf()
+                                    )
+                                }
+                            }
+
+                            // Calculate muscle stress using the new formula
+                            val muscleStress = calculateMuscleStress(session)
+                            
+                            // Update muscle data
+                            val existingData = muscleDataMap[session.muscleGroup] ?: MuscleData()
+                            existingData.totalStress += muscleStress
+                            existingData.lastWorkoutTime = max(existingData.lastWorkoutTime, session.sessionId)
+                            existingData.exercises.add(session)
+                            muscleDataMap[session.muscleGroup] = existingData
+
+                            // Add muscle group stress data
+                            val existingSession = sessionMap[sessionId]!!
+                            (existingSession.muscleGroups as MutableMap)[session.muscleGroup] =
+                                (existingSession.muscleGroups[session.muscleGroup] ?: 0) + muscleStress.toInt()
                         }
 
-                        // Calculate muscle stress based on repsOrTime and weight
-                        val muscleStress = if (session.repsOrTime > 50) {
-                            // If repsOrTime represents time (in seconds), ignore weight
-                            session.sets * (session.repsOrTime-1000)
-                        } else {
-                            // If repsOrTime represents reps, include weight
-                            session.sets * session.repsOrTime * session.weight
+                        // Update StateFlow with the new list
+                        _workoutSessions.value = sessionMap.values.toList()
+                            .sortedByDescending { it.startTime }
+                        
+                        // Calculate and update muscle soreness
+                        _muscleSoreness.value = calculateMuscleSoreness(muscleDataMap)
+
+                        // Start a parallel coroutine for the minimum display time
+                        launch {
+                            delay(1500L)
+                            _isLoading.value = false
                         }
-
-                        // Add muscle group stress data
-                        val existingSession = sessionMap[sessionId]!!
-                        (existingSession.muscleGroups as MutableMap)[session.muscleGroup] =
-                            (existingSession.muscleGroups[session.muscleGroup] ?: 0) + muscleStress
-
                     }
-
-                    // Update StateFlow with the new list
-                    _workoutSessions.value = sessionMap.values.toList()
-                    // Update muscle soreness whenever workout sessions change
-                    _muscleSoreness.value = calculateMuscleSoreness()
-
-                    // Start a parallel coroutine for the minimum display time
-                    launch {
-                        delay(1500L) // Reduced from 2000L to 1500L for shorter idle time
-                        _isLoading.value = false
-                    }
-                }
+            }
         }
     }
 
-    // Calculate muscle soreness dynamically
-    fun calculateMuscleSoreness(): Map<String, String> {
-        val sessions = _workoutSessions.value
-        val sorenessMap = mutableMapOf<String, String>()
+    /**
+     * Calculates muscle stress using the formula:
+     * Stress = k * (Load * Volume * E) * (1 + N/10) * (1 - A/10)
+     * Where:
+     * k = Individual sensitivity constant (0.1)
+     * Load = Average weight used
+     * Volume = Total reps (sets × reps)
+     * E = Eccentric factor
+     * N = Novelty factor (0-10)
+     * A = Adaptation level (0-10)
+     */
+    private fun calculateMuscleStress(session: SessionEntityExercise): Float {
+        val k = 0.1f // Individual sensitivity constant
+        
+        // Calculate average load and volume
+        val avgLoad = session.weight.filterNotNull().average().toFloat()
+        val totalVolume = session.repsOrTime.filterNotNull().sum()
+        
+        // Calculate base impact
+        val baseImpact = avgLoad * totalVolume * session.eccentricFactor
+        
+        // Calculate multipliers
+        val noveltyMultiplier = 1 + (session.noveltyFactor / 10f)
+        val adaptationMultiplier = 1 - (session.adaptationLevel / 10f)
+        val recoveryMultiplier = calculateRecoveryMultiplier(session.recoveryFactors)
+        
+        return k * baseImpact * noveltyMultiplier * adaptationMultiplier * recoveryMultiplier
+    }
+
+    /**
+     * Calculates recovery multiplier based on various factors
+     * Returns a value between 0.5 and 1.5
+     */
+    private fun calculateRecoveryMultiplier(factors: RecoveryFactors): Float {
+        val sleepImpact = factors.sleepQuality / 10f
+        val proteinImpact = min(factors.proteinIntake / 200f, 1f) // Assuming 200g is optimal
+        val hydrationImpact = factors.hydration / 10f
+        val stressImpact = 1 - (factors.stressLevel / 10f)
+
+        return (sleepImpact + proteinImpact + hydrationImpact + stressImpact) / 4f
+    }
+
+    /**
+     * Calculates muscle soreness for each muscle group
+     */
+    private fun calculateMuscleSoreness(muscleDataMap: Map<String, MuscleData>): Map<String, MuscleSorenessData> {
         val currentTime = System.currentTimeMillis()
+        val sorenessMap = mutableMapOf<String, MuscleSorenessData>()
 
-        // Create a map to store the total stress and last workout time for each muscle group
-        val muscleData = mutableMapOf<String, Pair<Int, Long>>() // Muscle group -> (Total stress, Last workout time)
-
-        // Iterate through all sessions
-        for (session in sessions) {
-            val timeSinceWorkout = currentTime - session.startTime
-
-            // Iterate through muscle groups in the session
-            for ((muscle, stress) in session.muscleGroups) {
-                // Update total stress and last workout time for the muscle group
-                val (existingStress, existingTime) = muscleData[muscle] ?: (0 to 0L)
-                muscleData[muscle] = (existingStress + stress) to maxOf(existingTime, session.startTime)
+        for ((muscle, data) in muscleDataMap) {
+            val daysSinceLastWorkout = (currentTime - data.lastWorkoutTime) / (1000 * 60 * 60 * 24)
+            val totalStress = data.totalStress
+            val recentExercises = data.exercises.filter { 
+                (currentTime - it.sessionId) < (7 * 24 * 60 * 60 * 1000) // Last 7 days
             }
-        }
 
-        // Determine soreness level for each muscle group
-        for ((muscle, data) in muscleData) {
-            val (totalStress, lastWorkoutTime) = data // Explicitly destructure the Pair
-            val daysSinceLastWorkout = (currentTime - lastWorkoutTime) / (1000 * 60 * 60 * 24)
+            // Calculate average RPE and subjective soreness
+            val avgRPE = recentExercises.map { it.rpe }.average().toInt()
+            val avgSubjectiveSoreness = recentExercises.map { it.subjectiveSoreness }.average().toInt()
 
-            sorenessMap[muscle] = when {
-                daysSinceLastWorkout < 1 && totalStress > 50 -> "Very Sore"
-                daysSinceLastWorkout < 3 && totalStress > 20 -> "Slightly Sore"
-                else -> "Fresh"
-            }
+            sorenessMap[muscle] = MuscleSorenessData(
+                sorenessLevel = determineSorenessLevel(
+                    daysSinceLastWorkout,
+                    totalStress,
+                    avgRPE,
+                    avgSubjectiveSoreness
+                ),
+                totalStress = totalStress,
+                lastWorkoutTime = data.lastWorkoutTime,
+                averageRPE = avgRPE,
+                averageSubjectiveSoreness = avgSubjectiveSoreness,
+                recentExercises = recentExercises
+            )
         }
 
         return sorenessMap
+    }
+
+    /**
+     * Determines the soreness level based on various factors
+     */
+    private fun determineSorenessLevel(
+        daysSinceLastWorkout: Long,
+        totalStress: Float,
+        avgRPE: Int,
+        avgSubjectiveSoreness: Int
+    ): String {
+        return when {
+            daysSinceLastWorkout < 1 && totalStress > 50 && avgRPE > 7 && avgSubjectiveSoreness > 7 -> "Very Sore"
+            daysSinceLastWorkout < 2 && totalStress > 30 && avgRPE > 6 && avgSubjectiveSoreness > 5 -> "Sore"
+            daysSinceLastWorkout < 3 && totalStress > 20 && avgRPE > 5 && avgSubjectiveSoreness > 3 -> "Slightly Sore"
+            else -> "Fresh"
+        }
     }
 
     /** Do tomorow: It's probably something wrong in the logic, track What Exercise is
@@ -145,3 +221,24 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
     }*/
 
 }
+
+/**
+ * Data class to store muscle-specific data for soreness calculation
+ */
+data class MuscleData(
+    var totalStress: Float = 0f,
+    var lastWorkoutTime: Long = 0L,
+    val exercises: MutableList<SessionEntityExercise> = mutableListOf()
+)
+
+/**
+ * Data class to store muscle soreness information
+ */
+data class MuscleSorenessData(
+    val sorenessLevel: String,
+    val totalStress: Float,
+    val lastWorkoutTime: Long,
+    val averageRPE: Int,
+    val averageSubjectiveSoreness: Int,
+    val recentExercises: List<SessionEntityExercise>
+)

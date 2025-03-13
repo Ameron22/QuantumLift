@@ -36,7 +36,7 @@ interface ExerciseDao {
     fun insertExerciseSession(entity: SessionEntityExercise)
 
     @Query("SELECT * FROM exercise_sessions")
-    suspend fun getAllExerciseSessions(): List<SessionEntityExercise>
+    fun getAllExerciseSessions(): Flow<List<SessionEntityExercise>>
 
     @Query("UPDATE workout_sessions Set duration = :duration WHERE sessionId = :sessionId")
     suspend fun updateWorkoutSessionDuration(sessionId: Long, duration: Long)

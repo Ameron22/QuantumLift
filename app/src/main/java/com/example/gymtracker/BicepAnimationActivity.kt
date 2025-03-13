@@ -15,15 +15,15 @@ import kotlin.math.sin
 
 private const val TAG = "BicepAnimation"
 private const val FRAME_DURATION = 16L // ~60fps
-private const val TOTAL_DURATION = 4000L // 4 seconds total animation
+private const val TOTAL_DURATION = 2000L // 2 seconds total animation
 private const val TOTAL_FRAMES = (TOTAL_DURATION / FRAME_DURATION).toInt()
 
 // Animation phases
-private const val PHASE_1_END = 0.2f // Initial growth
-private const val PHASE_2_END = 0.3f // Pause
-private const val PHASE_3_END = 0.6f // Vibrate and rotate
-private const val PHASE_4_END = 0.7f // Shrink
-private const val PHASE_5_END = 1.0f // Bicep animation
+private const val PHASE_1_END = 0.15f // Initial growth (0.3s)
+private const val PHASE_2_END = 0.45f // Pause (0.6s)
+private const val PHASE_3_END = 0.7f // Vibrate and rotate (0.5s)
+private const val PHASE_4_END = 0.8f // Shrink (0.2s)
+private const val PHASE_5_END = 1.0f // Bicep animation (0.4s)
 
 class BicepAnimationActivity : ComponentActivity() {
     private var currentFrame = 0
@@ -64,7 +64,8 @@ class BicepAnimationActivity : ComponentActivity() {
             
             // Phase 2: Brief pause
             progress <= PHASE_2_END -> {
-                // Keep the same scale and rotation
+                // Keep the same scale but reset rotation to 0
+                imageView.rotation = 0f
             }
             
             // Phase 3: Vibrate and rotate

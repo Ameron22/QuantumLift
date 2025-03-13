@@ -74,4 +74,6 @@ dependencies {
     implementation(libs.androidx.core.splashscreen) // Latest stable version
 
     //ksp(libs.androidx.room.compiler) // Use ksp for Kotlin Symbol Processing
+
+    implementation("com.google.code.gson:gson:2.10.1")
 }

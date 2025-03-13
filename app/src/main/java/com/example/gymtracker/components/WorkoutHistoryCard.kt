@@ -17,7 +17,7 @@ fun WorkoutHistoryCard(
     onClick: () -> Unit
 ) {
     val instant = Instant.ofEpochMilli(session.startTime)
-    val zoneId = ZoneId.systemDefault()
+    val zoneId = ZoneId.of("Europe/London") // Use London timezone
     val localDateTime = instant.atZone(zoneId)
     
     val formattedDate = localDateTime.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))
@@ -58,11 +58,11 @@ fun WorkoutHistoryCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Time: $formattedTime",
+                    text = "Duration: $durationInMinutes min",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    text = "Duration: $durationInMinutes min",
+                    text = "Time: $formattedTime",
                     style = MaterialTheme.typography.bodyMedium
                 )
             }

@@ -73,9 +73,10 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
     fun startWorkoutSession(exId: Int) {
         val workout = workoutWithExercises?.firstOrNull()?.workout ?: return
         println("Starting workout session for workout ID: $workoutId")
+        val currentTime = System.currentTimeMillis()
         val workoutSession = SessionWorkoutEntity(
             workoutId = workout.id,
-            startTime = System.currentTimeMillis(),
+            startTime = currentTime,
             duration = 0,
             workoutName = workout.name
         )
@@ -83,8 +84,8 @@ fun WorkoutDetailsScreen(workoutId: Int, navController: NavController) {
         coroutineScope.launch(Dispatchers.IO) {
             isLoading = true
             sessionId = dao.insertWorkoutSession(workoutSession)
-            startTimeWorkout = System.currentTimeMillis()
-            println("Workout session started with ID: $sessionId")
+            startTimeWorkout = currentTime
+            println("Workout session started with ID: $sessionId at time: $currentTime")
             isLoading = false
             withContext(Dispatchers.Main) {
                 isLoading = false

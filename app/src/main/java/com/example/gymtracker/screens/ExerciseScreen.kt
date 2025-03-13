@@ -37,6 +37,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -63,6 +64,7 @@ import com.example.gymtracker.classes.NumberPicker
 import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.SessionEntityExercise
+import com.example.gymtracker.data.RecoveryFactors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -100,6 +102,18 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
     //Track which set is currently being executed
     var completedSet by remember { mutableStateOf<Int?>(0) }
 
+    // New state variables for muscle soreness tracking
+    var eccentricFactor by remember { mutableStateOf(1.0f) }
+    var noveltyFactor by remember { mutableStateOf(5) }
+    var adaptationLevel by remember { mutableStateOf(5) }
+    var rpe by remember { mutableStateOf(5) }
+    var subjectiveSoreness by remember { mutableStateOf(5) }
+    var sleepQuality by remember { mutableStateOf(7) }
+    var proteinIntake by remember { mutableStateOf(150) }
+    var hydration by remember { mutableStateOf(7) }
+    var stressLevel by remember { mutableStateOf(5) }
+    var showSorenessDialog by remember { mutableStateOf(false) }
+
     // Fetch exercise data
     LaunchedEffect(exerciseId) {
         try {
@@ -120,24 +134,37 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
         }
     }
 
-    // Function to save exercise session
+    // Function to save exercise session with muscle soreness data
     fun saveExerciseSession() {
         val exercise = exercise ?: return
 
         // Convert repsOrTime and weight to lists
-        val repsOrTimeList = (1..exercise.sets).map { setReps[it] ?: 0 } // Use setReps map
-        val weightList = (1..exercise.sets).map { setWeights[it] ?: 0 } // Use setWeights map
+        val repsOrTimeList = (1..exercise.sets).map { setReps[it] ?: 0 }
+        val weightList = (1..exercise.sets).map { setWeights[it] ?: 0 }
+
+        val recoveryFactors = RecoveryFactors(
+            sleepQuality = sleepQuality,
+            proteinIntake = proteinIntake,
+            hydration = hydration,
+            stressLevel = stressLevel
+        )
 
         val exerciseSession = SessionEntityExercise(
             sessionId = workoutSessionId,
             exerciseId = exercise.id.toLong(),
             sets = exercise.sets,
-            repsOrTime = repsOrTimeList, // List of reps or time for each set
-            weight = weightList, // List of weights for each set
+            repsOrTime = repsOrTimeList,
+            weight = weightList,
             muscleGroup = exercise.muscle,
             muscleParts = exercise.part,
             completedSets = completedSet!!,
-            notes = ""
+            notes = "",
+            eccentricFactor = eccentricFactor,
+            noveltyFactor = noveltyFactor,
+            adaptationLevel = adaptationLevel,
+            rpe = rpe,
+            subjectiveSoreness = subjectiveSoreness,
+            recoveryFactors = recoveryFactors
         )
 
         coroutineScope.launch(Dispatchers.IO) {
@@ -339,10 +366,20 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
                                 navController.popBackStack() // Navigate back after saving
                             },
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 12.dp)
+                                .weight(1f)
+                                .padding(horizontal = 8.dp, vertical = 12.dp)
                         ) {
                             Text("Save Exercise")
+                        }
+
+                        // Track Muscle Soreness Button
+                        Button(
+                            onClick = { showSorenessDialog = true },
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 8.dp, vertical = 12.dp)
+                        ) {
+                            Text("Track Muscle Soreness")
                         }
                     }
                 }
@@ -618,14 +655,26 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
                         }
                     }
                 }
-            } ?: run {
-                // Show loading or error message
+            }
+
+            // Add a button to show the soreness tracking dialog
+            Button(
+                onClick = { showSorenessDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Text("Track Muscle Soreness")
+            }
+
+            // Show loading or error message
+            if (exercise == null) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (exercise == null) "Loading..." else "Exercise not found",
+                        text = "Loading...",
                         style = MaterialTheme.typography.bodyLarge
                     )
                 }
@@ -684,6 +733,147 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
                     }
                 }
             }
+
+            // Add muscle soreness tracking UI
+            if (showSorenessDialog) {
+                AlertDialog(
+                    onDismissRequest = { showSorenessDialog = false },
+                    title = { Text("Track Muscle Soreness") },
+                    text = {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            // Exercise-specific factors
+                            Text("Exercise Factors", style = MaterialTheme.typography.titleMedium)
+                            SliderWithLabel(
+                                value = eccentricFactor,
+                                onValueChange = { eccentricFactor = it },
+                                label = "Eccentric Factor (1.0-2.0)",
+                                valueRange = 1f..2f,
+                                steps = 10
+                            )
+                            SliderWithLabel(
+                                value = noveltyFactor.toFloat(),
+                                onValueChange = { noveltyFactor = it.toInt() },
+                                label = "Novelty Factor (0-10)",
+                                valueRange = 0f..10f,
+                                steps = 10
+                            )
+                            SliderWithLabel(
+                                value = adaptationLevel.toFloat(),
+                                onValueChange = { adaptationLevel = it.toInt() },
+                                label = "Adaptation Level (0-10)",
+                                valueRange = 0f..10f,
+                                steps = 10
+                            )
+
+                            // Perceived exertion and soreness
+                            Text("Perceived Exertion & Soreness", style = MaterialTheme.typography.titleMedium)
+                            SliderWithLabel(
+                                value = rpe.toFloat(),
+                                onValueChange = { rpe = it.toInt() },
+                                label = "Rate of Perceived Exertion (1-10)",
+                                valueRange = 1f..10f,
+                                steps = 9
+                            )
+                            SliderWithLabel(
+                                value = subjectiveSoreness.toFloat(),
+                                onValueChange = { subjectiveSoreness = it.toInt() },
+                                label = "Subjective Soreness (1-10)",
+                                valueRange = 1f..10f,
+                                steps = 9
+                            )
+
+                            // Recovery factors
+                            Text("Recovery Factors", style = MaterialTheme.typography.titleMedium)
+                            SliderWithLabel(
+                                value = sleepQuality.toFloat(),
+                                onValueChange = { sleepQuality = it.toInt() },
+                                label = "Sleep Quality (1-10)",
+                                valueRange = 1f..10f,
+                                steps = 9
+                            )
+                            SliderWithLabel(
+                                value = proteinIntake.toFloat(),
+                                onValueChange = { proteinIntake = it.toInt() },
+                                label = "Protein Intake (g)",
+                                valueRange = 0f..300f,
+                                steps = 30
+                            )
+                            SliderWithLabel(
+                                value = hydration.toFloat(),
+                                onValueChange = { hydration = it.toInt() },
+                                label = "Hydration Level (1-10)",
+                                valueRange = 1f..10f,
+                                steps = 9
+                            )
+                            SliderWithLabel(
+                                value = stressLevel.toFloat(),
+                                onValueChange = { stressLevel = it.toInt() },
+                                label = "Stress Level (1-10)",
+                                valueRange = 1f..10f,
+                                steps = 9
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showSorenessDialog = false
+                                saveExerciseSession()
+                            }
+                        ) {
+                            Text("Save")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showSorenessDialog = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Composable function for a slider with a label
+ */
+@Composable
+private fun SliderWithLabel(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    label: String,
+    valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int
+) {
+    Column {
+        Text(label)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Slider(
+                value = value,
+                onValueChange = onValueChange,
+                valueRange = valueRange,
+                steps = steps,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = if (label.contains("Protein")) {
+                    "${value.toInt()}g"
+                } else {
+                    value.toInt().toString()
+                },
+                modifier = Modifier.padding(start = 8.dp)
+            )
         }
     }
 }

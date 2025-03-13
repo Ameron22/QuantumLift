@@ -78,8 +78,8 @@ fun LoadHistoryScreen(navController: NavController, viewModel: HistoryViewModel)
                             ) {
                                 Text(text = muscle)
                                 Text(
-                                    text = soreness,
-                                    color = when (soreness) {
+                                    text = soreness.sorenessLevel,
+                                    color = when (soreness.sorenessLevel) {
                                         "Very Sore" -> Color.Red
                                         "Slightly Sore" -> Color.Yellow
                                         else -> Color.Green
@@ -105,7 +105,7 @@ fun LoadHistoryScreen(navController: NavController, viewModel: HistoryViewModel)
 @Composable
 fun WorkoutSessionCard(session: SessionWorkoutWithMuscles) {
     val instant = Instant.ofEpochMilli(session.startTime)
-    val zoneId = ZoneId.systemDefault()
+    val zoneId = ZoneId.of("Europe/London")
     val localDateTime = instant.atZone(zoneId)
     
     val formattedDate = localDateTime.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))
