@@ -41,16 +41,17 @@ interface ExerciseDao {
     @Query("UPDATE workout_sessions Set duration = :duration WHERE sessionId = :sessionId")
     suspend fun updateWorkoutSessionDuration(sessionId: Long, duration: Long)
 
-    @Query("SELECT * FROM workout_sessions")
+    @Query("SELECT * FROM workout_sessions ORDER BY startTime DESC")
     suspend fun getAllWorkoutSessions(): List<SessionWorkoutEntity>
 
-    @Query("SELECT ws.sessionId, ws.workoutId, ws.startTime, ws.duration, ws.workoutName, es.muscleGroup , es.sets , es.repsOrTime, es.weight " +
+    @Query("SELECT ws.sessionId, ws.workoutId, ws.startTime, ws.duration, ws.workoutName, es.muscleGroup, es.sets, es.repsOrTime, es.weight " +
             "FROM workout_sessions ws INNER JOIN exercise_sessions es " +
             "ON ws.sessionId = es.sessionId " +
-            "GROUP BY ws.sessionId, es.muscleGroup")
-    fun getAllWorkoutSessionsWithMuscleStress(): Flow <List<SessionWorkoutWithMusclesStress>>
+            "GROUP BY ws.sessionId, es.muscleGroup " +
+            "ORDER BY ws.startTime DESC")
+    fun getAllWorkoutSessionsWithMuscleStress(): Flow<List<SessionWorkoutWithMusclesStress>>
 
-    @Query("SELECT * FROM workout_sessions WHERE workoutId = :workoutId")
+    @Query("SELECT * FROM workout_sessions WHERE workoutId = :workoutId ORDER BY startTime DESC")
     suspend fun getWorkoutSessionsByWorkoutId(workoutId: Int): List<SessionWorkoutEntity>
 
     @Query("SELECT * FROM workout_sessions WHERE sessionId = :sessionId")

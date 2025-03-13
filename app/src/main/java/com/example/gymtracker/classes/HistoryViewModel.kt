@@ -25,10 +25,16 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
     }
 
     private fun loadWorkoutSessions() {
-        viewModelScope.launch (Dispatchers.IO){
+        viewModelScope.launch(Dispatchers.IO) {
+            // Start a parallel coroutine for the minimum display time
+            launch {
+                delay(4000L) // Minimum splash screen duration
+                _isLoading.value = false
+            }
+
+            // Load data in parallel
             dao.getAllWorkoutSessionsWithMuscleStress()
                 .collect { sessionsWithStress ->
-
                     // Create a map to store aggregated results
                     val sessionMap = mutableMapOf<Long, SessionWorkoutWithMuscles>()
 
@@ -68,9 +74,7 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
                     // Update muscle soreness whenever workout sessions change
                     _muscleSoreness.value = calculateMuscleSoreness()
                 }
-            //delay(3000L)
         }
-        _isLoading.value = false
     }
 
     // Calculate muscle soreness dynamically

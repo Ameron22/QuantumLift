@@ -9,8 +9,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.example.gymtracker.classes.NumberPicker
 import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.EntityWorkout
@@ -119,7 +118,9 @@ fun WorkoutCreationScreen(navController: NavController) {
             )
             // Switch between Reps and Time
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -130,74 +131,94 @@ fun WorkoutCreationScreen(navController: NavController) {
                 )
             }
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconButton(onClick = { if (currentSets < 50) currentSets++ }) {
-                        Icon(imageVector = Icons.Default.KeyboardArrowUp, contentDescription = "Increase Sets")
-                    }
-                    Text("$currentSets Sets", Modifier.padding(horizontal = 8.dp))
-                    IconButton(onClick = { if (currentSets > 1) currentSets-- }) {
-                        Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Sets")
-                    }
+            // Number pickers section
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Sets picker
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Sets", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    NumberPicker(
+                        value = currentSets,
+                        onValueChange = { currentSets = it },
+                        range = 1..10
+                    )
                 }
 
                 if (useTime) {
-                    // Time Input
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            // Minutes
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                IconButton(onClick = { if (currentMinutes < 59) currentMinutes++ }) {
-                                    Icon(imageVector = Icons.Default.KeyboardArrowUp, contentDescription = "Increase Minutes")
-                                }
-                                Text("$currentMinutes min", Modifier.padding(horizontal = 8.dp))
-                                IconButton(onClick = { if (currentMinutes > 0) currentMinutes-- }) {
-                                    Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Minutes")
-                                }
-                            }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    // Minutes picker
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Minutes", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        NumberPicker(
+                            value = currentMinutes,
+                            onValueChange = { currentMinutes = it },
+                            range = 0..59
+                        )
+                    }
 
-                            // Seconds
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                IconButton(onClick = { if (currentSeconds < 59) currentSeconds++ }) {
-                                    Icon(imageVector = Icons.Default.KeyboardArrowUp, contentDescription = "Increase Seconds")
-                                }
-                                Text("$currentSeconds sec", Modifier.padding(horizontal = 8.dp))
-                                IconButton(onClick = { if (currentSeconds > 0) currentSeconds-- }) {
-                                    Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Seconds")
-                                }
-                            }
-                        }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    // Seconds picker
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Seconds", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        NumberPicker(
+                            value = currentSeconds,
+                            onValueChange = { currentSeconds = it },
+                            range = 0..59
+                        )
                     }
                 } else {
-                    //Weight Input
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        IconButton(onClick = { if (weight < 500) weight++ }) {
-                            Icon(imageVector = Icons.Default.KeyboardArrowUp, contentDescription = "Increase Reps")
-                        }
-                        Text("$weight Kg", Modifier.padding(horizontal = 8.dp))
-                        IconButton(onClick = { if (weight > 1) weight-- }) {
-                            Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Reps")
-                        }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    // Weight picker
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Weight (kg)", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        NumberPicker(
+                            value = weight,
+                            onValueChange = { weight = it },
+                            range = 0..500,
+                            unit = "kg"
+                        )
                     }
-                    // Reps Input
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        IconButton(onClick = { if (currentRepsTime < 50) currentRepsTime++ }) {
-                            Icon(imageVector = Icons.Default.KeyboardArrowUp, contentDescription = "Increase Reps")
-                        }
-                        Text("$currentRepsTime Reps", Modifier.padding(horizontal = 8.dp))
-                        IconButton(onClick = { if (currentRepsTime > 1) currentRepsTime-- }) {
-                            Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Reps")
-                        }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+                    // Reps picker
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Reps", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        NumberPicker(
+                            value = currentRepsTime,
+                            onValueChange = { currentRepsTime = it },
+                            range = 1..50
+                        )
                     }
                 }
             }
             // State to control dropdown visibility
             var isMuscleGroupDropdownExpanded by remember { mutableStateOf(false) }
             var isPartDropdownExpanded by remember { mutableStateOf(false) }
-
             var selectedParts by remember { mutableStateOf<List<String>>(emptyList()) } // List to store selected parts
 
             // List of muscle groups
@@ -207,9 +228,15 @@ fun WorkoutCreationScreen(navController: NavController) {
             LaunchedEffect(currentMuscle) {
                 currentPart = "" // Reset the part when the muscle group changes
             }
-            Column(modifier = Modifier.fillMaxWidth()) {
+            // Muscle selection section
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 // Muscle Group Dropdown
-                Box(modifier = Modifier.fillMaxWidth()) {
+                Box(modifier = Modifier.weight(1f)) {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -218,11 +245,14 @@ fun WorkoutCreationScreen(navController: NavController) {
                         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(16.dp),
+                            modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(text = if (currentMuscle.isNotEmpty()) currentMuscle else "Muscle Group")
+                            Text(
+                                text = if (currentMuscle.isNotEmpty()) currentMuscle else "Muscle Group",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
                             Icon(
                                 imageVector = Icons.Default.ArrowDropDown,
                                 contentDescription = "Dropdown Icon"
@@ -232,10 +262,9 @@ fun WorkoutCreationScreen(navController: NavController) {
 
                     DropdownMenu(
                         expanded = isMuscleGroupDropdownExpanded,
-                        onDismissRequest = { isMuscleGroupDropdownExpanded = false },
-                        modifier = Modifier.fillMaxWidth()
+                        onDismissRequest = { isMuscleGroupDropdownExpanded = false }
                     ) {
-                        muscleGroups.forEach { muscle ->
+                        musclePartsMap.keys.forEach { muscle ->
                             DropdownMenuItem(
                                 text = { Text(muscle) },
                                 onClick = {
@@ -248,23 +277,23 @@ fun WorkoutCreationScreen(navController: NavController) {
                 }
 
                 // Specific Part Dropdown
-                val parts = musclePartsMap[currentMuscle] ?: emptyList()
-
-                Box(modifier = Modifier.fillMaxWidth()) {
+                Box(modifier = Modifier.weight(1f)) {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 16.dp)
                             .clickable { isPartDropdownExpanded = true },
                         shape = MaterialTheme.shapes.medium,
                         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(16.dp),
+                            modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(text = if (currentPart.isNotEmpty()) currentPart else "Specific Part")
+                            Text(
+                                text = if (currentPart.isNotEmpty()) currentPart else "Specific Part",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
                             Icon(
                                 imageVector = Icons.Default.ArrowDropDown,
                                 contentDescription = "Dropdown Icon"
@@ -274,10 +303,9 @@ fun WorkoutCreationScreen(navController: NavController) {
 
                     DropdownMenu(
                         expanded = isPartDropdownExpanded,
-                        onDismissRequest = { isPartDropdownExpanded = false },
-                        modifier = Modifier.fillMaxWidth()
+                        onDismissRequest = { isPartDropdownExpanded = false }
                     ) {
-                        parts.forEach { part ->
+                        musclePartsMap[currentMuscle]?.forEach { part ->
                             DropdownMenuItem(
                                 text = { Text(part) },
                                 onClick = {
@@ -288,38 +316,61 @@ fun WorkoutCreationScreen(navController: NavController) {
                         }
                     }
                 }
-                // Add Additional Muscle Part Button
+            }
+
+            // Add Part button centered below the dropdowns
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 Button(
                     onClick = {
                         if (currentPart.isNotEmpty()) {
-                            selectedParts = selectedParts + currentPart // Add the current part to the list
-                            currentPart = "" // Reset the current part for the next selection
+                            selectedParts = selectedParts + currentPart
+                            currentPart = ""
                         }
                     },
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    modifier = Modifier.width(120.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
                 ) {
-                    Text("Add Part")
+                    Text("Add Part", style = MaterialTheme.typography.bodyMedium)
                 }
+            }
 
-                // Display Selected Parts with Delete Buttons
-                if (selectedParts.isNotEmpty()) {
-                    Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-                        selectedParts.forEachIndexed { index, part ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(part)
-                                IconButton(
-                                    onClick = {
-                                        selectedParts = selectedParts.toMutableList().apply {
-                                            removeAt(index) // Remove the part at the current index
-                                        }
+            // Display Selected Parts with Delete Buttons
+            if (selectedParts.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    selectedParts.forEachIndexed { index, part ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(part)
+                            IconButton(
+                                onClick = {
+                                    selectedParts = selectedParts.toMutableList().apply {
+                                        removeAt(index)
                                     }
-                                ) {
-                                    Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete")
                                 }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
                             }
                         }
                     }
@@ -327,7 +378,6 @@ fun WorkoutCreationScreen(navController: NavController) {
             }
             Button(
                 onClick = {
-
                     // Save exercise with reps or time
                     val reps = if (useTime) {
                         // Convert time to seconds and add a threshold (e.g., 1000 to ensure it's > 50)
@@ -357,9 +407,20 @@ fun WorkoutCreationScreen(navController: NavController) {
                         weight = 5
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth(0.7f) // Take 70% of the width
+                    .padding(vertical = 8.dp)
+                    .align(Alignment.CenterHorizontally),
+                shape = MaterialTheme.shapes.medium,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
             ) {
-                Text(if (editIndex == null) "Add Exercise" else "Update Exercise")
+                Text(
+                    if (editIndex == null) "Add Exercise" else "Update Exercise",
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
 
             exercisesList.forEachIndexed { index, exercise ->

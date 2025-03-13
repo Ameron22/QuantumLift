@@ -104,31 +104,63 @@ fun LoadHistoryScreen(navController: NavController, viewModel: HistoryViewModel)
 
 @Composable
 fun WorkoutSessionCard(session: SessionWorkoutWithMuscles) {
-    val formattedDate = Instant.ofEpochMilli(session.startTime)
-        .atZone(ZoneId.systemDefault()) // Use device's time zone
-        .format(DateTimeFormatter.ofPattern("MMMM dd, yyyy")) // e.g., "March 10, 2025"
+    val instant = Instant.ofEpochMilli(session.startTime)
+    val zoneId = ZoneId.systemDefault()
+    val localDateTime = instant.atZone(zoneId)
+    
+    val formattedDate = localDateTime.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))
+    val formattedTime = localDateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
+    val durationInMinutes = session.duration / 60 // Convert seconds to minutes
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(ItemPadding),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = session.workoutName ?: "Unnamed Workout",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = formattedDate,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Time: $formattedTime",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = "Duration: $durationInMinutes min",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
             Text(
-                text = session.workoutName ?: "Unnamed Workout",
-                style = MaterialTheme.typography.bodyLarge
-            )
-            Text(
-                text = "Duration: ${session.duration} mins",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Text(
-                text = "Muscles: ${session.muscleGroups.keys.joinToString(", ") { it.capitalize() }}",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                text = "Date: $formattedDate",
-                style = MaterialTheme.typography.bodyMedium
+                text = "Muscles worked: ${session.muscleGroups.keys.joinToString(", ") { it.capitalize() }}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

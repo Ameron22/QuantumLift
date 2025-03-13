@@ -49,23 +49,33 @@ class MainActivity : ComponentActivity() {
                 val zoomX = ObjectAnimator.ofFloat(
                     splashScreenView.iconView,
                     View.SCALE_X,
-                    0.3f,
-                    0.0f
+                    1.0f,
+                    1.3f
                 ).apply {
                     interpolator = OvershootInterpolator()
-                    duration = 500L
-                    doOnEnd { splashScreenView.remove() }
+                    duration = 1000L
+                    doOnEnd { 
+                        val fadeOut = ObjectAnimator.ofFloat(
+                            splashScreenView.iconView,
+                            View.ALPHA,
+                            1f,
+                            0f
+                        ).apply {
+                            duration = 500L
+                            doOnEnd { splashScreenView.remove() }
+                        }
+                        fadeOut.start()
+                    }
                 }
 
                 val zoomY = ObjectAnimator.ofFloat(
                     splashScreenView.iconView,
                     View.SCALE_Y,
-                    0.3f,
-                    0.0f
+                    1.0f,
+                    1.3f
                 ).apply {
                     interpolator = OvershootInterpolator()
-                    duration = 500L
-                    doOnEnd { splashScreenView.remove() }
+                    duration = 1000L
                 }
 
                 zoomX.start()
