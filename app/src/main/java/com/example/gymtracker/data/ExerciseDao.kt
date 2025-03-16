@@ -30,19 +30,25 @@ interface ExerciseDao {
     suspend fun getAllWorkouts(): List<EntityWorkout>
 
     @Insert
-    fun insertWorkoutSession(entity: SessionWorkoutEntity): Long
+    suspend fun insertWorkoutSession(entity: SessionWorkoutEntity): Long
+
+    @Update
+    suspend fun updateWorkoutSession(entity: SessionWorkoutEntity)
 
     @Insert
-    fun insertExerciseSession(entity: SessionEntityExercise)
+    suspend fun insertExerciseSession(entity: SessionEntityExercise)
 
     @Query("SELECT * FROM exercise_sessions")
     fun getAllExerciseSessions(): Flow<List<SessionEntityExercise>>
 
-    @Query("UPDATE workout_sessions Set duration = :duration WHERE sessionId = :sessionId")
-    suspend fun updateWorkoutSessionDuration(sessionId: Long, duration: Long)
+    @Query("SELECT * FROM workout_sessions ORDER BY startTime DESC")
+    fun getAllWorkoutSessionsFlow(): Flow<List<SessionWorkoutEntity>>
 
     @Query("SELECT * FROM workout_sessions ORDER BY startTime DESC")
     suspend fun getAllWorkoutSessions(): List<SessionWorkoutEntity>
+
+    @Query("UPDATE workout_sessions Set duration = :duration WHERE sessionId = :sessionId")
+    suspend fun updateWorkoutSessionDuration(sessionId: Long, duration: Long)
 
     @Query("SELECT ws.sessionId, ws.workoutId, ws.startTime, ws.duration, ws.workoutName, es.muscleGroup, es.sets, es.repsOrTime, es.weight " +
             "FROM workout_sessions ws INNER JOIN exercise_sessions es " +
@@ -56,4 +62,13 @@ interface ExerciseDao {
 
     @Query("SELECT * FROM workout_sessions WHERE sessionId = :sessionId")
     suspend fun getWorkoutSession(sessionId: Long): SessionWorkoutEntity?
+
+    @Query("UPDATE workout_sessions SET duration = :duration, recoveryFactors = :recoveryFactorsJson WHERE sessionId = :sessionId")
+    suspend fun updateWorkoutSessionWithRecovery(sessionId: Long, duration: Long, recoveryFactorsJson: String)
+
+    @Query("UPDATE workout_sessions SET tempRecoveryFactors = :tempRecoveryFactors WHERE sessionId = :sessionId")
+    suspend fun updateTempRecoveryFactors(sessionId: Long, tempRecoveryFactors: String)
+
+    @Query("SELECT tempRecoveryFactors FROM workout_sessions WHERE sessionId = :sessionId")
+    suspend fun getTempRecoveryFactors(sessionId: Long): String?
 }

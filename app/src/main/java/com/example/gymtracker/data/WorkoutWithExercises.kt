@@ -1,5 +1,8 @@
 package com.example.gymtracker.data
-import androidx.room.*
+
+import androidx.room.Embedded
+import androidx.room.Junction
+import androidx.room.Relation
 
 data class WorkoutWithExercises(
     @Embedded val workout: EntityWorkout,
@@ -7,7 +10,7 @@ data class WorkoutWithExercises(
         parentColumn = "id",
         entityColumn = "id",
         associateBy = Junction(
-            CrossRefWorkoutExercise::class,
+            value = CrossRefWorkoutExercise::class,
             parentColumn = "workoutId",
             entityColumn = "exerciseId"
         )

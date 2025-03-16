@@ -5,14 +5,15 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
 @Database(
-    entities = [EntityExercise::class,
+    entities = [
+        EntityExercise::class,
         EntityWorkout::class,
         CrossRefWorkoutExercise::class,
-        SessionWorkoutEntity::class, // Add this
-        SessionEntityExercise::class // Add this
+        SessionEntityExercise::class,
+        SessionWorkoutEntity::class
     ],
-    version = 13, // Increase version number when schema changes ( you need to change version when you make changes to DB)
-    exportSchema = false // Disable schema export
+    version = 18,  // Increment version number
+    exportSchema = false
 )
 @TypeConverters(Converter::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -29,8 +30,8 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "app_database"
                 )
-                    .fallbackToDestructiveMigration() // THIS LINE IS THE SOLUTION (this line destroys old databases, used when version changes)
-                    .build()
+                .fallbackToDestructiveMigration()  // This will recreate tables if schema changes
+                .build()
                 INSTANCE = instance
                 instance
             }

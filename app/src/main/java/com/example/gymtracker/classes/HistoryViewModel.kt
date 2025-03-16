@@ -1,5 +1,6 @@
 package com.example.gymtracker.classes
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -35,61 +36,79 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
     private fun loadWorkoutSessions() {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                dao.getAllExerciseSessions()
-                    .collectLatest { sessions ->
+                try {
+                    Log.d("HistoryViewModel", "Starting to load workout sessions")
+                    
+                    // First, collect all workout sessions
+                    dao.getAllWorkoutSessionsFlow().collectLatest { workoutSessions ->
+                        Log.d("HistoryViewModel", "Loaded ${workoutSessions.size} workout sessions")
+                        
                         // Create a map to store aggregated results
                         val sessionMap = mutableMapOf<Long, SessionWorkoutWithMuscles>()
                         val muscleDataMap = mutableMapOf<String, MuscleData>()
 
-                        for (session in sessions) {
-                            val sessionId = session.sessionId
+                        // First, add all workout sessions to the map
+                        workoutSessions.forEach { workoutSession ->
+                            sessionMap[workoutSession.sessionId] = SessionWorkoutWithMuscles(
+                                sessionId = workoutSession.sessionId,
+                                workoutId = workoutSession.workoutId,
+                                startTime = workoutSession.startTime,
+                                duration = workoutSession.duration,
+                                workoutName = workoutSession.workoutName,
+                                muscleGroups = mutableMapOf()
+                            )
+                        }
 
-                            // Get the workout session to get the correct startTime
-                            val workoutSession = dao.getWorkoutSession(sessionId)
+                        // Then process exercise sessions to add muscle data
+                        dao.getAllExerciseSessions().collect { exerciseSessions ->
+                            Log.d("HistoryViewModel", "Processing ${exerciseSessions.size} exercise sessions")
+                            
+                            for (session in exerciseSessions) {
+                                val sessionId = session.sessionId
+                                
+                                // Get the existing workout session
+                                val existingSession = sessionMap[sessionId] ?: continue
 
-                            // If the sessionId is not yet in the map, create a new entry
-                            if (!sessionMap.containsKey(sessionId)) {
-                                if (workoutSession != null) {
-                                    sessionMap[sessionId] = SessionWorkoutWithMuscles(
-                                        sessionId = sessionId,
-                                        workoutId = session.exerciseId.toInt(),
-                                        startTime = workoutSession.startTime,
-                                        duration = workoutSession.duration,
-                                        workoutName = workoutSession.workoutName,
-                                        muscleGroups = mutableMapOf()
-                                    )
-                                }
+                                Log.d("HistoryViewModel", "Processing workout: ${existingSession.workoutName}, ID: $sessionId")
+
+                                // Calculate muscle stress using the new formula
+                                val muscleStress = calculateMuscleStress(session)
+                                
+                                // Update muscle data
+                                val existingData = muscleDataMap[session.muscleGroup] ?: MuscleData()
+                                existingData.totalStress += muscleStress
+                                existingData.lastWorkoutTime = max(existingData.lastWorkoutTime, session.sessionId)
+                                existingData.exercises.add(session)
+                                muscleDataMap[session.muscleGroup] = existingData
+
+                                // Add muscle group stress data
+                                (existingSession.muscleGroups as MutableMap)[session.muscleGroup] =
+                                    (existingSession.muscleGroups[session.muscleGroup] ?: 0) + muscleStress.toInt()
                             }
 
-                            // Calculate muscle stress using the new formula
-                            val muscleStress = calculateMuscleStress(session)
+                            Log.d("HistoryViewModel", "Processed ${sessionMap.size} unique workout sessions")
+
+                            // Update StateFlow with the new list
+                            _workoutSessions.value = sessionMap.values.toList()
+                                .sortedByDescending { it.startTime }
                             
-                            // Update muscle data
-                            val existingData = muscleDataMap[session.muscleGroup] ?: MuscleData()
-                            existingData.totalStress += muscleStress
-                            existingData.lastWorkoutTime = max(existingData.lastWorkoutTime, session.sessionId)
-                            existingData.exercises.add(session)
-                            muscleDataMap[session.muscleGroup] = existingData
+                            // Calculate and update muscle soreness
+                            _muscleSoreness.value = calculateMuscleSoreness(muscleDataMap)
 
-                            // Add muscle group stress data
-                            val existingSession = sessionMap[sessionId]!!
-                            (existingSession.muscleGroups as MutableMap)[session.muscleGroup] =
-                                (existingSession.muscleGroups[session.muscleGroup] ?: 0) + muscleStress.toInt()
-                        }
+                            Log.d("HistoryViewModel", "Updated workout sessions and muscle soreness")
 
-                        // Update StateFlow with the new list
-                        _workoutSessions.value = sessionMap.values.toList()
-                            .sortedByDescending { it.startTime }
-                        
-                        // Calculate and update muscle soreness
-                        _muscleSoreness.value = calculateMuscleSoreness(muscleDataMap)
-
-                        // Start a parallel coroutine for the minimum display time
-                        launch {
-                            delay(1500L)
-                            _isLoading.value = false
+                            // Start a parallel coroutine for the minimum display time
+                            launch {
+                                delay(1500L)
+                                _isLoading.value = false
+                            }
                         }
                     }
+                } catch (e: Exception) {
+                    Log.e("HistoryViewModel", "Error loading workout sessions: ${e.message}")
+                    e.printStackTrace()
+                    _isLoading.value = false
+                }
             }
         }
     }

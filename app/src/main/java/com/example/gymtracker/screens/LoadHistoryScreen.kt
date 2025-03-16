@@ -158,7 +158,7 @@ fun WorkoutSessionCard(session: SessionWorkoutWithMuscles) {
             Spacer(modifier = Modifier.height(8.dp))
             
             Text(
-                text = "Muscles worked: ${session.muscleGroups.keys.joinToString(", ") { it.capitalize() }}",
+                text = "Muscles worked: ${session.muscleGroups.keys.joinToString(", ") { it.replaceFirstChar { it.uppercase() } }}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

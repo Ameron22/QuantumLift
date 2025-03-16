@@ -1,26 +1,54 @@
 package com.example.gymtracker.data
 
 import androidx.room.TypeConverter
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 class Converter {
-    private val delimiter = "," // Choose a delimiter that won't appear in your data
-
     @TypeConverter
-    fun fromStringList(value: List<String>): String {
-        return value.joinToString(delimiter) // Convert List<String> to a single String
+    fun fromString(value: String?): List<String> {
+        if (value == null) {
+            return emptyList()
+        }
+        val listType = object : TypeToken<List<String>>() {}.type
+        return Gson().fromJson(value, listType)
     }
 
     @TypeConverter
-    fun toStringList(value: String): List<String> {
-        return value.split(delimiter) // Convert String back to List<String>
-    }
-    @TypeConverter
-    fun fromIntList(value: List<Int?>): String {
-        return value.joinToString(",") // Convert List<Int?> to a comma-separated String
+    fun fromList(list: List<String>): String {
+        return Gson().toJson(list)
     }
 
     @TypeConverter
-    fun toIntList(value: String): List<Int?> {
-        return value.split(",").map { it.toIntOrNull() } // Convert String back to List<Int?>
+    fun fromIntListToString(value: String?): List<Int?> {
+        if (value == null) {
+            return emptyList()
+        }
+        val listType = object : TypeToken<List<Int?>>() {}.type
+        return Gson().fromJson(value, listType)
+    }
+
+    @TypeConverter
+    fun fromIntList(list: List<Int?>): String {
+        return Gson().toJson(list)
+    }
+
+    @TypeConverter
+    fun fromRecoveryFactors(value: RecoveryFactors?): String {
+        return if (value == null) {
+            ""
+        } else {
+            Gson().toJson(value)
+        }
+    }
+
+    @TypeConverter
+    fun toRecoveryFactors(value: String?): RecoveryFactors? {
+        return if (value.isNullOrEmpty()) {
+            null
+        } else {
+            val type = object : TypeToken<RecoveryFactors>() {}.type
+            Gson().fromJson(value, type)
+        }
     }
 }
