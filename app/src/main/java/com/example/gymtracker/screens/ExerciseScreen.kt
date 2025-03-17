@@ -20,7 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
@@ -55,9 +54,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.example.gymtracker.R
 import com.example.gymtracker.classes.NumberPicker
 import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.data.EntityExercise
@@ -78,7 +79,6 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
     val db = remember { AppDatabase.getDatabase(context) }
     val dao = remember { db.exerciseDao() }
     var exercise by remember { mutableStateOf<EntityExercise?>(null) }
-    var sessionId by remember { mutableStateOf<Long?>(null) }
     var showWeightPicker by remember { mutableStateOf(false) }
     var showRepsPicker by remember { mutableStateOf(false) }
     var showSaveNotification by remember { mutableStateOf(false) }
@@ -92,6 +92,7 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
     var isPaused by remember { mutableStateOf(false) }
     var breakTime by remember { mutableIntStateOf(120) } // Default break time in seconds (2 minutes)
     var setTimeReps by remember { mutableIntStateOf(120) } // Default time in seconds for reps (2 minutes)
+    var pausedTime by remember { mutableStateOf(0L) }
 
     // Map to store weights for each set (set number to weight)
     val setWeights = remember { mutableStateMapOf<Int, Int>() }
@@ -188,7 +189,7 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
 
         try {
             withContext(Dispatchers.IO) {
-            dao.insertExerciseSession(exerciseSession)
+                dao.insertExerciseSession(exerciseSession)
             }
             Log.d("ExerciseScreen", "Exercise session saved successfully: $exerciseSession")
             withContext(Dispatchers.Main) {
@@ -263,8 +264,57 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
         isTimerRunning = true
         isBreakRunning = false
         isPaused = false
+        pausedTime = 0L
     }
 
+    // Function to pause the timer
+    fun pauseTimer() {
+        if (isTimerRunning && !isPaused) {
+            isPaused = true
+            pausedTime = System.currentTimeMillis()
+        }
+    }
+
+    // Function to resume the timer
+    fun resumeTimer() {
+        if (isTimerRunning && isPaused) {
+            isPaused = false
+            // No need to adjust remainingTime since we want to resume from exactly where we paused
+        }
+    }
+
+    // Function to stop the timer
+    fun stopTimer() {
+        isTimerRunning = false
+        isPaused = false
+        isBreakRunning = false
+        remainingTime = 0
+        pausedTime = 0L
+        // Don't reset completedSet to maintain progress
+    }
+
+    // Function to skip the current set
+    fun skipSet() {
+        if (isTimerRunning) {
+            if (isBreakRunning) {
+                isBreakRunning = false
+                activeSetIndex = activeSetIndex?.let { it + 1 }
+                if (activeSetIndex != null && activeSetIndex!! <= exercise?.sets ?: 0) {
+                    remainingTime = exerciseTime
+                } else {
+                    stopTimer()
+                    coroutineScope.launch {
+                        saveExerciseSession()
+                    }
+                }
+            } else {
+                isBreakRunning = true
+                completedSet += 1  // Increment completed sets when skipping
+                //activeSetIndex = activeSetIndex?.let { it + 1 }
+                remainingTime = breakTime
+            }
+        }
+    }
 
     // UI
     Scaffold(
@@ -335,12 +385,52 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
 
                             // Pause/Resume button
                             IconButton(
-                                onClick = { isPaused = !isPaused }
+                                onClick = {
+                                    if (isPaused) {
+                                        resumeTimer()
+                                    } else {
+                                        pauseTimer()
+                                    }
+                                }
+                            ) {
+                                if (isPaused) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Resume",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                } else {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.pause2_icon),
+                                        contentDescription = "Pause",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+
+                            // Stop button
+                            IconButton(
+                                onClick = { stopTimer() }
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.stop_icon),
+                                    contentDescription = "Stop",
+                                    tint = Color.Red,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+
+                            // Skip button
+                            IconButton(
+                                onClick = { skipSet() }
                             ) {
                                     Icon(
-                                    imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.ArrowDropDown,
-                                    contentDescription = if (isPaused) "Resume" else "Pause",
-                                    tint = MaterialTheme.colorScheme.primary
+                                    painter = painterResource(id = R.drawable.skip_icon),
+                                    contentDescription = "Skip Set",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
                         }
@@ -388,8 +478,8 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
             exercise?.let { ex ->
                 // Display sets with weight and reps
                 for (set in 1..ex.sets) {
-                    val animatedBorder by animateColorAsState(if (activeSetIndex == set) Color.Green else Color.Gray)
-                    val elevation = if (activeSetIndex == set) 8.dp else 2.dp
+                    val animatedBorder by animateColorAsState(if (activeSetIndex == set && isTimerRunning) Color.Green else Color.Gray)
+                    val elevation = if (activeSetIndex == set && isTimerRunning) 8.dp else 2.dp
 
                     Card(
                             modifier = Modifier
@@ -406,10 +496,10 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
                         elevation = CardDefaults.cardElevation(elevation),
                         shape = RoundedCornerShape(12.dp),
                             colors = CardDefaults.cardColors(
-                                containerColor = if (set <= completedSet + 1) {
-                                    MaterialTheme.colorScheme.surface
-                                } else {
-                                    MaterialTheme.colorScheme.background
+                                containerColor = when {
+                                    set <= completedSet || completedSet == (set-1) -> MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                                    set == activeSetIndex && isTimerRunning -> MaterialTheme.colorScheme.background
+                                    else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
                                 }
                             )
                     ) {
@@ -418,18 +508,23 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
                                 .padding(16.dp)
                                     .fillMaxWidth()
                                     .background(
-                                        brush = if (activeSetIndex == set) {
-                                            Brush.horizontalGradient(
+                                        brush = when {
+                                            set <= completedSet || completedSet == (set-1) -> Brush.horizontalGradient(
+                                                colors = listOf(
+                                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                                                )
+                                            )
+                                            set == activeSetIndex && isTimerRunning -> Brush.horizontalGradient(
                                                 colors = listOf(
                                                     MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
                                                     MaterialTheme.colorScheme.surface
                                                 )
                                             )
-                                        } else {
-                                            Brush.horizontalGradient(
+                                            else -> Brush.horizontalGradient(
                                                 colors = listOf(
-                                                    MaterialTheme.colorScheme.surface,
-                                                    MaterialTheme.colorScheme.surface
+                                                    MaterialTheme.colorScheme.background,
+                                                    MaterialTheme.colorScheme.background
                                                 )
                                             )
                                         }
@@ -440,7 +535,12 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
                             Text(
                                 text = "Set: $set",
                                 style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.weight(1f) // Occupy equal space
+                                color = when {
+                                    set <= completedSet || completedSet == (set-1) -> MaterialTheme.colorScheme.onSurface
+                                    set == activeSetIndex && isTimerRunning -> MaterialTheme.colorScheme.onSurface
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.weight(1f)
                             )
                             if (ex.weight != 0) {
                                 if (showWeightPicker && editingSetIndex == set) {
@@ -631,7 +731,7 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
                                     textAlign = TextAlign.Center
                                 )
                             }
-                            if (completedSet == (set-1) && activeSetIndex == null) {
+                            if (completedSet == (set-1) && !isTimerRunning) {
                                 IconButton(onClick = { startTimer(set) }) {
                                     Icon(
                                         imageVector = Icons.Default.PlayArrow,

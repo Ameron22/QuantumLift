@@ -51,6 +51,22 @@ class WorkoutDetailsViewModel : ViewModel() {
         }
     }
 
+    fun stopWorkoutSession() {
+        val currentSession = _workoutSession.value
+        if (currentSession != null) {
+            _workoutSession.value = currentSession.copy(
+                isStarted = false
+            )
+            Log.d("WorkoutViewModel", "Workout session stopped")
+        }
+    }
+
+    fun skipCurrentSet() {
+        // This will be implemented to handle skipping the current set
+        // and starting the break timer
+        Log.d("WorkoutViewModel", "Current set skipped")
+    }
+
     fun updateRecoveryFactors(
         sleepQuality: Int? = null,
         proteinIntake: Int? = null,

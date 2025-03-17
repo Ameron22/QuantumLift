@@ -105,14 +105,23 @@ fun WorkoutDetailsScreen(
                 workoutWithExercises = workoutData
                 val workoutName = workoutData.firstOrNull()?.workout?.name ?: "Unknown Workout"
                 
-                // Only initialize if there's no active session
-                if (viewModel.workoutSession.value == null) {
+                // Check if there's an existing session
+                val existingSession = viewModel.workoutSession.value
+                Log.d("WorkoutDetailsScreen", "Existing session: $existingSession")
+                
+                if (existingSession == null || existingSession.workoutId != workoutId) {
+                    Log.d("WorkoutDetailsScreen", "Initializing new workout session")
                     viewModel.initializeWorkoutSession(workoutId, workoutName)
-                    Log.d("WorkoutDetailsScreen", "Workout name: $workoutName")
-                    Log.d("WorkoutDetailsScreen", "Number of exercises: ${workoutData.firstOrNull()?.exercises?.size}")
                 } else {
-                    Log.d("WorkoutDetailsScreen", "Using existing session: ${viewModel.workoutSession.value}")
+                    Log.d("WorkoutDetailsScreen", "Using existing workout session")
+                    workoutStarted = existingSession.isStarted
+                    if (workoutStarted) {
+                        startTimeWorkout = existingSession.startTime
+                    }
                 }
+                
+                Log.d("WorkoutDetailsScreen", "Workout name: $workoutName")
+                Log.d("WorkoutDetailsScreen", "Number of exercises: ${workoutData.firstOrNull()?.exercises?.size}")
             }
         } catch (e: Exception) {
             Log.e("WorkoutDetailsScreen", "Database error: ${e.message}")
@@ -141,6 +150,7 @@ fun WorkoutDetailsScreen(
         val session = viewModel.workoutSession.value
         Log.d("WorkoutDetailsScreen", "Session state after start: $session")
         if (session != null) {
+            Log.d("WorkoutDetailsScreen", "Navigating to exercise with sessionId: ${session.sessionId}")
             navController.navigate("exerciseDetails/${exId}/${session.sessionId}")
         } else {
             Log.e("WorkoutDetailsScreen", "Failed to start workout session: session is null")
@@ -159,8 +169,9 @@ fun WorkoutDetailsScreen(
             return
         }
 
-        if (!session.isStarted) {
-            Log.e("WorkoutDetailsScreen", "Cannot end workout - session not started")
+        // If the session hasn't been started yet, just navigate back
+        if (!workoutStarted) {
+            Log.d("WorkoutDetailsScreen", "Workout not started, just navigating back")
             viewModel.resetWorkoutSession()
             navController.popBackStack()
             return
@@ -169,7 +180,7 @@ fun WorkoutDetailsScreen(
         coroutineScope.launch(Dispatchers.IO) {
             try {
                 val currentTime = System.currentTimeMillis()
-                val startTime = session.startTime
+                val startTime = startTimeWorkout // Use the local startTimeWorkout instead of session.startTime
                 val durationInSeconds = (currentTime - startTime) / 1000
 
                 Log.d("WorkoutDetailsScreen", """
@@ -180,7 +191,7 @@ fun WorkoutDetailsScreen(
                     - Session ID: ${session.sessionId}
                     - Workout ID: ${session.workoutId}
                     - Workout Name: ${session.workoutName}
-                    - Is Started: ${session.isStarted}
+                    - Is Started: $workoutStarted
                 """.trimIndent())
                 
                 // Create and save the workout session
@@ -508,31 +519,31 @@ fun WorkoutDetailsScreen(
         }
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
                     .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                workoutWithExercises?.flatMap { it.exercises }?.forEach { exercise ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            workoutWithExercises?.flatMap { it.exercises }?.forEach { exercise ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp)
-                            .clickable {
-                                if (!workoutStarted) {
-                                    startWorkoutSession(exercise.id)
-                                    workoutStarted = true
+                        .clickable {
+                            if (!workoutStarted) {
+                                startWorkoutSession(exercise.id)
+                                workoutStarted = true
+                            } else {
+                                if (sessionId != null) {
+                                    navController.navigate("exerciseDetails/${exercise.id}/${sessionId}")
                                 } else {
-                                    if (sessionId != null) {
-                                        navController.navigate("exerciseDetails/${exercise.id}/${sessionId}")
-                                    } else {
-                                        println("Workout session not started yet. Please wait.")
-                                    }
+                                    println("Workout session not started yet. Please wait.")
                                 }
                             }
+                        }
                             .border(
                                 width = 1.dp,
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
