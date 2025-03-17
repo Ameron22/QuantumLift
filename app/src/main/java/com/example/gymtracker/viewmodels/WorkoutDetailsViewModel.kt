@@ -1,101 +1,76 @@
 package com.example.gymtracker.viewmodels
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
+import com.example.gymtracker.data.TempRecoveryFactors
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
-
-data class RecoveryFactorsState(
-    val sleepQuality: Int = 0,
-    val proteinIntake: Int = 0,
-    val hydration: Int = 0,
-    val stressLevel: Int = 0
-) {
-    fun isAnyValueSet(): Boolean {
-        return sleepQuality > 0 || proteinIntake > 0 || hydration > 0 || stressLevel > 0
-    }
-}
+import android.util.Log
 
 data class WorkoutSessionState(
     val sessionId: Long = System.currentTimeMillis(),
-    val startTime: Long = System.currentTimeMillis(),
     val workoutId: Int = 0,
     val workoutName: String = "",
-    val isStarted: Boolean = false,
-    val completedExercises: MutableSet<Int> = mutableSetOf()
+    val startTime: Long = System.currentTimeMillis(),
+    val isStarted: Boolean = false
 )
 
 class WorkoutDetailsViewModel : ViewModel() {
-    private val _recoveryFactors = MutableStateFlow(RecoveryFactorsState())
-    val recoveryFactors: StateFlow<RecoveryFactorsState> = _recoveryFactors.asStateFlow()
+    private val _workoutSession = MutableStateFlow<WorkoutSessionState?>(null)
+    val workoutSession: StateFlow<WorkoutSessionState?> = _workoutSession.asStateFlow()
+
+    private val _recoveryFactors = MutableStateFlow(TempRecoveryFactors())
+    val recoveryFactors: StateFlow<TempRecoveryFactors> = _recoveryFactors.asStateFlow()
 
     private val _hasSetRecoveryFactors = MutableStateFlow(false)
     val hasSetRecoveryFactors: StateFlow<Boolean> = _hasSetRecoveryFactors.asStateFlow()
 
-    private val _workoutSession = MutableStateFlow<WorkoutSessionState?>(null)
-    val workoutSession: StateFlow<WorkoutSessionState?> = _workoutSession.asStateFlow()
-
     fun initializeWorkoutSession(workoutId: Int, workoutName: String) {
         val currentTime = System.currentTimeMillis()
+        Log.d("WorkoutViewModel", "Initializing workout session at time: $currentTime")
         _workoutSession.value = WorkoutSessionState(
             sessionId = currentTime,
-            startTime = currentTime,
             workoutId = workoutId,
-            workoutName = workoutName
-        )
-        if (!_hasSetRecoveryFactors.value) {
-            resetRecoveryFactors()
-        }
-    }
-
-    fun startWorkoutSession() {
-        val currentTime = System.currentTimeMillis()
-        _workoutSession.value = _workoutSession.value?.copy(
-            isStarted = true,
-            startTime = currentTime
+            workoutName = workoutName,
+            startTime = currentTime,
+            isStarted = false
         )
     }
 
-    fun markExerciseCompleted(exerciseId: Int) {
-        _workoutSession.value?.let { session ->
-            session.completedExercises.add(exerciseId)
-            _workoutSession.value = session
+    fun startWorkoutSession(startTime: Long) {
+        Log.d("WorkoutViewModel", "Starting workout session at time: $startTime")
+        val currentSession = _workoutSession.value
+        if (currentSession != null) {
+            _workoutSession.value = currentSession.copy(
+                startTime = startTime,
+                isStarted = true
+            )
+            Log.d("WorkoutViewModel", "Workout session started with state: ${_workoutSession.value}")
+        } else {
+            Log.e("WorkoutViewModel", "Cannot start session - no initialized session found")
         }
-    }
-
-    fun isExerciseCompleted(exerciseId: Int): Boolean {
-        return _workoutSession.value?.completedExercises?.contains(exerciseId) == true
     }
 
     fun updateRecoveryFactors(
-        sleepQuality: Int = _recoveryFactors.value.sleepQuality,
-        proteinIntake: Int = _recoveryFactors.value.proteinIntake,
-        hydration: Int = _recoveryFactors.value.hydration,
-        stressLevel: Int = _recoveryFactors.value.stressLevel
+        sleepQuality: Int? = null,
+        proteinIntake: Int? = null,
+        hydration: Int? = null,
+        stressLevel: Int? = null
     ) {
-        viewModelScope.launch {
-            val newState = RecoveryFactorsState(
-                sleepQuality = sleepQuality,
-                proteinIntake = proteinIntake,
-                hydration = hydration,
-                stressLevel = stressLevel
-            )
-            _recoveryFactors.value = newState
-            _hasSetRecoveryFactors.value = newState.isAnyValueSet()
-        }
-    }
-
-    fun resetRecoveryFactors() {
-        viewModelScope.launch {
-            _recoveryFactors.value = RecoveryFactorsState()
-            _hasSetRecoveryFactors.value = false
-        }
+        val currentFactors = _recoveryFactors.value
+        _recoveryFactors.value = currentFactors.copy(
+            sleepQuality = sleepQuality ?: currentFactors.sleepQuality,
+            proteinIntake = proteinIntake ?: currentFactors.proteinIntake,
+            hydration = hydration ?: currentFactors.hydration,
+            stressLevel = stressLevel ?: currentFactors.stressLevel
+        )
+        _hasSetRecoveryFactors.value = true
     }
 
     fun resetWorkoutSession() {
+        Log.d("WorkoutViewModel", "Resetting workout session")
         _workoutSession.value = null
-        resetRecoveryFactors()
+        _recoveryFactors.value = TempRecoveryFactors()
+        _hasSetRecoveryFactors.value = false
     }
 } 

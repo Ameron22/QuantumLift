@@ -54,6 +54,7 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.gymtracker.viewmodels.WorkoutDetailsViewModel
+import kotlin.math.roundToLong
 
 data class ExerciseState(
     val exercise: EntityExercise,
@@ -103,9 +104,15 @@ fun WorkoutDetailsScreen(
             } else {
                 workoutWithExercises = workoutData
                 val workoutName = workoutData.firstOrNull()?.workout?.name ?: "Unknown Workout"
-                viewModel.initializeWorkoutSession(workoutId, workoutName)
-                Log.d("WorkoutDetailsScreen", "Workout name: $workoutName")
-                Log.d("WorkoutDetailsScreen", "Number of exercises: ${workoutData.firstOrNull()?.exercises?.size}")
+                
+                // Only initialize if there's no active session
+                if (viewModel.workoutSession.value == null) {
+                    viewModel.initializeWorkoutSession(workoutId, workoutName)
+                    Log.d("WorkoutDetailsScreen", "Workout name: $workoutName")
+                    Log.d("WorkoutDetailsScreen", "Number of exercises: ${workoutData.firstOrNull()?.exercises?.size}")
+                } else {
+                    Log.d("WorkoutDetailsScreen", "Using existing session: ${viewModel.workoutSession.value}")
+                }
             }
         } catch (e: Exception) {
             Log.e("WorkoutDetailsScreen", "Database error: ${e.message}")
@@ -126,13 +133,17 @@ fun WorkoutDetailsScreen(
 
     // Function to start the workout session
     fun startWorkoutSession(exId: Int) {
-        viewModel.startWorkoutSession()
-        workoutStarted = true  // Set workoutStarted to true
-        val sessionId = viewModel.workoutSession.value?.sessionId
-        if (sessionId != null) {
-                navController.navigate("exerciseDetails/${exId}/${sessionId}")
+        val currentTime = System.currentTimeMillis()
+        Log.d("WorkoutDetailsScreen", "Starting workout session at time: $currentTime")
+        viewModel.startWorkoutSession(currentTime)
+        workoutStarted = true
+        startTimeWorkout = currentTime
+        val session = viewModel.workoutSession.value
+        Log.d("WorkoutDetailsScreen", "Session state after start: $session")
+        if (session != null) {
+            navController.navigate("exerciseDetails/${exId}/${session.sessionId}")
         } else {
-            Log.e("WorkoutDetailsScreen", "Failed to start workout session: sessionId is null")
+            Log.e("WorkoutDetailsScreen", "Failed to start workout session: session is null")
         }
     }
 
@@ -142,7 +153,14 @@ fun WorkoutDetailsScreen(
         Log.d("WorkoutDetailsScreen", "Ending workout session - Session: $session, Started: ${session?.isStarted}, WorkoutStarted: $workoutStarted")
         
         if (session == null) {
-            // If no session exists, just reset and go back
+            Log.e("WorkoutDetailsScreen", "Cannot end workout - session is null")
+            viewModel.resetWorkoutSession()
+            navController.popBackStack()
+            return
+        }
+
+        if (!session.isStarted) {
+            Log.e("WorkoutDetailsScreen", "Cannot end workout - session not started")
             viewModel.resetWorkoutSession()
             navController.popBackStack()
             return
@@ -151,15 +169,26 @@ fun WorkoutDetailsScreen(
         coroutineScope.launch(Dispatchers.IO) {
             try {
                 val currentTime = System.currentTimeMillis()
-                val duration = (currentTime - session.startTime) / 1000
-                Log.d("WorkoutDetailsScreen", "Saving workout session - ID: ${session.workoutId}, Name: ${session.workoutName}, Duration: $duration")
+                val startTime = session.startTime
+                val durationInSeconds = (currentTime - startTime) / 1000
+
+                Log.d("WorkoutDetailsScreen", """
+                    Saving workout session:
+                    - Start Time: $startTime
+                    - End Time: $currentTime
+                    - Duration: $durationInSeconds seconds
+                    - Session ID: ${session.sessionId}
+                    - Workout ID: ${session.workoutId}
+                    - Workout Name: ${session.workoutName}
+                    - Is Started: ${session.isStarted}
+                """.trimIndent())
                 
                 // Create and save the workout session
                 val workoutSession = SessionWorkoutEntity(
-                    sessionId = session.sessionId,  // Use the session ID from viewModel
+                    sessionId = session.sessionId,
                     workoutId = session.workoutId,
-                    startTime = session.startTime,
-                    duration = duration,
+                    startTime = startTime,
+                    duration = durationInSeconds,
                     workoutName = session.workoutName
                 )
 
@@ -182,19 +211,17 @@ fun WorkoutDetailsScreen(
                         stressLevel = recoveryFactors.stressLevel
                     )
                     val recoveryFactorsJson = Gson().toJson(recoveryFactorsObj)
-                    dao.updateWorkoutSessionWithRecovery(session.sessionId, duration, recoveryFactorsJson)
+                    dao.updateWorkoutSessionWithRecovery(session.sessionId, durationInSeconds, recoveryFactorsJson)
                 }
                 
-                Log.d("WorkoutDetailsScreen", "Workout session saved successfully with ID: ${session.sessionId}")
+                Log.d("WorkoutDetailsScreen", "Workout session saved successfully")
                 withContext(Dispatchers.Main) {
-                    startTimeWorkout = session.startTime // Set the start time for duration display
                     showSaveNotification = true
                 }
             } catch (e: Exception) {
                 Log.e("WorkoutDetailsScreen", "Error saving workout session: ${e.message}")
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
-                    // Handle error (show message to user)
                     viewModel.resetWorkoutSession()
                     navController.popBackStack()
                 }
@@ -388,6 +415,45 @@ fun WorkoutDetailsScreen(
         label = "brightnessAnimation"
     )
 
+    // Function to format duration in HH:MM:SS format
+    fun formatDuration(durationInSeconds: Long): String {
+        val hours = durationInSeconds / 3600
+        val minutes = (durationInSeconds % 3600) / 60
+        val seconds = durationInSeconds % 60
+        return when {
+            hours > 0 -> String.format("%02d:%02d:%02d", hours, minutes, seconds)
+            else -> String.format("%02d:%02d", minutes, seconds)
+        }
+    }
+
+    // Function to calculate current duration
+    fun calculateCurrentDuration(startTimeWorkout: Long, workoutStarted: Boolean): String {
+        return if (startTimeWorkout > 0 && workoutStarted) {
+            val currentDuration = (System.currentTimeMillis() - startTimeWorkout) / 1000
+            formatDuration(currentDuration)
+        } else {
+            "00:00"
+        }
+    }
+
+    @Composable
+    fun WorkoutDurationDisplay(startTimeWorkout: Long, workoutStarted: Boolean) {
+        var durationText by remember { mutableStateOf("00:00") }
+        
+        LaunchedEffect(workoutStarted, startTimeWorkout) {
+            while (workoutStarted && startTimeWorkout > 0) {
+                durationText = calculateCurrentDuration(startTimeWorkout, workoutStarted)
+                delay(1000) // Update every second
+            }
+        }
+
+        Text(
+            text = "Duration: $durationText",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(vertical = 8.dp)
+        )
+    }
+
     // UI
     Scaffold(
         topBar = {
@@ -413,7 +479,7 @@ fun WorkoutDetailsScreen(
                 )
             )
         },
-        bottomBar = {
+    bottomBar = {
             BottomAppBar(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surface
@@ -673,11 +739,7 @@ fun WorkoutDetailsScreen(
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            Text(
-                                text = "Duration: ${TimeUnit.SECONDS.toMinutes(((System.currentTimeMillis() - startTimeWorkout) / 1000))} minutes",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            )
+                            WorkoutDurationDisplay(startTimeWorkout, workoutStarted)
                             Text(
                                 text = SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(System.currentTimeMillis()),
                                 style = MaterialTheme.typography.bodyMedium,

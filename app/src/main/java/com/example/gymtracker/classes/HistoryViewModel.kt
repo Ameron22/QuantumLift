@@ -42,9 +42,9 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
                     // First, collect all workout sessions
                     dao.getAllWorkoutSessionsFlow().collectLatest { workoutSessions ->
                         Log.d("HistoryViewModel", "Loaded ${workoutSessions.size} workout sessions")
-                        
-                        // Create a map to store aggregated results
-                        val sessionMap = mutableMapOf<Long, SessionWorkoutWithMuscles>()
+
+                    // Create a map to store aggregated results
+                    val sessionMap = mutableMapOf<Long, SessionWorkoutWithMuscles>()
                         val muscleDataMap = mutableMapOf<String, MuscleData>()
 
                         // First, add all workout sessions to the map

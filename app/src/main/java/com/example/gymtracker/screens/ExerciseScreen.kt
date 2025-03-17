@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,12 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
@@ -65,15 +62,11 @@ import com.example.gymtracker.classes.NumberPicker
 import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.SessionEntityExercise
-import com.example.gymtracker.data.RecoveryFactors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.example.gymtracker.components.SliderWithLabel
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipDefaults
-import androidx.compose.material3.rememberTooltipState
 import kotlinx.coroutines.withContext
 
 
@@ -127,7 +120,19 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
     // Fetch exercise data
     LaunchedEffect(exerciseId) {
         try {
-            exercise = dao.getExerciseById(exerciseId)?.also { ex ->
+            Log.d("ExerciseScreen", "Fetching exercise with ID: $exerciseId")
+            val fetchedExercise = dao.getExerciseById(exerciseId)
+            if (fetchedExercise == null) {
+                Log.e("ExerciseScreen", "Exercise not found with ID: $exerciseId")
+                withContext(Dispatchers.Main) {
+                    // Show error and navigate back
+                    navController.popBackStack()
+                }
+                return@LaunchedEffect
+            }
+            
+            exercise = fetchedExercise.also { ex ->
+                Log.d("ExerciseScreen", "Exercise loaded: ${ex.name}")
                 // Initialize weights for all sets with the exercise weight
                 if (ex.weight != 0) {
                     for (set in 1..ex.sets) {
@@ -141,11 +146,16 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
             }
         } catch (e: Exception) {
             Log.e("ExerciseScreen", "Database error: ${e.message}")
+            e.printStackTrace()
+            withContext(Dispatchers.Main) {
+                // Show error and navigate back
+                navController.popBackStack()
+            }
         }
     }
 
     // Function to save exercise session
-    fun saveExerciseSession() {
+    suspend fun saveExerciseSession() {
         val exercise = exercise ?: return
 
         // Ensure completedSet doesn't exceed total sets
@@ -166,7 +176,7 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
             repsOrTime = repsOrTimeList,
             weight = weightList,
             muscleGroup = exercise.muscle,
-            muscleParts = exercise.part,
+            muscleParts = exercise.part.joinToString(", "),
             completedSets = completedSet,
             notes = "",
             eccentricFactor = eccentricFactor,
@@ -176,20 +186,17 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
             subjectiveSoreness = subjectiveSoreness
         )
 
-        coroutineScope.launch(Dispatchers.IO) {
-            try {
-                dao.insertExerciseSession(exerciseSession)
-                Log.d("ExerciseScreen", "Exercise session saved successfully: $exerciseSession")
-                withContext(Dispatchers.Main) {
-                    showSaveNotification = true
-                }
-            } catch (e: Exception) {
-                Log.e("ExerciseScreen", "Error saving exercise session: ${e.message}")
-                e.printStackTrace()
-                withContext(Dispatchers.Main) {
-                    // Could add error notification here
-                }
+        try {
+            withContext(Dispatchers.IO) {
+            dao.insertExerciseSession(exerciseSession)
             }
+            Log.d("ExerciseScreen", "Exercise session saved successfully: $exerciseSession")
+            withContext(Dispatchers.Main) {
+                showSaveNotification = true
+            }
+        } catch (e: Exception) {
+            Log.e("ExerciseScreen", "Error saving exercise session: ${e.message}")
+            e.printStackTrace()
         }
     }
 
@@ -198,7 +205,7 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
         if (showSaveNotification) {
             delay(3000)
             showSaveNotification = false
-            navController.popBackStack() // Navigate back after notification is shown
+            navController.popBackStack()
         }
     }
 
@@ -219,7 +226,9 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
                             isTimerRunning = false
                             activeSetIndex = null
                             completedSet = exercise?.sets ?: 0  // Set to total number of sets
+                            coroutineScope.launch {
                             saveExerciseSession()
+                            }
                         }
                     } else {
                         completedSet += 1  // Increment completed sets after exercise time
@@ -227,7 +236,9 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
                             isTimerRunning = false
                             activeSetIndex = null
                             completedSet = exercise?.sets ?: 0  // Ensure we mark all sets as completed
+                            coroutineScope.launch {
                             saveExerciseSession()
+                            }
                         } else {
                             isBreakRunning = true
                             remainingTime = breakTime
@@ -281,22 +292,22 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
             )
         },
         bottomBar = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                 if (isTimerRunning) {
                     // Timer progress bar
-                    LinearProgressIndicator(
-                        progress = {
-                            if (isBreakRunning) {
-                                remainingTime.toFloat() / breakTime
-                            } else {
-                                remainingTime.toFloat() / exerciseTime
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp),
+                        LinearProgressIndicator(
+                            progress = {
+                                if (isBreakRunning) {
+                                    remainingTime.toFloat() / breakTime
+                                } else {
+                                    remainingTime.toFloat() / exerciseTime
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp),
                         color = if (isBreakRunning) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
-                    )
+                        )
 
                     // Timer display
                     BottomAppBar(
@@ -310,14 +321,14 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             // Timer text
-                            Text(
+                                Text(
                                 text = if (isBreakRunning) "Break Time" else "Exercise Time",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             
-                            Text(
-                                text = String.format("%02d:%02d", remainingTime / 60, remainingTime % 60),
+                                Text(
+                                    text = String.format("%02d:%02d", remainingTime / 60, remainingTime % 60),
                                 style = MaterialTheme.typography.titleLarge,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -326,7 +337,7 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
                             IconButton(
                                 onClick = { isPaused = !isPaused }
                             ) {
-                                Icon(
+                                    Icon(
                                     imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.ArrowDropDown,
                                     contentDescription = if (isPaused) "Resume" else "Pause",
                                     tint = MaterialTheme.colorScheme.primary
@@ -336,26 +347,27 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
                     }
                 } else {
                     // Save Exercise Button when timer is not running
-                    BottomAppBar(
+                BottomAppBar(
                         modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
+                        Button(
+                            onClick = {
+                                    coroutineScope.launch {
+                                saveExerciseSession()
+                                    }
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(8.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Button(
-                                onClick = {
-                                    saveExerciseSession()
-                                    navController.popBackStack()
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
                                     .padding(horizontal = 8.dp, vertical = 12.dp)
-                            ) {
-                                Text("Save Exercise")
+                        ) {
+                            Text("Save Exercise")
                             }
                         }
                     }
@@ -980,7 +992,9 @@ fun ExerciseScreen(exerciseId: Int, workoutSessionId: Long, navController: NavCo
                         TextButton(
                             onClick = {
                                 showSorenessDialog = false
-                                saveExerciseSession()
+                                coroutineScope.launch {
+                                    saveExerciseSession()
+                                }
                             }
                         ) {
                             Text("Save")

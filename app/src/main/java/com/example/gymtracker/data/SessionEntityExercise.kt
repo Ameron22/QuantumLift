@@ -18,7 +18,7 @@ data class SessionEntityExercise(
     val repsOrTime: List<Int?>, // List of reps or time for each set (nullable)
     val weight: List<Int?>, // List of weights for each set (nullable)
     val muscleGroup: String, // Muscle group targeted
-    val muscleParts: List<String>, // Specific muscle parts targeted
+    val muscleParts: String, // Specific muscle parts targeted
     val completedSets: Int, // Number of completed sets
     val notes: String, // Additional notes
     
