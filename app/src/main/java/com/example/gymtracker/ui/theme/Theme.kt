@@ -19,8 +19,8 @@ import androidx.core.view.WindowCompat
 private val LightColorScheme = lightColorScheme(
     primary = Color(0xFF6200EE), // purple_500
     secondary = Color(0xFF03DAC5), // teal_200
-    background = Color(0xFFFFFFFF), // white
-    surface = Color(0xFFFFFFFF), // white
+    background = Color.Transparent, // Transparent background
+    surface = Color(0xFFFFFFFF), // White surface for cards
     onPrimary = Color(0xFFFFFFFF), // white
     onSecondary = Color(0xFF000000), // black
     onBackground = Color(0xFF000000), // black
@@ -30,8 +30,8 @@ private val LightColorScheme = lightColorScheme(
 private val DarkColorScheme = darkColorScheme(
     primary = Color(0xFFBB86FC), // purple_200
     secondary = Color(0xFF03DAC5), // teal_200
-    background = Color(0xFF000000), // black
-    surface = Color(0xFF000000), // black
+    background = Color.Transparent, // Transparent background
+    surface = Color(0xFF1A1A1A), // Dark surface for cards
     onPrimary = Color(0xFF000000), // black
     onSecondary = Color(0xFFFFFFFF), // white
     onBackground = Color(0xFFFFFFFF), // white
@@ -51,7 +51,7 @@ fun QuantumLiftTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-           // window.statusBarColor = DarkerBackground.toArgb()
+            window.statusBarColor = Color(0xFF1A1A1A).toArgb()
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
         }
     }

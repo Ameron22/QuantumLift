@@ -51,4 +51,28 @@ class Converter {
             Gson().fromJson(value, type)
         }
     }
+
+    @TypeConverter
+    fun fromAchievementStatus(status: AchievementStatus): String {
+        return status.name
+    }
+
+    @TypeConverter
+    fun toAchievementStatus(value: String): AchievementStatus {
+        return AchievementStatus.valueOf(value)
+    }
+
+    @TypeConverter
+    fun fromLongList(list: List<Long>): String {
+        return Gson().toJson(list)
+    }
+
+    @TypeConverter
+    fun toLongList(value: String?): List<Long> {
+        if (value == null) {
+            return emptyList()
+        }
+        val listType = object : TypeToken<List<Long>>() {}.type
+        return Gson().fromJson(value, listType)
+    }
 }

@@ -13,11 +13,20 @@ interface ExerciseDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExercise(exercise: EntityExercise): Long
 
+    @Update
+    suspend fun updateExercise(exercise: EntityExercise)
+
+    @Query("SELECT * FROM exercises")
+    suspend fun getAllExercises(): List<EntityExercise>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWorkout(workout: EntityWorkout): Long
 
     @Insert
     suspend fun insertWorkoutExerciseCrossRef(crossRef: CrossRefWorkoutExercise)
+
+    @Delete
+    suspend fun deleteWorkoutExerciseCrossRef(crossRef: CrossRefWorkoutExercise)
 
     @Query("SELECT * FROM exercises WHERE id = :exerciseId")
     suspend fun getExerciseById(exerciseId: Int): EntityExercise?
@@ -71,4 +80,16 @@ interface ExerciseDao {
 
     @Query("SELECT tempRecoveryFactors FROM workout_sessions WHERE sessionId = :sessionId")
     suspend fun getTempRecoveryFactors(sessionId: Long): String?
+
+    @Query("SELECT COUNT(DISTINCT sessionId) FROM workout_sessions")
+    suspend fun getTotalWorkoutCount(): Int
+
+    @Query("SELECT startTime FROM workout_sessions ORDER BY startTime DESC")
+    suspend fun getWorkoutDates(): List<Long>
+
+    @Query("SELECT MAX(weight) FROM exercise_sessions WHERE exerciseId IN (SELECT id FROM exercises WHERE name = :exerciseName)")
+    suspend fun getMaxWeightForExercise(exerciseName: String): Float
+
+    @Query("SELECT * FROM workout_sessions ORDER BY startTime DESC")
+    suspend fun getAllWorkoutSessionsOrderedByDate(): List<SessionWorkoutEntity>
 }

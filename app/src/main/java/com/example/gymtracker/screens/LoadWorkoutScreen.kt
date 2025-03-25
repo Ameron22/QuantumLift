@@ -32,6 +32,7 @@ import kotlinx.coroutines.Dispatchers
 import com.example.gymtracker.components.BottomNavBar
 import com.example.gymtracker.components.WorkoutCard
 import com.example.gymtracker.navigation.Screen
+import androidx.compose.ui.graphics.Color
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,7 +64,8 @@ fun LoadWorkoutScreen(navController: NavController) {
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Workout")
             }
-        }
+        },
+        containerColor = Color.Transparent
     ) { paddingValues ->
         LazyColumn(
             modifier = Modifier

@@ -7,6 +7,15 @@ sealed class Screen(val route: String) {
     object LoadHistory : Screen("load_history")
     object ExerciseDetails : Screen("exercise_details")
     object Achievements : Screen("achievements")
+    object WorkoutDetails : Screen("workout_details/{workoutId}") {
+        fun createRoute(workoutId: Int) = "workout_details/$workoutId"
+    }
+    object Exercise : Screen("exercise/{exerciseId}/{sessionId}") {
+        fun createRoute(exerciseId: Int, sessionId: Int) = "exercise/$exerciseId/$sessionId"
+    }
+    object AddExerciseToWorkout : Screen("addExerciseToWorkout/{workoutId}") {
+        fun createRoute(workoutId: Int) = "addExerciseToWorkout/$workoutId"
+    }
     
     // Helper object for parameterized routes
     object Routes {

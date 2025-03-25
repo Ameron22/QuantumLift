@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,6 +45,7 @@ import com.example.gymtracker.data.SessionWorkoutEntity
 import com.example.gymtracker.data.WorkoutWithExercises
 import com.example.gymtracker.data.RecoveryFactors
 import com.example.gymtracker.data.TempRecoveryFactors
+import com.example.gymtracker.data.CrossRefWorkoutExercise
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -55,6 +57,9 @@ import java.util.concurrent.TimeUnit
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.gymtracker.viewmodels.WorkoutDetailsViewModel
 import kotlin.math.roundToLong
+import com.example.gymtracker.data.AchievementManager
+import com.example.gymtracker.data.ExerciseDao
+import java.util.Calendar
 
 data class ExerciseState(
     val exercise: EntityExercise,
@@ -84,48 +89,63 @@ fun WorkoutDetailsScreen(
     var workoutStarted by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
     var showSaveNotification by remember { mutableStateOf(false) }
-    
+
     // Recovery Factors states from ViewModel
     val recoveryFactors by viewModel.recoveryFactors.collectAsState()
     val hasSetRecoveryFactors by viewModel.hasSetRecoveryFactors.collectAsState()
     var showRecoveryDialog by remember { mutableStateOf(false) }
     var currentRecoveryFactor by remember { mutableStateOf("") }
+    var showRecoveryInfoDialog by remember { mutableStateOf(false) }
 
     // Update the LaunchedEffect for loading workout data
     LaunchedEffect(workoutId) {
         try {
             Log.d("WorkoutDetailsScreen", "Loading workout data for ID: $workoutId")
-            
-            val workoutData = dao.getWorkoutWithExercises(workoutId)
-            Log.d("WorkoutDetailsScreen", "Workout data loaded: ${workoutData?.size} items")
-            
-            if (workoutData.isNullOrEmpty()) {
-                Log.e("WorkoutDetailsScreen", "No workout data found for ID: $workoutId")
-            } else {
-                workoutWithExercises = workoutData
-                val workoutName = workoutData.firstOrNull()?.workout?.name ?: "Unknown Workout"
-                
-                // Check if there's an existing session
-                val existingSession = viewModel.workoutSession.value
-                Log.d("WorkoutDetailsScreen", "Existing session: $existingSession")
-                
-                if (existingSession == null || existingSession.workoutId != workoutId) {
-                    Log.d("WorkoutDetailsScreen", "Initializing new workout session")
-                    viewModel.initializeWorkoutSession(workoutId, workoutName)
-                } else {
-                    Log.d("WorkoutDetailsScreen", "Using existing workout session")
-                    workoutStarted = existingSession.isStarted
-                    if (workoutStarted) {
-                        startTimeWorkout = existingSession.startTime
+
+            withContext(Dispatchers.IO) {
+                val workoutData = dao.getWorkoutWithExercises(workoutId)
+
+                withContext(Dispatchers.Main) {
+                    Log.d("WorkoutDetailsScreen", "Workout data loaded: ${workoutData?.size} items")
+
+                    if (workoutData.isNullOrEmpty()) {
+                        Log.e("WorkoutDetailsScreen", "No workout data found for ID: $workoutId")
+                    } else {
+                        workoutWithExercises = workoutData
+                        val workoutName =
+                            workoutData.firstOrNull()?.workout?.name ?: "Unknown Workout"
+
+                        // Check if there's an existing session
+                        val existingSession = viewModel.workoutSession.value
+                        Log.d("WorkoutDetailsScreen", "Existing session: $existingSession")
+
+                        if (existingSession == null || existingSession.workoutId != workoutId) {
+                            Log.d("WorkoutDetailsScreen", "Initializing new workout session")
+                            viewModel.initializeWorkoutSession(workoutId, workoutName)
+                        } else {
+                            Log.d("WorkoutDetailsScreen", "Using existing workout session")
+                            workoutStarted = existingSession.isStarted
+                            if (workoutStarted) {
+                                startTimeWorkout = existingSession.startTime
+                            }
+                        }
+
+                        Log.d("WorkoutDetailsScreen", "Workout name: $workoutName")
+                        Log.d(
+                            "WorkoutDetailsScreen",
+                            "Number of exercises: ${workoutData.firstOrNull()?.exercises?.size}"
+                        )
                     }
                 }
-                
-                Log.d("WorkoutDetailsScreen", "Workout name: $workoutName")
-                Log.d("WorkoutDetailsScreen", "Number of exercises: ${workoutData.firstOrNull()?.exercises?.size}")
             }
         } catch (e: Exception) {
             Log.e("WorkoutDetailsScreen", "Database error: ${e.message}")
             e.printStackTrace()
+            // Handle the error on the main thread
+            withContext(Dispatchers.Main) {
+                // You might want to show an error message to the user here
+                navController.popBackStack()
+            }
         }
     }
 
@@ -150,7 +170,10 @@ fun WorkoutDetailsScreen(
         val session = viewModel.workoutSession.value
         Log.d("WorkoutDetailsScreen", "Session state after start: $session")
         if (session != null) {
-            Log.d("WorkoutDetailsScreen", "Navigating to exercise with sessionId: ${session.sessionId}")
+            Log.d(
+                "WorkoutDetailsScreen",
+                "Navigating to exercise with sessionId: ${session.sessionId}"
+            )
             navController.navigate("exerciseDetails/${exId}/${session.sessionId}")
         } else {
             Log.e("WorkoutDetailsScreen", "Failed to start workout session: session is null")
@@ -160,8 +183,11 @@ fun WorkoutDetailsScreen(
     // Function to end the workout session
     fun endWorkoutSession() {
         val session = viewModel.workoutSession.value
-        Log.d("WorkoutDetailsScreen", "Ending workout session - Session: $session, Started: ${session?.isStarted}, WorkoutStarted: $workoutStarted")
-        
+        Log.d(
+            "WorkoutDetailsScreen",
+            "Ending workout session - Session: $session, Started: ${session?.isStarted}, WorkoutStarted: $workoutStarted"
+        )
+
         if (session == null) {
             Log.e("WorkoutDetailsScreen", "Cannot end workout - session is null")
             viewModel.resetWorkoutSession()
@@ -180,10 +206,12 @@ fun WorkoutDetailsScreen(
         coroutineScope.launch(Dispatchers.IO) {
             try {
                 val currentTime = System.currentTimeMillis()
-                val startTime = startTimeWorkout // Use the local startTimeWorkout instead of session.startTime
+                val startTime =
+                    startTimeWorkout // Use the local startTimeWorkout instead of session.startTime
                 val durationInSeconds = (currentTime - startTime) / 1000
 
-                Log.d("WorkoutDetailsScreen", """
+                Log.d(
+                    "WorkoutDetailsScreen", """
                     Saving workout session:
                     - Start Time: $startTime
                     - End Time: $currentTime
@@ -192,8 +220,9 @@ fun WorkoutDetailsScreen(
                     - Workout ID: ${session.workoutId}
                     - Workout Name: ${session.workoutName}
                     - Is Started: $workoutStarted
-                """.trimIndent())
-                
+                """.trimIndent()
+                )
+
                 // Create and save the workout session
                 val workoutSession = SessionWorkoutEntity(
                     sessionId = session.sessionId,
@@ -212,7 +241,7 @@ fun WorkoutDetailsScreen(
                     Log.d("WorkoutDetailsScreen", "Updating existing workout session")
                     dao.updateWorkoutSession(workoutSession)
                 }
-                
+
                 // Save recovery factors if set
                 if (hasSetRecoveryFactors) {
                     val recoveryFactorsObj = RecoveryFactors(
@@ -222,9 +251,34 @@ fun WorkoutDetailsScreen(
                         stressLevel = recoveryFactors.stressLevel
                     )
                     val recoveryFactorsJson = Gson().toJson(recoveryFactorsObj)
-                    dao.updateWorkoutSessionWithRecovery(session.sessionId, durationInSeconds, recoveryFactorsJson)
+                    dao.updateWorkoutSessionWithRecovery(
+                        session.sessionId,
+                        durationInSeconds,
+                        recoveryFactorsJson
+                    )
                 }
+
+                // Update achievements
+                val totalWorkouts = dao.getTotalWorkoutCount()
+                val currentHour = SimpleDateFormat("HH", Locale.getDefault())
+                    .format(System.currentTimeMillis()).toInt()
+                val isNightWorkout = currentHour >= 22 || currentHour < 4
+
+                // Get the achievement manager instance
+                val achievementManager = AchievementManager.getInstance()
                 
+                // Update workout count achievements
+                achievementManager.updateWorkoutCount(totalWorkouts)
+
+                // Update special challenges
+                if (isNightWorkout) {
+                    achievementManager.updateSpecialChallenges("night_owl")
+                }
+
+                // Calculate and update streak
+                val streak = calculateWorkoutStreak(dao)
+                achievementManager.updateConsistencyStreak(streak)
+
                 Log.d("WorkoutDetailsScreen", "Workout session saved successfully")
                 withContext(Dispatchers.Main) {
                     showSaveNotification = true
@@ -245,7 +299,6 @@ fun WorkoutDetailsScreen(
         if (workoutStarted) {
             endWorkoutSession()
         } else {
-            viewModel.resetWorkoutSession()
             navController.popBackStack()
         }
     }
@@ -260,7 +313,7 @@ fun WorkoutDetailsScreen(
                     currentRecoveryFactor.contains("Protein") -> {
                         SliderWithLabel(
                             value = recoveryFactors.proteinIntake.toFloat(),
-                            onValueChange = { 
+                            onValueChange = {
                                 viewModel.updateRecoveryFactors(proteinIntake = it.toInt())
                             },
                             label = "",
@@ -268,6 +321,7 @@ fun WorkoutDetailsScreen(
                             steps = 30
                         )
                     }
+
                     else -> {
                         SliderWithLabel(
                             value = when {
@@ -276,13 +330,15 @@ fun WorkoutDetailsScreen(
                                 currentRecoveryFactor.contains("Stress") -> recoveryFactors.stressLevel
                                 else -> 5
                             }.toFloat(),
-                            onValueChange = { 
+                            onValueChange = {
                                 when {
-                                    currentRecoveryFactor.contains("Sleep") -> 
+                                    currentRecoveryFactor.contains("Sleep") ->
                                         viewModel.updateRecoveryFactors(sleepQuality = it.toInt())
-                                    currentRecoveryFactor.contains("Hydration") -> 
+
+                                    currentRecoveryFactor.contains("Hydration") ->
                                         viewModel.updateRecoveryFactors(hydration = it.toInt())
-                                    currentRecoveryFactor.contains("Stress") -> 
+
+                                    currentRecoveryFactor.contains("Stress") ->
                                         viewModel.updateRecoveryFactors(stressLevel = it.toInt())
                                 }
                             },
@@ -300,110 +356,6 @@ fun WorkoutDetailsScreen(
             },
             containerColor = MaterialTheme.colorScheme.surface
         )
-    }
-
-    // Update the Recovery Factors buttons section
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        listOf(
-            Triple("Sleep", recoveryFactors.sleepQuality, "Sleep Quality (1-10)"),
-            Triple("Protein", recoveryFactors.proteinIntake, "Protein Intake (g)"),
-            Triple("Hydration", recoveryFactors.hydration, "Hydration Level (1-10)"),
-            Triple("Stress Lvl", recoveryFactors.stressLevel, "Stress Level (1-10)")
-        ).forEach { (shortLabel, value, fullLabel) ->
-            Button(
-                onClick = {
-                    currentRecoveryFactor = fullLabel
-                    showRecoveryDialog = true
-                },
-                modifier = Modifier
-                    .height(80.dp)  // Increased height
-                    .weight(1f),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (value > 0)
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                    else
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-                )
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    if (value == 0) {
-                        Row(
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.plus_icon),
-                                contentDescription = "Add $shortLabel",
-                                modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    // Factor-specific icon
-                    when (shortLabel) {
-                        "Sleep" -> Icon(
-                            painter = painterResource(id = R.drawable.sleep_icon),
-                            contentDescription = "Sleep Icon",
-                            modifier = Modifier.size(24.dp),
-                            tint = if (value > 0) 
-                                MaterialTheme.colorScheme.onPrimary
-                            else 
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        "Protein" -> Icon(
-                            painter = painterResource(id = R.drawable.food_icon),
-                            contentDescription = "Food Icon",
-                            modifier = Modifier.size(24.dp),
-                            tint = if (value > 0) 
-                                MaterialTheme.colorScheme.onPrimary
-                            else 
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        "Hydration" -> Icon(
-                            painter = painterResource(id = R.drawable.drop_icon),
-                            contentDescription = "Hydration Icon",
-                            modifier = Modifier.size(24.dp),
-                            tint = if (value > 0) 
-                                MaterialTheme.colorScheme.onPrimary
-                            else 
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        "Stress Lvl" -> Icon(
-                            painter = painterResource(id = R.drawable.stress_icon),
-                            contentDescription = "Stress Icon",
-                            modifier = Modifier.size(24.dp),
-                            tint = if (value > 0) 
-                                MaterialTheme.colorScheme.onPrimary
-                            else 
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    
-                    Spacer(modifier = Modifier.height(4.dp))
-                    
-                    Text(
-                        text = if (value == 0) shortLabel 
-                              else if (shortLabel == "Protein") "${value}g" 
-                              else "$value",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (value > 0)
-                            MaterialTheme.colorScheme.onPrimary
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
-                    )
-                }
-            }
-        }
     }
 
     // Auto-dismiss notification after 3 seconds
@@ -450,7 +402,7 @@ fun WorkoutDetailsScreen(
     @Composable
     fun WorkoutDurationDisplay(startTimeWorkout: Long, workoutStarted: Boolean) {
         var durationText by remember { mutableStateOf("00:00") }
-        
+
         LaunchedEffect(workoutStarted, startTimeWorkout) {
             while (workoutStarted && startTimeWorkout > 0) {
                 durationText = calculateCurrentDuration(startTimeWorkout, workoutStarted)
@@ -469,7 +421,7 @@ fun WorkoutDetailsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { 
+                title = {
                     Text(
                         text = workoutWithExercises?.firstOrNull()?.workout?.name ?: "Loading...",
                         style = MaterialTheme.typography.titleLarge,
@@ -528,22 +480,63 @@ fun WorkoutDetailsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             workoutWithExercises?.flatMap { it.exercises }?.forEach { exercise ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .clickable {
+                    ExerciseCard(
+                        exercise = exercise,
+                        onClick = {
                             if (!workoutStarted) {
                                 startWorkoutSession(exercise.id)
                                 workoutStarted = true
                             } else {
-                                if (sessionId != null) {
-                                    navController.navigate("exerciseDetails/${exercise.id}/${sessionId}")
+                                val session = viewModel.workoutSession.value
+                                if (session != null) {
+                                    Log.d(
+                                        "WorkoutDetailsScreen",
+                                        "Navigating to exercise ${exercise.id} with existing session: ${session.sessionId}"
+                                    )
+                                    navController.navigate("exerciseDetails/${exercise.id}/${session.sessionId}")
                                 } else {
-                                    println("Workout session not started yet. Please wait.")
+                                    Log.e(
+                                        "WorkoutDetailsScreen",
+                                        "Cannot navigate - session is null"
+                                    )
                                 }
                             }
-                        }
+                        },
+                        onDelete = {
+                            coroutineScope.launch {
+                                try {
+                                    withContext(Dispatchers.IO) {
+                                        dao.deleteWorkoutExerciseCrossRef(
+                                            CrossRefWorkoutExercise(
+                                                workoutId = workoutId,
+                                                exerciseId = exercise.id
+                                            )
+                                        )
+                                    }
+                                    // Refresh the workout data
+                                    val updatedWorkoutData = dao.getWorkoutWithExercises(workoutId)
+                                    withContext(Dispatchers.Main) {
+                                        workoutWithExercises = updatedWorkoutData
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("WorkoutDetailsScreen", "Error deleting exercise: ${e.message}")
+                                    e.printStackTrace()
+                                }
+                            }
+                        },
+                        isWorkoutStarted = workoutStarted
+                    )
+                }
+
+                // Add Exercise Button
+                if (!workoutStarted) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .clickable {
+                                navController.navigate("addExerciseToWorkout/$workoutId")
+                            }
                             .border(
                                 width = 1.dp,
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
@@ -554,27 +547,30 @@ fun WorkoutDetailsScreen(
                             containerColor = MaterialTheme.colorScheme.surface
                         )
                     ) {
-                        Column(
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp)
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = exercise.name,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
+                            Icon(
+                                painter = painterResource(id = R.drawable.plus_icon),
+                                contentDescription = "Add Exercise",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "${exercise.sets} sets × ${if (exercise.reps > 50) "${(exercise.reps-1000)/60}:${(exercise.reps-1000)%60} min" else "${exercise.reps} reps"}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                text = "Add Exercise",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
                 }
 
-                // Recovery Factors Section
+                // Recovery Factors Section - moved outside the exercise loop
                 Spacer(modifier = Modifier.height(24.dp))
                 Card(
                     modifier = Modifier
@@ -591,17 +587,60 @@ fun WorkoutDetailsScreen(
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(
-                            text = "Recovery Factors",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            ),
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Recovery Factors",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                ),
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                            IconButton(
+                                onClick = { showRecoveryInfoDialog = true },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Recovery Factors Info",
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
+
+                        // Add Recovery Factors Info Dialog
+                        if (showRecoveryInfoDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showRecoveryInfoDialog = false },
+                                title = { Text("Recovery Factors") },
+                                text = {
+                                    Text(
+                                        "Recovery factors help calculate muscle stress and recovery more accurately. " +
+                                        "If you provide all recovery factors, the app will use a more detailed formula " +
+                                        "that takes into account your sleep quality, protein intake, hydration, and stress levels. " +
+                                        "If any factor is not provided (set to 0), the app will use a simplified formula " +
+                                        "based only on exercise load and volume.\n\n" +
+                                        "Factors:\n" +
+                                        "• Sleep Quality (1-10): How well you slept\n" +
+                                        "• Protein Intake (g): Amount of protein consumed\n" +
+                                        "• Hydration (1-10): Your hydration level\n" +
+                                        "• Stress Level (1-10): Your current stress level"
+                                    )
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = { showRecoveryInfoDialog = false }) {
+                                        Text("OK")
+                                    }
+                                }
+                            )
+                        }
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             listOf(
                                 Triple("Sleep", recoveryFactors.sleepQuality, "Sleep Quality (1-10)"),
@@ -650,46 +689,49 @@ fun WorkoutDetailsScreen(
                                                 painter = painterResource(id = R.drawable.sleep_icon),
                                                 contentDescription = "Sleep Icon",
                                                 modifier = Modifier.size(24.dp),
-                                                tint = if (value > 0) 
+                                                tint = if (value > 0)
                                                     MaterialTheme.colorScheme.onPrimary
-                                                else 
+                                                else
                                                     MaterialTheme.colorScheme.onSurfaceVariant
                                             )
+
                                             "Protein" -> Icon(
                                                 painter = painterResource(id = R.drawable.food_icon),
                                                 contentDescription = "Food Icon",
                                                 modifier = Modifier.size(24.dp),
-                                                tint = if (value > 0) 
+                                                tint = if (value > 0)
                                                     MaterialTheme.colorScheme.onPrimary
-                                                else 
+                                                else
                                                     MaterialTheme.colorScheme.onSurfaceVariant
                                             )
+
                                             "Hydration" -> Icon(
                                                 painter = painterResource(id = R.drawable.drop_icon),
                                                 contentDescription = "Hydration Icon",
                                                 modifier = Modifier.size(24.dp),
-                                                tint = if (value > 0) 
+                                                tint = if (value > 0)
                                                     MaterialTheme.colorScheme.onPrimary
-                                                else 
+                                                else
                                                     MaterialTheme.colorScheme.onSurfaceVariant
                                             )
+
                                             "Stress Lvl" -> Icon(
                                                 painter = painterResource(id = R.drawable.stress_icon),
                                                 contentDescription = "Stress Icon",
                                                 modifier = Modifier.size(24.dp),
-                                                tint = if (value > 0) 
+                                                tint = if (value > 0)
                                                     MaterialTheme.colorScheme.onPrimary
-                                                else 
+                                                else
                                                     MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
-                                        
+
                                         Spacer(modifier = Modifier.height(4.dp))
-                                        
+
                                         Text(
-                                            text = if (value == 0) shortLabel 
-                                                  else if (shortLabel == "Protein") "${value}g" 
-                                                  else "$value",
+                                            text = if (value == 0) shortLabel
+                                            else if (shortLabel == "Protein") "${value}g"
+                                            else "$value",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = if (value > 0)
                                                 MaterialTheme.colorScheme.onPrimary
@@ -704,62 +746,160 @@ fun WorkoutDetailsScreen(
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-            }
 
-            // Save Notification overlay
-            if (showSaveNotification) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.7f))
-                        .clickable { showSaveNotification = false },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Card(
+                // Save Notification overlay
+                if (showSaveNotification) {
+                    Box(
                         modifier = Modifier
-                            .padding(32.dp)
-                            .border(
-                                width = 2.dp,
-                                color = MaterialTheme.colorScheme.primary,
-                                shape = RoundedCornerShape(16.dp)
-                            ),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        )
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.7f))
+                            .clickable { showSaveNotification = false },
+                        contentAlignment = Alignment.Center
                     ) {
-                        Column(
+                        Card(
                             modifier = Modifier
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                .padding(32.dp)
+                                .border(
+                                    width = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    shape = RoundedCornerShape(16.dp)
+                                ),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = "Success",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Text(
-                                text = "Workout Completed!",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = workoutWithExercises?.firstOrNull()?.workout?.name ?: "",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            WorkoutDurationDisplay(startTimeWorkout, workoutStarted)
-                            Text(
-                                text = SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(System.currentTimeMillis()),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
+                            Column(
+                                modifier = Modifier
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = "Success",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Text(
+                                    text = "Workout Completed!",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = workoutWithExercises?.firstOrNull()?.workout?.name ?: "",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                WorkoutDurationDisplay(startTimeWorkout, workoutStarted)
+                                Text(
+                                    text = SimpleDateFormat(
+                                        "EEEE, MMMM d",
+                                        Locale.getDefault()
+                                    ).format(System.currentTimeMillis()),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                            }
                         }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+fun ExerciseCard(
+    exercise: EntityExercise,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+    isWorkoutStarted: Boolean
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !isWorkoutStarted) { onClick() }
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(12.dp)
+            ),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = exercise.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = exercise.muscle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
+            if (!isWorkoutStarted) {
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.padding(start = 8.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.minus_icon),
+                        contentDescription = "Remove exercise",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+    }
+}
+
+private suspend fun calculateWorkoutStreak(dao: ExerciseDao): Int {
+    val sessions = dao.getAllWorkoutSessionsOrderedByDate()
+    if (sessions.isEmpty()) return 0
+
+    val calendar = Calendar.getInstance()
+    var currentStreak = 1
+    var lastWorkoutDate = calendar.apply { 
+        timeInMillis = sessions.first().startTime 
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
+    for (i in 1 until sessions.size) {
+        val session = sessions[i]
+        val sessionDate = calendar.apply { 
+            timeInMillis = session.startTime
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        // Check if this workout was on the consecutive previous day
+        if ((lastWorkoutDate - sessionDate) == TimeUnit.DAYS.toMillis(1)) {
+            currentStreak++
+            lastWorkoutDate = sessionDate
+        } else {
+            break
+        }
+    }
+
+    return currentStreak
 }

@@ -114,15 +114,9 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
     }
 
     /**
-     * Calculates muscle stress using the formula:
-     * Stress = k * (Load * Volume * E) * (1 + N/10) * (1 - A/10)
-     * Where:
-     * k = Individual sensitivity constant (0.1)
-     * Load = Average weight used
-     * Volume = Total reps (sets × reps)
-     * E = Eccentric factor
-     * N = Novelty factor (0-10)
-     * A = Adaptation level (0-10)
+     * Calculates muscle stress using either the complete or simplified formula based on user input
+     * Complete formula: Stress = k * (Load * Volume * E) * (1 + N/10) * (1 - A/10)
+     * Simplified formula: Stress = k * (Load * Volume)
      */
     private fun calculateMuscleStress(session: SessionEntityExercise): Float {
         val k = 0.1f // Individual sensitivity constant
@@ -131,28 +125,82 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
         val avgLoad = session.weight.filterNotNull().average().toFloat()
         val totalVolume = session.repsOrTime.filterNotNull().sum()
         
-        // Calculate base impact
-        val baseImpact = avgLoad * totalVolume * session.eccentricFactor
-        
-        // Calculate multipliers
-        val noveltyMultiplier = 1 + (session.noveltyFactor / 10f)
-        val adaptationMultiplier = 1 - (session.adaptationLevel / 10f)
-        val recoveryMultiplier = calculateRecoveryMultiplier(session.recoveryFactors)
-        
-        return k * baseImpact * noveltyMultiplier * adaptationMultiplier * recoveryMultiplier
+        // Check if user provided detailed data (all values are non-zero)
+        val hasDetailedData = session.eccentricFactor > 0f && 
+                            session.noveltyFactor > 0 && 
+                            session.adaptationLevel > 0 && 
+                            session.rpe > 0 && 
+                            session.subjectiveSoreness > 0
+
+        return if (hasDetailedData) {
+            // Complete formula with all factors
+            val baseImpact = avgLoad * totalVolume
+            val eccentricMultiplier = 1 + (session.eccentricFactor / 10f)
+            val noveltyMultiplier = 1 + (session.noveltyFactor / 10f)
+            val adaptationMultiplier = 1 - (session.adaptationLevel / 10f)
+            val rpeMultiplier = 1 + (session.rpe / 10f)
+            val sorenessMultiplier = 1 + (session.subjectiveSoreness / 10f)
+            val recoveryMultiplier = calculateRecoveryMultiplier(session.recoveryFactors)
+            
+            k * baseImpact * 
+            eccentricMultiplier * 
+            noveltyMultiplier * 
+            adaptationMultiplier * 
+            rpeMultiplier * 
+            sorenessMultiplier * 
+            recoveryMultiplier
+        } else {
+            // Simplified formula without detailed factors
+            k * avgLoad * totalVolume * calculateRecoveryMultiplier(session.recoveryFactors)
+        }
     }
 
     /**
      * Calculates recovery multiplier based on various factors
      * Returns a value between 0.5 and 1.5
+     * If no recovery factors are provided, returns 1.0
      */
-    private fun calculateRecoveryMultiplier(factors: RecoveryFactors): Float {
-        val sleepImpact = factors.sleepQuality / 10f
-        val proteinImpact = min(factors.proteinIntake / 200f, 1f) // Assuming 200g is optimal
-        val hydrationImpact = factors.hydration / 10f
-        val stressImpact = 1 - (factors.stressLevel / 10f)
+    private fun calculateRecoveryMultiplier(factors: RecoveryFactors?): Float {
+        if (factors == null) return 1.0f
 
-        return (sleepImpact + proteinImpact + hydrationImpact + stressImpact) / 4f
+        // Check if any recovery factors are provided
+        val hasRecoveryData = factors.sleepQuality > 0 || 
+                             factors.proteinIntake > 0 || 
+                             factors.hydration > 0 || 
+                             factors.stressLevel > 0
+
+        if (!hasRecoveryData) return 1.0f
+
+        // Calculate individual multipliers for each factor
+        val sleepMultiplier = if (factors.sleepQuality > 0) {
+            1.0f + (factors.sleepQuality - 5.0f) / 20.0f
+        } else 1.0f
+
+        val proteinMultiplier = if (factors.proteinIntake > 0) {
+            1.0f + (factors.proteinIntake - 100.0f) / 200.0f
+        } else 1.0f
+
+        val hydrationMultiplier = if (factors.hydration > 0) {
+            1.0f + (factors.hydration - 5.0f) / 20.0f
+        } else 1.0f
+
+        val stressMultiplier = if (factors.stressLevel > 0) {
+            1.0f - (factors.stressLevel - 5.0f) / 20.0f
+        } else 1.0f
+
+        // Calculate the average of all provided factors
+        val providedFactors = listOfNotNull(
+            if (factors.sleepQuality > 0) sleepMultiplier else null,
+            if (factors.proteinIntake > 0) proteinMultiplier else null,
+            if (factors.hydration > 0) hydrationMultiplier else null,
+            if (factors.stressLevel > 0) stressMultiplier else null
+        )
+
+        return if (providedFactors.isNotEmpty()) {
+            providedFactors.average().toFloat()
+        } else {
+            1.0f
+        }
     }
 
     /**
