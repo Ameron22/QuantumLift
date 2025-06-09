@@ -10,10 +10,8 @@ data class SessionWorkoutEntity(
     @PrimaryKey(autoGenerate = true) val sessionId: Long = 0,
     val workoutId: Int?, // Foreign key to WorkoutEntity
     val startTime: Long, // Timestamp in milliseconds
-    val duration: Long, // Duration in seconds
-    val workoutName: String? = null, // Optional workout name
-    val recoveryFactors: RecoveryFactors? = null, // Recovery factors for the workout session
-    val tempRecoveryFactors: String? = null  // Add this field to store temporary recovery factors
+    val endTime: Long, // Timestamp in milliseconds (0 if not completed)
+    val workoutName: String? = null // Optional workout name
 )
 
 // Add new data class for temporary recovery factors

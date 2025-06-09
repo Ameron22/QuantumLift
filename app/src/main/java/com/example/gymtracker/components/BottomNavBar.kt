@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun BottomNavBar(navController: NavController) {
     val items = listOf(
+        Screen.Home,
         Screen.LoadWorkout,
         Screen.LoadHistory,
         Screen.Achievements
@@ -33,6 +34,11 @@ fun BottomNavBar(navController: NavController) {
             NavigationBarItem(
                 icon = { 
                     when(screen) {
+                        Screen.Home -> Icon(
+                            painter = painterResource(id = R.drawable.home_icon),
+                            contentDescription = "Home",
+                            modifier = Modifier.size(36.dp)
+                        )
                         Screen.LoadWorkout -> Icon(
                             painter = painterResource(id = R.drawable.dumbell_icon),
                             contentDescription = "Workouts",

@@ -110,7 +110,7 @@ fun WorkoutSessionCard(session: SessionWorkoutWithMuscles) {
     
     val formattedDate = localDateTime.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))
     val formattedTime = localDateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
-    val durationInMinutes = session.duration / 60 // Convert seconds to minutes
+    val durationInMinutes = (session.endTime - session.startTime) / (60 * 1000) // Convert milliseconds to minutes
 
     Card(
         modifier = Modifier

@@ -16,18 +16,10 @@ import com.example.gymtracker.data.EntityWorkout
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
-import com.example.gymtracker.data.EntityExercise
 import kotlinx.coroutines.Dispatchers
 import com.example.gymtracker.components.BottomNavBar
 import com.example.gymtracker.components.WorkoutCard
@@ -39,30 +31,77 @@ import androidx.compose.ui.graphics.Color
 fun LoadWorkoutScreen(navController: NavController) {
     val context = LocalContext.current
     val workouts = remember { mutableStateOf(listOf<EntityWorkout>()) }
+    val filteredWorkouts = remember { mutableStateOf(listOf<EntityWorkout>()) }
+    val searchQuery = remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
+    // Load workouts
     LaunchedEffect(Unit) {
         scope.launch(Dispatchers.IO) {
             val dao = AppDatabase.getDatabase(context).exerciseDao()
             workouts.value = dao.getAllWorkouts()
+            filteredWorkouts.value = workouts.value
+        }
+    }
+
+    // Filter workouts when search query changes
+    LaunchedEffect(searchQuery.value) {
+        filteredWorkouts.value = if (searchQuery.value.isEmpty()) {
+            workouts.value
+        } else {
+            workouts.value.filter { workout ->
+                workout.name.contains(searchQuery.value, ignoreCase = true)
+            }
         }
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Workouts") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+            Column {
+                TopAppBar(
+                    title = { Text("Workouts") },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+                    )
                 )
-            )
+                SearchBar(
+                    query = searchQuery.value,
+                    onQueryChange = { searchQuery.value = it },
+                    onSearch = { },
+                    active = false,
+                    onActiveChange = { },
+                    placeholder = { Text("Search workouts...") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                    trailingIcon = {
+                        if (searchQuery.value.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery.value = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear search")
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                ) { }
+            }
         },
         bottomBar = { BottomNavBar(navController) },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { navController.navigate(Screen.WorkoutCreation.route) }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Workout")
+                FloatingActionButton(
+                    onClick = { navController.navigate(Screen.CreateExercise.route) },
+                    containerColor = MaterialTheme.colorScheme.secondary
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Exercise")
+                }
+                FloatingActionButton(
+                    onClick = { navController.navigate(Screen.WorkoutCreation.route) },
+                    containerColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Workout")
+                }
             }
         },
         containerColor = Color.Transparent
@@ -74,41 +113,12 @@ fun LoadWorkoutScreen(navController: NavController) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(workouts.value) { workout ->
+            items(filteredWorkouts.value) { workout ->
                 WorkoutCard(
                     workout = workout,
                     onClick = { navController.navigate(Screen.Routes.workoutDetails(workout.id)) }
                 )
             }
-        }
-    }
-}
-
-@Composable
-fun WorkoutItem(workout: EntityWorkout, exercises: List<EntityExercise>, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        onClick = onClick
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Text(
-                text = workout.name,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = exercises.joinToString { it.name },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }

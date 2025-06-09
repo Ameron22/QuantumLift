@@ -25,6 +25,9 @@ class WorkoutDetailsViewModel : ViewModel() {
     private val _hasSetRecoveryFactors = MutableStateFlow(false)
     val hasSetRecoveryFactors: StateFlow<Boolean> = _hasSetRecoveryFactors.asStateFlow()
 
+    private val _completedExercises = MutableStateFlow<Set<Int>>(emptySet())
+    val completedExercises: StateFlow<Set<Int>> = _completedExercises.asStateFlow()
+
     fun initializeWorkoutSession(workoutId: Int, workoutName: String) {
         val currentTime = System.currentTimeMillis()
         Log.d("WorkoutViewModel", "Initializing workout session at time: $currentTime")
@@ -35,6 +38,7 @@ class WorkoutDetailsViewModel : ViewModel() {
             startTime = currentTime,
             isStarted = false
         )
+        _completedExercises.value = emptySet()
     }
 
     fun startWorkoutSession(startTime: Long) {
@@ -61,12 +65,6 @@ class WorkoutDetailsViewModel : ViewModel() {
         }
     }
 
-    fun skipCurrentSet() {
-        // This will be implemented to handle skipping the current set
-        // and starting the break timer
-        Log.d("WorkoutViewModel", "Current set skipped")
-    }
-
     fun updateRecoveryFactors(
         sleepQuality: Int? = null,
         proteinIntake: Int? = null,
@@ -83,10 +81,20 @@ class WorkoutDetailsViewModel : ViewModel() {
         _hasSetRecoveryFactors.value = true
     }
 
+    fun markExerciseAsCompleted(exerciseId: Int) {
+        Log.d("WorkoutViewModel", "Marking exercise $exerciseId as completed")
+        _completedExercises.value = _completedExercises.value + exerciseId
+    }
+
+    fun isExerciseCompleted(exerciseId: Int): Boolean {
+        return _completedExercises.value.contains(exerciseId)
+    }
+
     fun resetWorkoutSession() {
         Log.d("WorkoutViewModel", "Resetting workout session")
         _workoutSession.value = null
         _recoveryFactors.value = TempRecoveryFactors()
         _hasSetRecoveryFactors.value = false
+        _completedExercises.value = emptySet()
     }
 } 

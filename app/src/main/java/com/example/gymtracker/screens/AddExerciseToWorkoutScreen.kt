@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,10 +19,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.example.gymtracker.components.ExerciseGif
 import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.CrossRefWorkoutExercise
 import com.example.gymtracker.classes.NumberPicker
+import com.example.gymtracker.data.Exercise
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,6 +48,9 @@ fun AddExerciseToWorkoutScreen(
     var reps by remember { mutableStateOf(12) }
     var weight by remember { mutableStateOf(0) }
 
+    // Create a single interaction source for all cards
+    val interactionSource = remember { MutableInteractionSource() }
+
     // Load all exercises
     LaunchedEffect(Unit) {
         try {
@@ -63,6 +69,13 @@ fun AddExerciseToWorkoutScreen(
     // Filter exercises based on search query
     val filteredExercises = exercises.filter { exercise ->
         exercise.name.contains(searchQuery, ignoreCase = true)
+    }
+
+    // Add LaunchedEffect to check returnTo state
+    LaunchedEffect(Unit) {
+        println("AddExerciseToWorkoutScreen: Checking returnTo state")
+        val returnTo = navController.currentBackStackEntry?.savedStateHandle?.get<String>("returnTo")
+        println("AddExerciseToWorkoutScreen: Initial returnTo value: $returnTo")
     }
 
     Scaffold(
@@ -118,7 +131,10 @@ fun AddExerciseToWorkoutScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable {
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = null
+                            ) {
                                 selectedExercise = exercise
                                 showNumberPicker = true
                             }
@@ -137,6 +153,14 @@ fun AddExerciseToWorkoutScreen(
                                 .fillMaxWidth()
                                 .padding(16.dp)
                         ) {
+                            // Display GIF if available
+                            if (exercise.gifUrl.isNotEmpty()) {
+                                ExerciseGif(
+                                    gifPath = exercise.gifUrl,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                            }
+                            
                             Text(
                                 text = exercise.name,
                                 style = MaterialTheme.typography.titleMedium,
@@ -151,6 +175,71 @@ fun AddExerciseToWorkoutScreen(
                         }
                     }
                 }
+            }
+
+            // Save Button
+            Button(
+                onClick = {
+                    coroutineScope.launch {
+                        try {
+                            selectedExercise?.let { exercise ->
+                                // Check if we should return to workout creation
+                                val returnTo = navController.currentBackStackEntry?.savedStateHandle?.get<String>("returnTo")
+                                if (returnTo == "workout_creation") {
+                                    println("AddExerciseToWorkoutScreen: Creating new exercise with values - sets: $sets, reps: $reps, weight: $weight")
+                                    val newExercise = Exercise(
+                                        name = exercise.name,
+                                        sets = sets,
+                                        weight = weight,
+                                        reps = reps,
+                                        muscle = exercise.muscle,
+                                        part = exercise.part
+                                    )
+                                    println("AddExerciseToWorkoutScreen: Setting newExercise in savedStateHandle")
+                                    navController.currentBackStackEntry?.savedStateHandle?.set("newExercise", newExercise)
+                                    println("AddExerciseToWorkoutScreen: Popping back stack")
+                                    navController.popBackStack()
+                                } else {
+                                    coroutineScope.launch {
+                                        try {
+                                            withContext(Dispatchers.IO) {
+                                                // Check if the exercise is already in the workout
+                                                val existingCrossRef = dao.getWorkoutExerciseCrossRef(workoutId, exercise.id)
+                                                if (existingCrossRef == null) {
+                                                    // Add exercise to workout
+                                                    val crossRef = CrossRefWorkoutExercise(
+                                                        workoutId = workoutId,
+                                                        exerciseId = exercise.id
+                                                    )
+                                                    dao.insertWorkoutExerciseCrossRef(crossRef)
+                                                } else {
+                                                    println("AddExerciseToWorkoutScreen: Exercise already in workout")
+                                                }
+                                            }
+                                            navController.popBackStack()
+                                        } catch (e: Exception) {
+                                            Log.e("AddExerciseToWorkoutScreen", "Error adding exercise: ${e.message}")
+                                            e.printStackTrace()
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e("AddExerciseToWorkoutScreen", "Error adding exercise: ${e.message}")
+                            e.printStackTrace()
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                enabled = selectedExercise != null,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            ) {
+                Text("Add Exercise")
             }
         }
 
@@ -220,30 +309,52 @@ fun AddExerciseToWorkoutScreen(
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            coroutineScope.launch {
-                                try {
-                                    withContext(Dispatchers.IO) {
-                                        // Update exercise with new values
-                                        val updatedExercise = selectedExercise!!.copy(
-                                            sets = sets,
-                                            reps = reps,
-                                            weight = weight
-                                        )
-                                        dao.updateExercise(updatedExercise)
-
-                                        // Add exercise to workout
-                                        val crossRef = CrossRefWorkoutExercise(
-                                            workoutId = workoutId,
-                                            exerciseId = selectedExercise!!.id
-                                        )
-                                        dao.insertWorkoutExerciseCrossRef(crossRef)
-                                    }
+                            selectedExercise?.let { exercise ->
+                                println("AddExerciseToWorkoutScreen: Selected exercise: ${exercise.name}")
+                                // Check if we should return to workout creation
+                                val returnTo = navController.currentBackStackEntry?.savedStateHandle?.get<String>("returnTo")
+                                println("AddExerciseToWorkoutScreen: Return to: $returnTo")
+                                if (returnTo == "workout_creation") {
+                                    println("AddExerciseToWorkoutScreen: Creating new exercise with values - sets: $sets, reps: $reps, weight: $weight")
+                                    val newExercise = Exercise(
+                                        name = exercise.name,
+                                        sets = sets,
+                                        weight = weight,
+                                        reps = reps,
+                                        muscle = exercise.muscle,
+                                        part = exercise.part
+                                    )
+                                    println("AddExerciseToWorkoutScreen: Setting newExercise in savedStateHandle")
+                                    navController.previousBackStackEntry?.savedStateHandle?.set("newExercise", newExercise)
+                                    println("AddExerciseToWorkoutScreen: Popping back stack")
                                     navController.popBackStack()
-                                } catch (e: Exception) {
-                                    Log.e("AddExerciseToWorkoutScreen", "Error adding exercise: ${e.message}")
-                                    e.printStackTrace()
+                                } else {
+                                    println("AddExerciseToWorkoutScreen: Adding exercise to workout")
+                                    coroutineScope.launch {
+                                        try {
+                                            withContext(Dispatchers.IO) {
+                                                // Check if the exercise is already in the workout
+                                                val existingCrossRef = dao.getWorkoutExerciseCrossRef(workoutId, exercise.id)
+                                                if (existingCrossRef == null) {
+                                                    // Add exercise to workout
+                                                    val crossRef = CrossRefWorkoutExercise(
+                                                        workoutId = workoutId,
+                                                        exerciseId = exercise.id
+                                                    )
+                                                    dao.insertWorkoutExerciseCrossRef(crossRef)
+                                                } else {
+                                                    println("AddExerciseToWorkoutScreen: Exercise already in workout")
+                                                }
+                                            }
+                                            navController.popBackStack()
+                                        } catch (e: Exception) {
+                                            Log.e("AddExerciseToWorkoutScreen", "Error adding exercise: ${e.message}")
+                                            e.printStackTrace()
+                                        }
+                                    }
                                 }
                             }
+                            showNumberPicker = false
                         }
                     ) {
                         Text("Add")

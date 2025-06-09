@@ -141,7 +141,7 @@ class InsertInitialData {
                         sessionId = currentTime - (5 * oneDayInMillis),
                         workoutId = pushWorkoutId.toInt(),
                         startTime = currentTime - (5 * oneDayInMillis),
-                        duration = 45 * 60, // 45 minutes
+                        endTime = currentTime - (5 * oneDayInMillis) + (45 * 60 * 1000), // 45 minutes
                         workoutName = "Push Day"
                     )
                 )
@@ -189,7 +189,7 @@ class InsertInitialData {
                         sessionId = currentTime - (4 * oneDayInMillis),
                         workoutId = pullWorkoutId.toInt(),
                         startTime = currentTime - (4 * oneDayInMillis),
-                        duration = 40 * 60, // 40 minutes
+                        endTime = currentTime - (4 * oneDayInMillis) + (40 * 60 * 1000), // 40 minutes
                         workoutName = "Pull Day"
                     )
                 )
@@ -219,7 +219,7 @@ class InsertInitialData {
                         sessionId = currentTime - (3 * oneDayInMillis),
                         workoutId = legsWorkoutId.toInt(),
                         startTime = currentTime - (3 * oneDayInMillis),
-                        duration = 50 * 60, // 50 minutes
+                        endTime = currentTime - (3 * oneDayInMillis) + (50 * 60 * 1000), // 50 minutes
                         workoutName = "Leg Day"
                     )
                 )
@@ -249,7 +249,7 @@ class InsertInitialData {
                         sessionId = currentTime - (2 * oneDayInMillis),
                         workoutId = quickUpperId.toInt(),
                         startTime = currentTime - (2 * oneDayInMillis),
-                        duration = 30 * 60, // 30 minutes
+                        endTime = currentTime - (2 * oneDayInMillis) + (30 * 60 * 1000), // 30 minutes
                         workoutName = "Quick Upper Body"
                     )
                 )
@@ -279,7 +279,7 @@ class InsertInitialData {
                         sessionId = currentTime - oneDayInMillis,
                         workoutId = coreCardioId.toInt(),
                         startTime = currentTime - oneDayInMillis,
-                        duration = 35 * 60, // 35 minutes
+                        endTime = currentTime - oneDayInMillis + (35 * 60 * 1000), // 35 minutes
                         workoutName = "Core & Cardio"
                     )
                 )

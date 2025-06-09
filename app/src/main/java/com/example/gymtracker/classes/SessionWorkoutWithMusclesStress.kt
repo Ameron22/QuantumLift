@@ -4,7 +4,7 @@ data class SessionWorkoutWithMusclesStress(
     val sessionId: Long,
     val workoutId: Int?,
     val startTime: Long,
-    val duration: Long,
+    val endTime: Long,
     val workoutName: String?,
     val muscleGroup: String, // Muscle group name
     val sets: Int, // Number of sets

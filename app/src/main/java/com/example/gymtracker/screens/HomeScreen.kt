@@ -1,6 +1,5 @@
 package com.example.gymtracker.screens
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -14,9 +13,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.gymtracker.navigation.Screen
 import com.example.gymtracker.classes.InsertInitialData
 import com.example.gymtracker.data.AppDatabase
 import kotlinx.coroutines.Dispatchers
@@ -60,45 +59,26 @@ fun HomeScreen(navController: NavController) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            CreateWorkoutButton(
-                onClick = { navController.navigate(Screen.WorkoutCreation.route) }
+            Text(
+                text = "Welcome to Quantum Lift",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
             )
-            LoadWorkoutButton(
-                onClick = { navController.navigate(Screen.LoadWorkout.route) }
-            )
-            LoadHistoryButton(
-                onClick = { navController.navigate(Screen.LoadHistory.route) }
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Your journey to fitness starts here",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
             )
         }
     }
 }
 
-@Composable
-fun CreateWorkoutButton(onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier.padding(16.dp)
-    ) {
-        Text("Create Workout")
-    }
-}
-@Composable
-fun LoadWorkoutButton(onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier.padding(16.dp)
-    ) {
-        Text("Load Workout")
-    }
-}
-@Composable
-fun LoadHistoryButton(onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier.padding(16.dp)
-    ) {
-        Text("Load History")
-    }
-}
+
 

@@ -53,7 +53,7 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
                                 sessionId = workoutSession.sessionId,
                                 workoutId = workoutSession.workoutId,
                                 startTime = workoutSession.startTime,
-                                duration = workoutSession.duration,
+                                endTime = workoutSession.endTime,
                                 workoutName = workoutSession.workoutName,
                                 muscleGroups = mutableMapOf()
                             )

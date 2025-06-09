@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SessionEntityExercise::class,
         AchievementEntity::class
     ],
-    version = 22,  // Increment version number
+    version = 24,  // Increment version number
     //exportSchema = false
 )
 @TypeConverters(Converter::class)

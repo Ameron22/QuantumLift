@@ -22,10 +22,12 @@ import com.example.gymtracker.navigation.Screen
 import com.example.gymtracker.classes.InsertInitialData
 import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.data.AchievementManager
+import com.example.gymtracker.viewmodels.WorkoutDetailsViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 class MainActivity : ComponentActivity() {
     private val viewModel: HistoryViewModel by viewModels {
@@ -104,10 +106,16 @@ class MainActivity : ComponentActivity() {
             QuantumLiftTheme {
                 GradientBackground {
                     val navController = rememberNavController()
+                    // Create a shared ViewModel instance
+                    val workoutDetailsViewModel = viewModel<WorkoutDetailsViewModel>()
+
                     NavHost(
                         navController = navController,
-                        startDestination = Screen.LoadWorkout.route
+                        startDestination = Screen.Home.route
                     ) {
+                        composable(Screen.Home.route) {
+                            HomeScreen(navController)
+                        }
                         composable(Screen.LoadWorkout.route) {
                             LoadWorkoutScreen(navController)
                         }
@@ -120,23 +128,35 @@ class MainActivity : ComponentActivity() {
                         composable(Screen.WorkoutCreation.route) {
                             WorkoutCreationScreen(navController)
                         }
+                        composable(Screen.CreateExercise.route) {
+                            CreateExerciseScreen(navController)
+                        }
                         composable(
                             Screen.Routes.WORKOUT_DETAILS,
                             arguments = listOf(navArgument("workoutId") { type = NavType.IntType })
                         ) { backStackEntry ->
                             val workoutId = backStackEntry.arguments?.getInt("workoutId") ?: 0
-                            WorkoutDetailsScreen(workoutId = workoutId, navController = navController)
+                            WorkoutDetailsScreen(
+                                workoutId = workoutId, 
+                                navController = navController,
+                                viewModel = workoutDetailsViewModel
+                            )
                         }
                         composable(
-                            Screen.Routes.EXERCISE_DETAILS,
+                            Screen.Exercise.route,
                             arguments = listOf(
                                 navArgument("exerciseId") { type = NavType.IntType },
-                                navArgument("workoutSessionId") { type = NavType.LongType }
+                                navArgument("sessionId") { type = NavType.LongType }
                             )
                         ) { backStackEntry ->
                             val exerciseId = backStackEntry.arguments?.getInt("exerciseId") ?: 0
-                            val workoutSessionId = backStackEntry.arguments?.getLong("workoutSessionId") ?: 0L
-                            ExerciseScreen(exerciseId = exerciseId, workoutSessionId = workoutSessionId, navController = navController)
+                            val workoutSessionId = backStackEntry.arguments?.getLong("sessionId") ?: 0L
+                            ExerciseScreen(
+                                exerciseId = exerciseId,
+                                workoutSessionId = workoutSessionId,
+                                navController = navController,
+                                viewModel = workoutDetailsViewModel
+                            )
                         }
                         composable(
                             Screen.AddExerciseToWorkout.route,

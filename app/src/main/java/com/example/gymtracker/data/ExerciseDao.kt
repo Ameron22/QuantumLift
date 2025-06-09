@@ -56,10 +56,10 @@ interface ExerciseDao {
     @Query("SELECT * FROM workout_sessions ORDER BY startTime DESC")
     suspend fun getAllWorkoutSessions(): List<SessionWorkoutEntity>
 
-    @Query("UPDATE workout_sessions Set duration = :duration WHERE sessionId = :sessionId")
-    suspend fun updateWorkoutSessionDuration(sessionId: Long, duration: Long)
+    @Query("UPDATE workout_sessions Set endTime = :endTime WHERE sessionId = :sessionId")
+    suspend fun updateWorkoutSessionEndTime(sessionId: Long, endTime: Long)
 
-    @Query("SELECT ws.sessionId, ws.workoutId, ws.startTime, ws.duration, ws.workoutName, es.muscleGroup, es.sets, es.repsOrTime, es.weight " +
+    @Query("SELECT ws.sessionId, ws.workoutId, ws.startTime, ws.endTime, ws.workoutName, es.muscleGroup, es.sets, es.repsOrTime, es.weight " +
             "FROM workout_sessions ws INNER JOIN exercise_sessions es " +
             "ON ws.sessionId = es.sessionId " +
             "GROUP BY ws.sessionId, es.muscleGroup " +
@@ -72,15 +72,6 @@ interface ExerciseDao {
     @Query("SELECT * FROM workout_sessions WHERE sessionId = :sessionId")
     suspend fun getWorkoutSession(sessionId: Long): SessionWorkoutEntity?
 
-    @Query("UPDATE workout_sessions SET duration = :duration, recoveryFactors = :recoveryFactorsJson WHERE sessionId = :sessionId")
-    suspend fun updateWorkoutSessionWithRecovery(sessionId: Long, duration: Long, recoveryFactorsJson: String)
-
-    @Query("UPDATE workout_sessions SET tempRecoveryFactors = :tempRecoveryFactors WHERE sessionId = :sessionId")
-    suspend fun updateTempRecoveryFactors(sessionId: Long, tempRecoveryFactors: String)
-
-    @Query("SELECT tempRecoveryFactors FROM workout_sessions WHERE sessionId = :sessionId")
-    suspend fun getTempRecoveryFactors(sessionId: Long): String?
-
     @Query("SELECT COUNT(DISTINCT sessionId) FROM workout_sessions")
     suspend fun getTotalWorkoutCount(): Int
 
@@ -92,4 +83,10 @@ interface ExerciseDao {
 
     @Query("SELECT * FROM workout_sessions ORDER BY startTime DESC")
     suspend fun getAllWorkoutSessionsOrderedByDate(): List<SessionWorkoutEntity>
+
+    @Query("SELECT * FROM workout_sessions WHERE sessionId = :sessionId")
+    suspend fun getSessionWorkoutById(sessionId: Long): SessionWorkoutEntity?
+
+    @Query("SELECT * FROM workout_exercise_cross_ref WHERE workoutId = :workoutId AND exerciseId = :exerciseId")
+    suspend fun getWorkoutExerciseCrossRef(workoutId: Int, exerciseId: Int): CrossRefWorkoutExercise?
 }

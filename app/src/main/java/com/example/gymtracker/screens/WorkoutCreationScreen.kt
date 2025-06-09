@@ -14,30 +14,30 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import com.example.gymtracker.R
 import com.example.gymtracker.classes.NumberPicker
+import com.example.gymtracker.components.ExerciseGif
 import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.EntityWorkout
 import com.example.gymtracker.data.CrossRefWorkoutExercise
+import com.example.gymtracker.data.Exercise
+import com.example.gymtracker.navigation.Screen
+import com.example.gymtracker.viewmodels.WorkoutCreationViewModel
 import kotlinx.coroutines.launch
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WorkoutCreationScreen(navController: NavController) {
-    var workoutName by remember { mutableStateOf("") }
-    var exercisesList by remember { mutableStateOf(listOf<Exercise>()) }
-    var currentExercise by remember { mutableStateOf("") }
-    var currentSets by remember { mutableIntStateOf(3) }
-    var currentRepsTime by remember { mutableIntStateOf(12) }
-    var currentMinutes by remember { mutableIntStateOf(1) } // Minutes (default: 1)
-    var currentSeconds by remember { mutableIntStateOf(0) } // Seconds (default: 0)
-    var useTime by remember { mutableStateOf(false) } // Switch between reps and time
-    var currentMuscle by remember { mutableStateOf("") }
-    var currentPart by remember { mutableStateOf("") }
-    var weight by remember { mutableIntStateOf(5) }
+fun WorkoutCreationScreen(
+    navController: NavController,
+    viewModel: WorkoutCreationViewModel = viewModel()
+) {
     var editIndex by remember { mutableStateOf<Int?>(null) }
 
     val context = LocalContext.current
@@ -45,15 +45,64 @@ fun WorkoutCreationScreen(navController: NavController) {
     val dao = remember { db.exerciseDao() }
     val scope = rememberCoroutineScope()
 
-    val musclePartsMap = mapOf(
-        "Chest" to listOf("Upper Chest", "Middle Chest", "Lower Chest"),
-        "Shoulders" to listOf("Front Shoulders", "Side Shoulders", "Rear Shoulders"),
-        "Back" to listOf("Upper Back", "Lats", "Lower Back"),
-        "Arms" to listOf("Biceps", "Triceps", "Forearms"),
-        "Legs" to listOf("Quadriceps", "Hamstrings", "Glutes", "Calves"),
-        "Core" to listOf("Abs", "Obliques", "Lower Back"),
-        "Neck" to listOf("Side neck muscle", "Upper Traps")
-    )
+    // Collect state from ViewModel
+    val workoutName by viewModel.workoutName.collectAsState()
+    val exercisesList by viewModel.exercisesList.collectAsState()
+
+    // Add LaunchedEffect to handle navigation result
+    LaunchedEffect(navController.currentBackStackEntry?.savedStateHandle) {
+        println("WorkoutCreationScreen: Checking for new exercise")
+        val newExercise = navController.currentBackStackEntry?.savedStateHandle?.get<Exercise>("newExercise")
+        println("WorkoutCreationScreen: New exercise from savedStateHandle: ${newExercise?.name}")
+        
+        if (newExercise != null) {
+            println("WorkoutCreationScreen: Adding new exercise to list")
+            viewModel.addExercise(newExercise)
+            println("WorkoutCreationScreen: Exercise added, clearing savedStateHandle")
+            navController.currentBackStackEntry?.savedStateHandle?.remove<Exercise>("newExercise")
+            println("WorkoutCreationScreen: Current exercises list size: ${exercisesList.size}")
+        }
+    }
+
+    // Add LaunchedEffect to observe exercises list changes
+    LaunchedEffect(exercisesList) {
+        println("WorkoutCreationScreen: exercisesList changed, new size: ${exercisesList.size}")
+        exercisesList.forEachIndexed { index, exercise ->
+            println("WorkoutCreationScreen: Exercise $index: ${exercise.name}")
+        }
+    }
+
+    // Add LaunchedEffect to handle exercise updates
+    LaunchedEffect(navController.currentBackStackEntry?.savedStateHandle) {
+        println("WorkoutCreationScreen: Checking for updated exercise")
+        val updatedExercise = navController.currentBackStackEntry?.savedStateHandle?.get<EntityExercise>("updatedExercise")
+        println("WorkoutCreationScreen: Updated exercise from savedStateHandle: ${updatedExercise?.name}")
+        
+        val currentEditIndex = editIndex
+        if (updatedExercise != null && currentEditIndex != null) {
+            println("WorkoutCreationScreen: Updating exercise at index $currentEditIndex")
+            viewModel.updateExercise(
+                currentEditIndex,
+                Exercise(
+                    name = updatedExercise.name,
+                    sets = updatedExercise.sets,
+                    weight = updatedExercise.weight,
+                    reps = updatedExercise.reps,
+                    muscle = updatedExercise.muscle,
+                    part = updatedExercise.part
+                )
+            )
+            println("WorkoutCreationScreen: Exercise updated, clearing savedStateHandle")
+            navController.currentBackStackEntry?.savedStateHandle?.remove<EntityExercise>("updatedExercise")
+        }
+    }
+
+    // Add logging for navigation
+    LaunchedEffect(navController.currentBackStackEntry?.savedStateHandle) {
+        println("WorkoutCreationScreen: BackStackEntry changed")
+        println("WorkoutCreationScreen: Current route: ${navController.currentDestination?.route}")
+        println("WorkoutCreationScreen: Current exercises list size: ${exercisesList.size}")
+    }
 
     Scaffold(
         topBar = {
@@ -89,7 +138,7 @@ fun WorkoutCreationScreen(navController: NavController) {
         ) {
             OutlinedTextField(
                 value = workoutName,
-                onValueChange = { workoutName = it },
+                onValueChange = { viewModel.updateWorkoutName(it) },
                 label = { Text("Workout Name") },
                 modifier = Modifier.fillMaxWidth(),
                 colors = TextFieldDefaults.colors(
@@ -102,381 +151,181 @@ fun WorkoutCreationScreen(navController: NavController) {
                 )
             )
 
-            OutlinedTextField(
-                value = currentExercise,
-                onValueChange = { currentExercise = it },
-                label = { Text("Exercise Name") },
-                modifier = Modifier.fillMaxWidth(),
-                colors = TextFieldDefaults.colors(
-                    focusedTextColor = MaterialTheme.colorScheme.onBackground,
-                    unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
-                    focusedContainerColor = MaterialTheme.colorScheme.background,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.background,
-                    focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                    unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
+            // Display Exercises List
+            if (exercisesList.isNotEmpty()) {
+                Text(
+                    text = "Exercises",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp)
                 )
-            )
-            // Switch between Reps and Time
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("Reps/Time")
-                Switch(
-                    checked = useTime,
-                    onCheckedChange = { useTime = it }
-                )
-            }
-
-            // Number pickers section
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Sets picker
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Sets", style = MaterialTheme.typography.bodyMedium)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    NumberPicker(
-                        value = currentSets,
-                        onValueChange = { currentSets = it },
-                        range = 1..10
-                    )
-                }
-
-                if (useTime) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    // Minutes picker
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Minutes", style = MaterialTheme.typography.bodyMedium)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        NumberPicker(
-                            value = currentMinutes,
-                            onValueChange = { currentMinutes = it },
-                            range = 0..59
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(4.dp))
-                    // Seconds picker
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Seconds", style = MaterialTheme.typography.bodyMedium)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        NumberPicker(
-                            value = currentSeconds,
-                            onValueChange = { currentSeconds = it },
-                            range = 0..59
-                        )
-                    }
-                } else {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    // Weight picker
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Weight (kg)", style = MaterialTheme.typography.bodyMedium)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        NumberPicker(
-                            value = weight,
-                            onValueChange = { weight = it },
-                            range = 0..500,
-                            unit = "kg"
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-                    // Reps picker
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Reps", style = MaterialTheme.typography.bodyMedium)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        NumberPicker(
-                            value = currentRepsTime,
-                            onValueChange = { currentRepsTime = it },
-                            range = 1..50
-                        )
-                    }
-                }
-            }
-            // State to control dropdown visibility
-            var isMuscleGroupDropdownExpanded by remember { mutableStateOf(false) }
-            var isPartDropdownExpanded by remember { mutableStateOf(false) }
-            var selectedParts by remember { mutableStateOf<List<String>>(emptyList()) } // List to store selected parts
-
-            // List of muscle groups
-            val muscleGroups = musclePartsMap.keys.toList()
-
-            // Reset currentPart when currentMuscle changes
-            LaunchedEffect(currentMuscle) {
-                currentPart = "" // Reset the part when the muscle group changes
-            }
-            // Muscle selection section
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Muscle Group Dropdown
-                Box(modifier = Modifier.weight(1f)) {
+                
+                exercisesList.forEachIndexed { index, exercise ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { isMuscleGroupDropdownExpanded = true },
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
                         shape = MaterialTheme.shapes.medium,
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = if (currentMuscle.isNotEmpty()) currentMuscle else "Muscle Group",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = "Dropdown Icon"
-                            )
-                        }
-                    }
-
-                    DropdownMenu(
-                        expanded = isMuscleGroupDropdownExpanded,
-                        onDismissRequest = { isMuscleGroupDropdownExpanded = false }
-                    ) {
-                        musclePartsMap.keys.forEach { muscle ->
-                            DropdownMenuItem(
-                                text = { Text(muscle) },
-                                onClick = {
-                                    currentMuscle = muscle
-                                    isMuscleGroupDropdownExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                // Specific Part Dropdown
-                Box(modifier = Modifier.weight(1f)) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { isPartDropdownExpanded = true },
-                        shape = MaterialTheme.shapes.medium,
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = if (currentPart.isNotEmpty()) currentPart else "Specific Part",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = "Dropdown Icon"
-                            )
-                        }
-                    }
-
-                    DropdownMenu(
-                        expanded = isPartDropdownExpanded,
-                        onDismissRequest = { isPartDropdownExpanded = false }
-                    ) {
-                        musclePartsMap[currentMuscle]?.forEach { part ->
-                            DropdownMenuItem(
-                                text = { Text(part) },
-                                onClick = {
-                                    currentPart = part
-                                    isPartDropdownExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Add Part button centered below the dropdowns
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Button(
-                    onClick = {
-                        if (currentPart.isNotEmpty()) {
-                            selectedParts = selectedParts + currentPart
-                            currentPart = ""
-                        }
-                    },
-                    modifier = Modifier.width(120.dp),
-                    shape = MaterialTheme.shapes.medium,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                ) {
-                    Text("Add Part", style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-
-            // Display Selected Parts with Delete Buttons
-            if (selectedParts.isNotEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    selectedParts.forEachIndexed { index, part ->
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .padding(16.dp)
                         ) {
-                            Text(part)
-                            IconButton(
-                                onClick = {
-                                    selectedParts = selectedParts.toMutableList().apply {
-                                        removeAt(index)
-                                    }
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "Delete",
-                                    tint = MaterialTheme.colorScheme.error
+                            // Display GIF if available
+                            if (exercise.gifUrl.isNotEmpty()) {
+                                ExerciseGif(
+                                    gifPath = exercise.gifUrl,
+                                    modifier = Modifier.padding(bottom = 8.dp)
                                 )
                             }
-                        }
-                    }
-                }
-            }
-            Button(
-                onClick = {
-                    // Save exercise with reps or time
-                    val reps = if (useTime) {
-                        // Convert time to seconds and add a threshold (e.g., 1000 to ensure it's > 50)
-                        (currentMinutes * 60 + currentSeconds) + 1000
-                    } else {
-                        // Use reps as is
-                        currentRepsTime
-                    }
 
-                    if (currentExercise.isNotEmpty() && currentMuscle.isNotEmpty() && selectedParts.isNotEmpty()) {
-                        if (editIndex == null) {
-                            exercisesList = exercisesList + Exercise(currentExercise, currentSets, weight, reps, currentMuscle, selectedParts)
-                        } else {
-                            exercisesList = exercisesList.toMutableList().also {
-                                it[editIndex!!] = Exercise(currentExercise, currentSets, weight, reps, currentMuscle, selectedParts)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = exercise.name,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Row {
+                                    IconButton(
+                                        onClick = {
+                                            editIndex = index
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Edit",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            viewModel.removeExercise(index)
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Delete",
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                }
                             }
-                            editIndex = null
-                        }
-                        currentExercise = ""
-                        currentSets = 3
-                        currentRepsTime = 12
-                        currentMuscle = ""
-                        currentPart = ""
-                        selectedParts = emptyList()
-                        currentMinutes = 1
-                        currentSeconds = 0
-                        weight = 5
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth(0.7f) // Take 70% of the width
-                    .padding(vertical = 8.dp)
-                    .align(Alignment.CenterHorizontally),
-                shape = MaterialTheme.shapes.medium,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            ) {
-                Text(
-                    if (editIndex == null) "Add Exercise" else "Update Exercise",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-
-            exercisesList.forEachIndexed { index, exercise ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Print exercise with reps or time
-                    val textReps = if (exercise.reps > 50) {
-                        // Convert time to seconds and subtract the threshold (e.g., 1000)
-                        val timeInSeconds = exercise.reps - 1000
-                        val minutes = timeInSeconds / 60
-                        val seconds = timeInSeconds % 60
-                        // Format as mm:ss
-                        var time = String.format("%02d:%02d", minutes, seconds)
-                        "${exercise.name}: ${exercise.sets} Sets, ${time} Time, ${exercise.muscle} - ${exercise.part}"
-                    } else {
-                        // Use reps as is
-                        "${exercise.name}: ${exercise.sets} Sets, ${exercise.reps} Reps, ${exercise.weight} Kg, ${exercise.muscle} - ${exercise.part}"
-                    }
-                    Text(
-                        text = textReps,
-                        modifier = Modifier
-                            .weight(1f) // Takes remaining space
-                            .padding(end = 8.dp), // Add padding to separate from buttons
-                        maxLines = 3, // Limit to 2 lines (optional)
-                        overflow = TextOverflow.Ellipsis // Add ellipsis if text overflows
-                    )
-
-                    Row {
-                        IconButton(onClick = {
-                            currentExercise = exercise.name
-                            currentSets = exercise.sets
-                            currentRepsTime = exercise.reps
-                            currentMuscle = exercise.muscle
-                            selectedParts = exercise.part
-                            editIndex = index
-                        },
-                            modifier = Modifier.width(80.dp) // Fixed width for the button
-                        ) {
-                            Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit")
-                        }
-
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        IconButton(onClick = {
-                            exercisesList = exercisesList.filterIndexed { i, _ -> i != index }
-                        }) {
-                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete")
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "${exercise.sets} Sets",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                if (exercise.reps > 50) {
+                                    val timeInSeconds = exercise.reps - 1000
+                                    val minutes = timeInSeconds / 60
+                                    val seconds = timeInSeconds % 60
+                                    Text(
+                                        text = "${minutes}:${String.format("%02d", seconds)} Time",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                } else {
+                                    Text(
+                                        text = "${exercise.reps} Reps",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                                Text(
+                                    text = "${exercise.weight}kg",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "${exercise.muscle} - ${exercise.part.joinToString(", ")}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
                         }
                     }
                 }
             }
 
+            // Add Exercise Buttons
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Add Existing Exercise Button
+                Button(
+                    onClick = {
+                        println("WorkoutCreationScreen: Navigating to AddExerciseToWorkout")
+                        navController.navigate(Screen.AddExerciseToWorkout.createRoute(0)) {
+                            popUpTo(Screen.WorkoutCreation.route) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                        // Set the returnTo value in the destination's savedStateHandle
+                        navController.currentBackStackEntry?.savedStateHandle?.set("returnTo", "workout_creation")
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.plus_icon),
+                            contentDescription = "Add Exercise",
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Add Exercise")
+                    }
+                }
+
+                // Create New Exercise Button
+                Button(
+                    onClick = {
+                        navController.navigate(Screen.CreateExercise.route) {
+                            popUpTo(Screen.WorkoutCreation.route) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                        navController.currentBackStackEntry?.savedStateHandle?.set("returnTo", "workout_creation")
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary
+                    )
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.plus_icon),
+                            contentDescription = "Create Exercise",
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Create Exercise")
+                    }
+                }
+            }
+
+            // Save Workout Button
             Button(
                 onClick = {
                     scope.launch {
@@ -496,19 +345,25 @@ fun WorkoutCreationScreen(navController: NavController) {
                                 dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(workoutId, exerciseId))
                             }
                             println("Workout Saved!")
+                            viewModel.clearWorkout()
                             navController.popBackStack()
                         } catch (e: Exception) {
                             println("Error saving workout: ${e.message}")
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                enabled = workoutName.isNotEmpty() && exercisesList.isNotEmpty(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
             ) {
                 Text("Save Workout")
             }
         }
     }
 }
-
-data class Exercise(val name: String, val sets: Int, val weight: Int, val reps: Int, val muscle: String, val part: List<String>)
 

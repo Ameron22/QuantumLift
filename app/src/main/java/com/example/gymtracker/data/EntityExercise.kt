@@ -9,6 +9,6 @@ data class EntityExercise(
     val reps: Int,
     val weight: Int,
     val muscle: String, // Primary muscle group
-    val part: List<String> // Specific parts of the muscle
-
+    val part: List<String>, // Specific parts of the muscle
+    val gifUrl: String = "" // Path to the stored GIF file
 )

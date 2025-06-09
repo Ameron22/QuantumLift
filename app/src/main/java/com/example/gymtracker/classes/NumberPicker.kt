@@ -1,4 +1,8 @@
 package com.example.gymtracker.classes
+import android.content.Context
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,6 +23,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun NumberPicker(
@@ -28,7 +33,18 @@ fun NumberPicker(
     modifier: Modifier = Modifier,
     unit: String = ""
 ) {
-    //start here
+    val context = LocalContext.current
+
+    fun vibrateOnValueChange() {
+        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(20)
+        }
+    }
+
     val itemCount = range.count()
     val visibleItems = 5 // Total visible items in the picker
     val offsetFromCenter = 2 // Move selected value 2 rows below the center
@@ -43,12 +59,12 @@ fun NumberPicker(
 
     // Automatically update the value when the middle item changes
     LaunchedEffect(listState.firstVisibleItemIndex) {
-        //val middleIndex = listState.firstVisibleItemIndex + 2 // Adjust based on your UI
         val middleIndex = (listState.firstVisibleItemIndex + offsetFromCenter) % itemCount
         val newValue = range.first + middleIndex
 
         if (newValue in range && newValue != value) {
             onValueChange(newValue)
+            vibrateOnValueChange()
         }
     }
 
@@ -104,6 +120,7 @@ fun NumberPicker(
                                 coroutineScope.launch {
                                     listState.scrollToItem(index)
                                     onValueChange(itemValue)
+                                    vibrateOnValueChange()
                                 }
                             }
                     )
