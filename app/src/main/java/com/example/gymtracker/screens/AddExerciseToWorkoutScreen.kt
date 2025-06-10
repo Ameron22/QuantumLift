@@ -54,10 +54,13 @@ fun AddExerciseToWorkoutScreen(
     // Load all exercises
     LaunchedEffect(Unit) {
         try {
+            Log.d("AddExerciseToWorkoutScreen", "Starting to load exercises")
             withContext(Dispatchers.IO) {
                 val allExercises = dao.getAllExercises()
+                Log.d("AddExerciseToWorkoutScreen", "Loaded ${allExercises.size} exercises from database")
                 withContext(Dispatchers.Main) {
                     exercises = allExercises
+                    Log.d("AddExerciseToWorkoutScreen", "Updated UI with exercises")
                 }
             }
         } catch (e: Exception) {
@@ -193,7 +196,8 @@ fun AddExerciseToWorkoutScreen(
                                         weight = weight,
                                         reps = reps,
                                         muscle = exercise.muscle,
-                                        part = exercise.part
+                                        part = exercise.part,
+                                        gifUrl = exercise.gifUrl
                                     )
                                     println("AddExerciseToWorkoutScreen: Setting newExercise in savedStateHandle")
                                     navController.currentBackStackEntry?.savedStateHandle?.set("newExercise", newExercise)
@@ -322,7 +326,8 @@ fun AddExerciseToWorkoutScreen(
                                         weight = weight,
                                         reps = reps,
                                         muscle = exercise.muscle,
-                                        part = exercise.part
+                                        part = exercise.part,
+                                        gifUrl = exercise.gifUrl
                                     )
                                     println("AddExerciseToWorkoutScreen: Setting newExercise in savedStateHandle")
                                     navController.previousBackStackEntry?.savedStateHandle?.set("newExercise", newExercise)

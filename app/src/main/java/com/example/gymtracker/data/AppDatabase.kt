@@ -1,4 +1,5 @@
 package com.example.gymtracker.data
+import android.util.Log
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -6,6 +7,10 @@ import androidx.room.TypeConverters
 import android.content.Context
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.gymtracker.utils.ExerciseDataImporter
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @Database(
     entities = [
@@ -16,7 +21,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SessionEntityExercise::class,
         AchievementEntity::class
     ],
-    version = 24,  // Increment version number
+    version = 30,  // Increment version number to force database recreation
     //exportSchema = false
 )
 @TypeConverters(Converter::class)
@@ -30,13 +35,38 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
+                Log.d("AppDatabase", "Creating new database instance")
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "app_database"
                 )
                 .fallbackToDestructiveMigration()  // This will recreate tables if schema changes
+                .addCallback(object : RoomDatabase.Callback() {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        super.onCreate(db)
+                        Log.d("AppDatabase", "Database onCreate callback triggered")
+                        // Only import exercises from CSV when database is created
+                        CoroutineScope(Dispatchers.IO).launch {
+                            try {
+                                Log.d("AppDatabase", "Starting exercise import in onCreate")
+                                // Get the database instance that was just created
+                                val database = INSTANCE
+                                if (database != null) {
+                                    val importer = ExerciseDataImporter(context.applicationContext, database.exerciseDao())
+                                    importer.importExercises()
+                                    Log.d("AppDatabase", "Exercise import completed")
+                                } else {
+                                    Log.e("AppDatabase", "Database instance is null during onCreate")
+                                }
+                            } catch (e: Exception) {
+                                Log.e("AppDatabase", "Error during exercise import", e)
+                            }
+                        }
+                    }
+                })
                 .build()
+                Log.d("AppDatabase", "Database instance created")
                 INSTANCE = instance
                 instance
             }

@@ -339,7 +339,8 @@ fun WorkoutCreationScreen(
                                         weight = exercise.weight,
                                         reps = exercise.reps,
                                         muscle = exercise.muscle,
-                                        part = exercise.part
+                                        part = exercise.part,
+                                        gifUrl = exercise.gifUrl
                                     )
                                 ).toInt()
                                 dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(workoutId, exerciseId))

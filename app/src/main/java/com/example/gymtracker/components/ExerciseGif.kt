@@ -1,19 +1,25 @@
 package com.example.gymtracker.components
 
+import android.graphics.drawable.Drawable
 import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import androidx.compose.ui.viewinterop.AndroidView
+import coil.compose.AsyncImagePainter
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
 import com.example.gymtracker.utils.GifUtils
+import pl.droidsonroids.gif.GifImageView
 
 @Composable
 fun ExerciseGif(
@@ -37,14 +43,16 @@ fun ExerciseGif(
             contentAlignment = Alignment.Center
         ) {
             gifUri?.let { uri ->
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(uri)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = "Exercise demonstration",
+                AndroidView(
+                    factory = { context ->
+                        GifImageView(context).apply {
+                            setImageURI(uri)
+                        }
+                    },
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
+                    update = { view ->
+                        view.setImageURI(uri)
+                    }
                 )
             }
         }

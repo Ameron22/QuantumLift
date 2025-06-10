@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.gymtracker.classes.NumberPicker
@@ -25,6 +26,8 @@ import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.Exercise
 import com.example.gymtracker.utils.GifUtils
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,6 +50,9 @@ fun CreateExerciseScreen(navController: NavController) {
     val db = remember { AppDatabase.getDatabase(context) }
     val dao = remember { db.exerciseDao() }
     val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused = interactionSource.collectIsFocusedAsState().value
 
     // Launcher for picking GIF from gallery
     val gifPickerLauncher = rememberLauncherForActivityResult(
@@ -96,7 +102,8 @@ fun CreateExerciseScreen(navController: NavController) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .clickable { focusManager.clearFocus() },
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             OutlinedTextField(
@@ -104,6 +111,7 @@ fun CreateExerciseScreen(navController: NavController) {
                 onValueChange = { currentExercise = it },
                 label = { Text("Exercise Name") },
                 modifier = Modifier.fillMaxWidth(),
+                interactionSource = interactionSource,
                 colors = TextFieldDefaults.colors(
                     focusedTextColor = MaterialTheme.colorScheme.onBackground,
                     unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -245,7 +253,10 @@ fun CreateExerciseScreen(navController: NavController) {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { isMuscleGroupDropdownExpanded = true },
+                            .clickable { 
+                                focusManager.clearFocus()
+                                isMuscleGroupDropdownExpanded = true 
+                            },
                         shape = MaterialTheme.shapes.medium,
                         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                     ) {
@@ -286,7 +297,10 @@ fun CreateExerciseScreen(navController: NavController) {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { isPartDropdownExpanded = true },
+                            .clickable { 
+                                focusManager.clearFocus()
+                                isPartDropdownExpanded = true 
+                            },
                         shape = MaterialTheme.shapes.medium,
                         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                     ) {
@@ -332,6 +346,7 @@ fun CreateExerciseScreen(navController: NavController) {
             ) {
                 Button(
                     onClick = {
+                        focusManager.clearFocus()
                         if (currentPart.isNotEmpty()) {
                             selectedParts = selectedParts + currentPart
                             currentPart = ""

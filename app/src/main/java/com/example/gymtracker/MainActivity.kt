@@ -1,6 +1,7 @@
 package com.example.gymtracker
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -19,9 +20,9 @@ import com.example.gymtracker.ui.theme.QuantumLiftTheme
 import com.example.gymtracker.ui.theme.GradientBackground
 import com.example.gymtracker.screens.*
 import com.example.gymtracker.navigation.Screen
-import com.example.gymtracker.classes.InsertInitialData
 import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.data.AchievementManager
+import com.example.gymtracker.utils.ExerciseDataImporter
 import com.example.gymtracker.viewmodels.WorkoutDetailsViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,18 +47,22 @@ class MainActivity : ComponentActivity() {
         val achievementManager = AchievementManager.getInstance()
         
         CoroutineScope(Dispatchers.IO).launch {
-            // Check total workout count
-            val totalWorkouts = dao.getTotalWorkoutCount()
-            achievementManager.updateWorkoutCount(totalWorkouts)
+            try {
+                // Check total workout count
+                val totalWorkouts = dao.getTotalWorkoutCount()
+                achievementManager.updateWorkoutCount(totalWorkouts)
 
-            // Check workout streak
-            val streak = calculateWorkoutStreak(dao)
-            achievementManager.updateConsistencyStreak(streak)
+                // Check workout streak
+                val streak = calculateWorkoutStreak(dao)
+                achievementManager.updateConsistencyStreak(streak)
 
-            // Check strength milestones
-            val maxBenchPress = dao.getMaxWeightForExercise("Bench Press")
-            if (maxBenchPress > 0) {
-                achievementManager.updateStrengthProgress("Bench Press", maxBenchPress)
+                // Check strength milestones - only if there are exercises
+                val maxBenchPress = dao.getMaxWeightForExercise("Bench Press")
+                if (maxBenchPress != null && maxBenchPress > 0) {
+                    achievementManager.updateStrengthProgress("Bench Press", maxBenchPress)
+                }
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Error checking achievements", e)
             }
         }
     }
@@ -95,11 +100,17 @@ class MainActivity : ComponentActivity() {
         val database = AppDatabase.getDatabase(applicationContext)
         val dao = database.exerciseDao()
 
-        // Initialize data if needed
+        // Import exercises and check achievements
         CoroutineScope(Dispatchers.IO).launch {
-            InsertInitialData().insertInitialData(dao)
-            // Check achievements after initial data is inserted
-            checkAchievements(dao)
+            try {
+                Log.d("MainActivity", "Starting exercise import")
+                val importer = ExerciseDataImporter(applicationContext, dao)
+                importer.importExercises()
+                Log.d("MainActivity", "Exercise import completed")
+                checkAchievements(dao)
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Error during initialization", e)
+            }
         }
 
         setContent {
