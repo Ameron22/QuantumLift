@@ -11,5 +11,6 @@ data class Exercise(
     val reps: Int,
     val muscle: String,
     val part: List<String>,
-    val gifUrl: String = "" // URL to the exercise demonstration GIF
+    val gifUrl: String = "", // URL to the exercise demonstration GIF
+    val difficulty: String = "Intermediate" // Difficulty level: Beginner, Intermediate, Advanced
 ) : Parcelable 

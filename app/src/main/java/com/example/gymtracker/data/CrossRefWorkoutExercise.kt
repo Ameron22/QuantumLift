@@ -8,5 +8,6 @@ import androidx.room.*
 )
 data class CrossRefWorkoutExercise(
     val workoutId: Int,
-    val exerciseId: Int
+    val exerciseId: Int,
+    val order: Int = 0 // Position of the exercise in the workout
 )

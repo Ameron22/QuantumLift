@@ -10,6 +10,9 @@ interface ExerciseDao {
     @Query("SELECT COUNT(*) FROM EntityWorkout")
     suspend fun getWorkoutCount(): Int
 
+    @Query("SELECT COUNT(*) FROM exercises")
+    suspend fun getExerciseCount(): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExercise(exercise: EntityExercise): Long
 
@@ -89,4 +92,10 @@ interface ExerciseDao {
 
     @Query("SELECT * FROM workout_exercise_cross_ref WHERE workoutId = :workoutId AND exerciseId = :exerciseId")
     suspend fun getWorkoutExerciseCrossRef(workoutId: Int, exerciseId: Int): CrossRefWorkoutExercise?
+
+    @Query("SELECT * FROM workout_exercise_cross_ref WHERE workoutId = :workoutId ORDER BY `order` ASC")
+    suspend fun getWorkoutExercisesOrdered(workoutId: Int): List<CrossRefWorkoutExercise>
+
+    @Query("SELECT MAX(`order`) FROM workout_exercise_cross_ref WHERE workoutId = :workoutId")
+    suspend fun getMaxExerciseOrder(workoutId: Int): Int?
 }

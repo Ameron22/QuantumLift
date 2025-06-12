@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -167,87 +168,110 @@ fun WorkoutCreationScreen(
                         shape = MaterialTheme.shapes.medium,
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
-                        Column(
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp)
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Display GIF if available
+                            // GIF Container
                             if (exercise.gifUrl.isNotEmpty()) {
-                                ExerciseGif(
-                                    gifPath = exercise.gifUrl,
-                                    modifier = Modifier.padding(bottom = 8.dp)
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(80.dp)
+                                        .clip(MaterialTheme.shapes.small)
+                                ) {
+                                    ExerciseGif(
+                                        gifPath = exercise.gifUrl,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
                             }
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            // Exercise Details
+                            Column(
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Text(
-                                    text = exercise.name,
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Row {
-                                    IconButton(
-                                        onClick = {
-                                            editIndex = index
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = exercise.name,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Row {
+                                        IconButton(
+                                            onClick = { viewModel.removeExercise(index) },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Delete",
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
                                         }
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Edit,
-                                            contentDescription = "Edit",
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                    IconButton(
-                                        onClick = {
-                                            viewModel.removeExercise(index)
-                                        }
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Delete,
-                                            contentDescription = "Delete",
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
                                     }
                                 }
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "${exercise.sets} Sets",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                if (exercise.reps > 50) {
-                                    val timeInSeconds = exercise.reps - 1000
-                                    val minutes = timeInSeconds / 60
-                                    val seconds = timeInSeconds % 60
+                                
+                                Spacer(modifier = Modifier.height(4.dp))
+                                
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
                                     Text(
-                                        text = "${minutes}:${String.format("%02d", seconds)} Time",
+                                        text = "${exercise.sets} Sets",
                                         style = MaterialTheme.typography.bodyMedium
                                     )
-                                } else {
+                                    if (exercise.reps > 50) {
+                                        val timeInSeconds = exercise.reps - 1000
+                                        val minutes = timeInSeconds / 60
+                                        val seconds = timeInSeconds % 60
+                                        Text(
+                                            text = "${minutes}:${String.format("%02d", seconds)} Time",
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    } else {
+                                        Text(
+                                            text = "${exercise.reps} Reps",
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
                                     Text(
-                                        text = "${exercise.reps} Reps",
+                                        text = "${exercise.weight}kg",
                                         style = MaterialTheme.typography.bodyMedium
                                     )
                                 }
-                                Text(
-                                    text = "${exercise.weight}kg",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
+                                
+                                Spacer(modifier = Modifier.height(4.dp))
+                                
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "${exercise.muscle} - ${exercise.part.joinToString(", ")}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                    )
+                                    Text(
+                                        text = exercise.difficulty,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = when (exercise.difficulty.lowercase()) {
+                                            "beginner" -> MaterialTheme.colorScheme.primary
+                                            "intermediate" -> MaterialTheme.colorScheme.secondary
+                                            "advanced" -> MaterialTheme.colorScheme.error
+                                            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                        }
+                                    )
+                                }
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "${exercise.muscle} - ${exercise.part.joinToString(", ")}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            )
                         }
                     }
                 }
@@ -295,7 +319,7 @@ fun WorkoutCreationScreen(
 
                 // Create New Exercise Button
                 Button(
-                    onClick = {
+                    onClick = { 
                         navController.navigate(Screen.CreateExercise.route) {
                             popUpTo(Screen.WorkoutCreation.route) {
                                 saveState = true
@@ -340,7 +364,8 @@ fun WorkoutCreationScreen(
                                         reps = exercise.reps,
                                         muscle = exercise.muscle,
                                         part = exercise.part,
-                                        gifUrl = exercise.gifUrl
+                                        gifUrl = exercise.gifUrl,
+                                        difficulty = exercise.difficulty
                                     )
                                 ).toInt()
                                 dao.insertWorkoutExerciseCrossRef(CrossRefWorkoutExercise(workoutId, exerciseId))

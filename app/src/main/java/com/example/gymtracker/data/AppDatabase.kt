@@ -21,8 +21,8 @@ import kotlinx.coroutines.launch
         SessionEntityExercise::class,
         AchievementEntity::class
     ],
-    version = 30,  // Increment version number to force database recreation
-    //exportSchema = false
+    version = 33,  // Increment version number to force database recreation
+    exportSchema = false
 )
 @TypeConverters(Converter::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -32,6 +32,7 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
+        private var isInitialized = false
 
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -46,22 +47,27 @@ abstract class AppDatabase : RoomDatabase() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)
                         Log.d("AppDatabase", "Database onCreate callback triggered")
-                        // Only import exercises from CSV when database is created
-                        CoroutineScope(Dispatchers.IO).launch {
-                            try {
-                                Log.d("AppDatabase", "Starting exercise import in onCreate")
-                                // Get the database instance that was just created
-                                val database = INSTANCE
-                                if (database != null) {
-                                    val importer = ExerciseDataImporter(context.applicationContext, database.exerciseDao())
-                                    importer.importExercises()
-                                    Log.d("AppDatabase", "Exercise import completed")
-                                } else {
-                                    Log.e("AppDatabase", "Database instance is null during onCreate")
+                        if (!isInitialized) {
+                            isInitialized = true
+                            // Only import exercises from CSV when database is created
+                            CoroutineScope(Dispatchers.IO).launch {
+                                try {
+                                    Log.d("AppDatabase", "Starting exercise import in onCreate")
+                                    // Get the database instance that was just created
+                                    val database = INSTANCE
+                                    if (database != null) {
+                                        val importer = ExerciseDataImporter(context.applicationContext, database.exerciseDao())
+                                        importer.importExercises()
+                                        Log.d("AppDatabase", "Exercise import completed")
+                                    } else {
+                                        Log.e("AppDatabase", "Database instance is null during onCreate")
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("AppDatabase", "Error during exercise import", e)
                                 }
-                            } catch (e: Exception) {
-                                Log.e("AppDatabase", "Error during exercise import", e)
                             }
+                        } else {
+                            Log.d("AppDatabase", "Database already initialized, skipping exercise import")
                         }
                     }
                 })

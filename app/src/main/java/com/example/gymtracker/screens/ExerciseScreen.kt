@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.media.MediaPlayer
 import android.util.Log
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
@@ -85,6 +86,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.gymtracker.data.AchievementManager
 import com.example.gymtracker.viewmodels.WorkoutDetailsViewModel
 import com.example.gymtracker.components.ExerciseGif
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import androidx.compose.runtime.DisposableEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -110,9 +117,12 @@ fun ExerciseScreen(
     var isTimerRunning by remember { mutableStateOf(false) }
     var isBreakRunning by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(false) }
-    var breakTime by remember { mutableIntStateOf(120) } // Default break time in seconds (2 minutes)
-    var setTimeReps by remember { mutableIntStateOf(120) } // Default time in seconds for reps (2 minutes)
+    var breakTime by remember { mutableIntStateOf(7) } // Default break time in seconds (7 seconds)
+    var setTimeReps by remember { mutableIntStateOf(5) } // Default time in seconds for reps (5 seconds)
     var pausedTime by remember { mutableStateOf(0L) }
+    // Add new state for countdown
+    var showCountdown by remember { mutableStateOf(false) }
+    var countdownNumber by remember { mutableIntStateOf(5) }
 
     // Map to store weights for each set (set number to weight)
     val setWeights = remember { mutableStateMapOf<Int, Int>() }
@@ -140,7 +150,22 @@ fun ExerciseScreen(
 
     // Add new state variables at the top of ExerciseScreen composable
     var hasProvidedSorenessData by remember { mutableStateOf(false) }
-    var defaultSorenessValues by remember { mutableStateOf(false) }
+    var defaultSorenessValues by remember { mutableStateOf(true) }  // Changed to true to make checkbox unchecked by default
+
+    // Add state for back confirmation dialog
+    var showBackConfirmationDialog by remember { mutableStateOf(false) }
+
+    // Add MediaPlayer instances
+    val pingSound = remember { MediaPlayer.create(context, R.raw.ping) }
+    val peeengSound = remember { MediaPlayer.create(context, R.raw.peeeng) }
+
+    // Clean up MediaPlayer when leaving the screen
+    DisposableEffect(Unit) {
+        onDispose {
+            pingSound.release()
+            peeengSound.release()
+        }
+    }
 
     // Fetch exercise data
     LaunchedEffect(exerciseId) {
@@ -230,11 +255,16 @@ fun ExerciseScreen(
             // Mark exercise as completed in ViewModel
             viewModel.markExerciseAsCompleted(exercise.id)
             
-            // Show success notification
+            // Show success notification and navigate back
             withContext(Dispatchers.Main) {
                 showSaveNotification = true
                 delay(2000)
                 showSaveNotification = false
+                // Only navigate back if we haven't already
+                if (isTimerRunning) {
+                    isTimerRunning = false
+                }
+                navController.previousBackStackEntry?.savedStateHandle?.set("exerciseCompleted", true)
                 navController.popBackStack()
             }
         } catch (e: Exception) {
@@ -251,11 +281,41 @@ fun ExerciseScreen(
         while (isTimerRunning) {
             if (!isPaused) {
                 if (remainingTime > 0) {
+                    // Check if we're in the last 5 seconds of break
+                    if (isBreakRunning && remainingTime <= 5) {
+                        showCountdown = true
+                        countdownNumber = remainingTime
+                        // Vibrate and play sound when countdown number changes
+                        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
+                        } else {
+                            @Suppress("DEPRECATION")
+                            vibrator.vibrate(100)
+                        }
+                        // Play ping sound
+                        pingSound.seekTo(0)
+                        pingSound.start()
+                    } else {
+                        showCountdown = false
+                    }
                     delay(1000)
                     remainingTime--
                 } else {
+                    showCountdown = false
                     if (isBreakRunning) {
                         isBreakRunning = false
+                        // Long vibration and sound when exercise starts
+                        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
+                        } else {
+                            @Suppress("DEPRECATION")
+                            vibrator.vibrate(500)
+                        }
+                        // Play peeeng sound
+                        peeengSound.seekTo(0)
+                        peeengSound.start()
                         activeSetIndex = activeSetIndex?.let { it + 1 }
                         if (activeSetIndex != null && activeSetIndex!! <= exercise?.sets ?: 0) {
                             remainingTime = exerciseTime
@@ -264,11 +324,9 @@ fun ExerciseScreen(
                             activeSetIndex = null
                             completedSet = exercise?.sets ?: 0  // Set to total number of sets
                             try {
-                                saveExerciseSession()
-                                showSaveNotification = true
-                                delay(2000) // Show notification for 2 seconds
-                                showSaveNotification = false
-                                navController.popBackStack()
+                                coroutineScope.launch {
+                                    saveExerciseSession()
+                                }
                             } catch (e: Exception) {
                                 Log.e("ExerciseScreen", "Error saving exercise: ${e.message}")
                                 navController.popBackStack()
@@ -281,11 +339,9 @@ fun ExerciseScreen(
                             activeSetIndex = null
                             completedSet = exercise?.sets ?: 0  // Ensure we mark all sets as completed
                             try {
-                                saveExerciseSession()
-                                showSaveNotification = true
-                                delay(2000) // Show notification for 2 seconds
-                                showSaveNotification = false
-                                navController.popBackStack()
+                                coroutineScope.launch {
+                                    saveExerciseSession()
+                                }
                             } catch (e: Exception) {
                                 Log.e("ExerciseScreen", "Error saving exercise: ${e.message}")
                                 navController.popBackStack()
@@ -314,21 +370,41 @@ fun ExerciseScreen(
 
     // Handle back navigation
     BackHandler {
-        coroutineScope.launch {
-            if (isTimerRunning) {
-                stopTimer()
-            }
-            try {
-                saveExerciseSession()
-                showSaveNotification = true
-                delay(2000) // Show notification for 2 seconds
-                showSaveNotification = false
-                navController.popBackStack()
-            } catch (e: Exception) {
-                Log.e("ExerciseScreen", "Error saving exercise: ${e.message}")
-                navController.popBackStack()
-            }
+        if (isTimerRunning) {
+            stopTimer()
         }
+        showBackConfirmationDialog = true
+    }
+
+    // Back confirmation dialog
+    if (showBackConfirmationDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackConfirmationDialog = false },
+            title = { Text("Save Exercise?") },
+            text = { Text("Do you want to save this exercise before going back?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            saveExerciseSession()
+                        }
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showBackConfirmationDialog = false
+                        navController.popBackStack()
+                    }
+                ) {
+                    Text("No")
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     }
 
     // Function to start the timer for a specific set
@@ -396,6 +472,43 @@ fun ExerciseScreen(
     }
 
     // UI
+    // Add this before the Scaffold
+    if (showCountdown) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.3f))
+                .zIndex(1000f), // Ensure it's on top of everything
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(200.dp)
+                    .background(
+                        color = Color.Transparent,
+                        shape = RoundedCornerShape(100.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = countdownNumber.toString(),
+                    style = MaterialTheme.typography.displayLarge.copy(
+                        fontSize = 180.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .shadow(
+                            elevation = 12.dp,
+                            shape = RoundedCornerShape(100.dp),
+                            spotColor = Color.Red
+                        )
+                )
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -435,7 +548,7 @@ fun ExerciseScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(4.dp),
-                        color = if (isBreakRunning) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
+                        color = if (isBreakRunning) Color.Red else Color.Green
                         )
 
                     // Timer display
@@ -559,45 +672,63 @@ fun ExerciseScreen(
         ) {
             // Display exercise details
             exercise?.let { ex ->
-                // Display GIF if available
-                if (ex.gifUrl.isNotEmpty()) {
-                    ExerciseGif(
-                        gifPath = ex.gifUrl,
+                // Display GIF and exercise details in a row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Left side - GIF
+                    if (ex.gifUrl.isNotEmpty()) {
+                        ExerciseGif(
+                            gifPath = ex.gifUrl,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    // Right side - Exercise details
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 16.dp)
-                    )
+                            .weight(1f)
+                            .padding(vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        DetailItem("Muscle Group", ex.muscle)
+                        DetailItem("Muscles", ex.part.toString())
+                        DetailItem("Difficulty", ex.difficulty)
+                    }
                 }
 
                 // Display sets with weight and reps
                 for (set in 1..ex.sets) {
-                        val animatedBorder by animateColorAsState(if (activeSetIndex == set && isTimerRunning) Color.Green else Color.Gray)
+                        val animatedBorder by animateColorAsState(if (activeSetIndex == set && isTimerRunning && !isBreakRunning) Color.Green else Color.Gray)
                         val elevation = if (activeSetIndex == set && isTimerRunning) 8.dp else 2.dp
 
                     Card(
-                            modifier = Modifier
-                                .border(
-                                    width = 2.dp,
-                                    color = animatedBorder,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                .shadow(
-                                    elevation = elevation,
-                                    shape = RoundedCornerShape(12.dp),
-                                    spotColor = MaterialTheme.colorScheme.primary
-                                ),
+                        modifier = Modifier
+                            .border(
+                                width = 2.dp,
+                                color = animatedBorder,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .shadow(
+                                elevation = elevation,
+                                shape = RoundedCornerShape(12.dp),
+                                spotColor = MaterialTheme.colorScheme.primary
+                            ),
                         elevation = CardDefaults.cardElevation(elevation),
                         shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = when {
-                                    set <= completedSet || completedSet == (set - 1) -> MaterialTheme.colorScheme.surface.copy(
-                                        alpha = 0.9f
-                                    )
+                        colors = CardDefaults.cardColors(
+                            containerColor = when {
+                                set <= completedSet || completedSet == (set - 1) -> MaterialTheme.colorScheme.surface.copy(
+                                    alpha = 0.9f
+                                )
 
-                                    set == activeSetIndex && isTimerRunning -> MaterialTheme.colorScheme.background
-                                    else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-                                }
-                            )
+                                set == activeSetIndex && isTimerRunning -> MaterialTheme.colorScheme.background
+                                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                            }
+                        )
                     ) {
                         Row(
                             modifier = Modifier
@@ -879,6 +1010,11 @@ fun ExerciseScreen(
                                 }
                             }
                         }
+                        // Add break indicator after each set except the last one
+                        if (set != ex.sets && isBreakRunning && set == activeSetIndex) {
+                            BreakIndicatorBar()
+                        }
+
                     }
 
                     // Add Set Button
@@ -1452,5 +1588,34 @@ private fun SliderWithLabel(
                 modifier = Modifier.padding(start = 8.dp)
             )
         }
+    }
+}
+
+@Composable
+private fun BreakIndicatorBar() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(2.dp)
+            .background(
+                color = Color.Red,
+                shape = RoundedCornerShape(1.dp)
+            )
+    )
+}
+
+@Composable
+private fun DetailItem(label: String, value: String) {
+    Column {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }

@@ -8,6 +8,7 @@ import com.example.gymtracker.data.ExerciseDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
+import java.io.StringReader
 
 class ExerciseDataImporter(private val context: Context, private val dao: ExerciseDao) {
     private val TAG = "ExerciseDataImporter"
@@ -15,6 +16,14 @@ class ExerciseDataImporter(private val context: Context, private val dao: Exerci
     suspend fun importExercises() {
         try {
             Log.d(TAG, "Starting exercise import")
+            
+            // Check if database is empty
+            val existingCount = dao.getExerciseCount()
+            if (existingCount > 0) {
+                Log.d(TAG, "Database already contains $existingCount exercises. Skipping import.")
+                return
+            }
+            
             val exercises = readCsvFile()
             Log.d(TAG, "Read ${exercises.size} exercises from CSV")
             if (exercises.isEmpty()) {
@@ -26,6 +35,41 @@ class ExerciseDataImporter(private val context: Context, private val dao: Exerci
         } catch (e: Exception) {
             Log.e(TAG, "Error importing exercises", e)
         }
+    }
+
+    private fun parseCsvLine(line: String): List<String> {
+        val result = mutableListOf<String>()
+        var current = StringBuilder()
+        var inQuotes = false
+        var i = 0
+        
+        while (i < line.length) {
+            when (line[i]) {
+                '"' -> {
+                    if (inQuotes && i + 1 < line.length && line[i + 1] == '"') {
+                        // Handle escaped quotes
+                        current.append('"')
+                        i++ // Skip the next quote
+                    } else {
+                        inQuotes = !inQuotes
+                    }
+                }
+                ',' -> {
+                    if (inQuotes) {
+                        current.append(',')
+                    } else {
+                        result.add(current.toString().trim())
+                        current = StringBuilder()
+                    }
+                }
+                else -> current.append(line[i])
+            }
+            i++
+        }
+        
+        // Add the last field
+        result.add(current.toString().trim())
+        return result
     }
 
     private suspend fun readCsvFile(): List<CsvExercise> = withContext(Dispatchers.IO) {
@@ -51,40 +95,47 @@ class ExerciseDataImporter(private val context: Context, private val dao: Exerci
                     var line: String?
                     while (reader.readLine().also { line = it } != null) {
                         lineCount++
-                        val parts = line!!.split(",")
-                        Log.d(TAG, "Processing line $lineCount: ${parts.joinToString()}")
+                        Log.d(TAG, "Raw line $lineCount: $line")
+                        val parts = parseCsvLine(line!!)
+                        Log.d(TAG, "Parsed parts for line $lineCount: ${parts.joinToString(" | ")}")
                         
                         if (parts.size >= 8) {
                             try {
-                                val id = parts[0].toIntOrNull() ?: 0
+                                val id = parts[0].toIntOrNull() ?: continue
                                 val title = parts[1]
+                                val category = parts[2]
+                                val muscleGroup = parts[3]
+                                val muscles = parts[4].trim().split(", ").map { it.trim() }
+                                val equipment = parts[5].trim().split(", ").map { it.trim() }.joinToString(", ")
+                                val difficulty = parts[6]
                                 
                                 // Construct GIF filename using ID and title
                                 val gifFilename = String.format("%04d_%s.gif", id, title.replace(" ", "_"))
                                 val gifPath = "exercise_gifs/$gifFilename"
                                 
-                                Log.d(TAG, "Exercise ID: $id")
-                                Log.d(TAG, "Exercise Title: $title")
-                                Log.d(TAG, "GIF filename: $gifFilename")
-                                Log.d(TAG, "GIF path: $gifPath")
+                                Log.d(TAG, "Processing exercise $lineCount: ID=$id, Title=$title, Category=$category, MuscleGroup=$muscleGroup, Muscles=$muscles, Equipment=$equipment, Difficulty=$difficulty")
                                 
                                 val exercise = CsvExercise(
                                     id = id,
                                     title = title,
-                                    category = parts[2],
-                                    muscleGroup = parts[3],
-                                    muscles = parts[4].split(", "),
-                                    equipment = parts[5],
-                                    difficulty = parts[6],
+                                    category = category,
+                                    muscleGroup = muscleGroup,
+                                    muscles = muscles,
+                                    equipment = equipment,
+                                    difficulty = difficulty,
                                     gifUrl = gifPath
                                 )
                                 exercises.add(exercise)
-                                Log.d(TAG, "Successfully parsed exercise: ${exercise.title}")
+                                Log.d(TAG, "Difficulty - Successfully parsed exercise: ${exercise.title} with difficulty: ${exercise.difficulty}")
                             } catch (e: Exception) {
                                 Log.e(TAG, "Error parsing line $lineCount: ${e.message}")
+                                Log.e(TAG, "Line content: $line")
+                                Log.e(TAG, "Parsed parts: ${parts.joinToString(" | ")}")
                             }
                         } else {
                             Log.e(TAG, "Invalid line format at line $lineCount: ${parts.size} parts found, expected 8")
+                            Log.e(TAG, "Line content: $line")
+                            Log.e(TAG, "Parsed parts: ${parts.joinToString(" | ")}")
                         }
                     }
                     Log.d(TAG, "Finished reading CSV file. Total lines processed: $lineCount")
@@ -97,12 +148,57 @@ class ExerciseDataImporter(private val context: Context, private val dao: Exerci
         exercises
     }
 
+    private fun convertDifficulty(difficulty: String): String {
+        Log.d(TAG, "Difficulty - Converting value: '$difficulty'")
+        return when (difficulty.trim()) {
+            "1/3" -> {
+                Log.d(TAG, "Difficulty - Converting to Beginner")
+                "Beginner"
+            }
+            "2/3" -> {
+                Log.d(TAG, "Difficulty - Converting to Intermediate")
+                "Intermediate"
+            }
+            "3/3" -> {
+                Log.d(TAG, "Difficulty - Converting to Advanced")
+                "Advanced"
+            }
+            else -> {
+                Log.w(TAG, "Difficulty - Unknown value: '$difficulty', defaulting to Intermediate")
+                "Intermediate"
+            }
+        }
+    }
+
     private suspend fun insertExercisesToDatabase(exercises: List<CsvExercise>) = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "Starting database insertion")
             var insertedCount = 0
+            var skippedCount = 0
+            var beginnerCount = 0
+            var intermediateCount = 0
+            var advancedCount = 0
+            
+            // Get all existing exercises
+            val existingExercises = dao.getAllExercises()
+            val existingExerciseNames = existingExercises.map { it.name }.toSet()
+            
             exercises.forEach { csvExercise ->
                 try {
+                    // Skip if exercise already exists
+                    if (existingExerciseNames.contains(csvExercise.title)) {
+                        skippedCount++
+                        Log.d(TAG, "Skipping existing exercise: ${csvExercise.title}")
+                        return@forEach
+                    }
+
+                    val convertedDifficulty = convertDifficulty(csvExercise.difficulty)
+                    when (convertedDifficulty) {
+                        "Beginner" -> beginnerCount++
+                        "Intermediate" -> intermediateCount++
+                        "Advanced" -> advancedCount++
+                    }
+                    
                     val exercise = EntityExercise(
                         name = csvExercise.title,
                         sets = 3, // Default value
@@ -110,16 +206,19 @@ class ExerciseDataImporter(private val context: Context, private val dao: Exerci
                         weight = 0, // Default value
                         muscle = csvExercise.muscleGroup,
                         part = csvExercise.muscles,
-                        gifUrl = csvExercise.gifUrl
+                        gifUrl = csvExercise.gifUrl,
+                        difficulty = convertedDifficulty
                     )
+                    
                     dao.insertExercise(exercise)
                     insertedCount++
-                    Log.d(TAG, "Inserted exercise: ${exercise.name} with GIF path: ${exercise.gifUrl}")
+                    Log.d(TAG, "Difficulty - Inserted exercise: ${exercise.name} with difficulty: $convertedDifficulty")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error inserting exercise ${csvExercise.title}: ${e.message}")
                 }
             }
-            Log.d(TAG, "Successfully inserted $insertedCount exercises into database")
+            Log.d(TAG, "Database update complete: $insertedCount new exercises inserted, $skippedCount existing exercises skipped")
+            Log.d(TAG, "Difficulty distribution: Beginner=$beginnerCount, Intermediate=$intermediateCount, Advanced=$advancedCount")
         } catch (e: Exception) {
             Log.e(TAG, "Error inserting exercises into database", e)
         }
