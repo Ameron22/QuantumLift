@@ -49,7 +49,10 @@ fun AddExerciseToWorkoutScreen(
     var selectedExercise by remember { mutableStateOf<EntityExercise?>(null) }
     var sets by remember { mutableStateOf(3) }
     var reps by remember { mutableStateOf(12) }
-    var weight by remember { mutableStateOf(0) }
+    var weight by remember { mutableStateOf(5) }
+    var useTime by remember { mutableStateOf(false) }
+    var minutes by remember { mutableStateOf(1) }
+    var seconds by remember { mutableStateOf(0) }
     var showFilterDialog by remember { mutableStateOf(false) }
     var selectedMuscleGroup by remember { mutableStateOf<String?>(null) }
     var selectedDifficulty by remember { mutableStateOf<String?>(null) }
@@ -249,18 +252,147 @@ fun AddExerciseToWorkoutScreen(
                                     Text(
                                         text = exercise.difficulty,
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = when (exercise.difficulty) {
-                                            "Beginner" -> Color(0xFF4CAF50) // Green
-                                            "Intermediate" -> Color(0xFFFFA000) // Orange
-                                            "Advanced" -> Color(0xFFF44336) // Red
-                                            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                        }
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                                     )
                                 }
                             }
                         }
                     }
                 }
+            }
+
+            // Alert Dialog for number pickers
+            if (showNumberPicker && selectedExercise != null) {
+                AlertDialog(
+                    onDismissRequest = { showNumberPicker = false },
+                    title = { Text(selectedExercise!!.name) },
+                    text = {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            // Switch between Reps and Time
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Reps/Time")
+                                Switch(
+                                    checked = useTime,
+                                    onCheckedChange = { useTime = it }
+                                )
+                            }
+
+                            // Number pickers section
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Sets picker
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Sets", style = MaterialTheme.typography.bodyMedium)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    NumberPicker(
+                                        value = sets,
+                                        onValueChange = { sets = it },
+                                        range = 1..10
+                                    )
+                                }
+
+                                if (useTime) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    // Minutes picker
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Minutes", style = MaterialTheme.typography.bodyMedium)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        NumberPicker(
+                                            value = minutes,
+                                            onValueChange = { minutes = it },
+                                            range = 0..59
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    // Seconds picker
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Seconds", style = MaterialTheme.typography.bodyMedium)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        NumberPicker(
+                                            value = seconds,
+                                            onValueChange = { seconds = it },
+                                            range = 0..59
+                                        )
+                                    }
+                                } else {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    // Weight picker
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Weight (kg)", style = MaterialTheme.typography.bodyMedium)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        NumberPicker(
+                                            value = weight,
+                                            onValueChange = { weight = it },
+                                            range = 0..500,
+                                            unit = "kg"
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    // Reps picker
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Reps", style = MaterialTheme.typography.bodyMedium)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        NumberPicker(
+                                            value = reps,
+                                            onValueChange = { reps = it },
+                                            range = 1..50
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                // Create a copy of the selected exercise with updated values
+                                val updatedExercise = selectedExercise!!.copy(
+                                    sets = sets,
+                                    weight = weight,
+                                    reps = if (useTime) (minutes * 60 + seconds) + 1000 else reps
+                                )
+                                Log.d("AddExerciseToWorkoutScreen", "Updating exercise with weight: $weight")
+                                navController.previousBackStackEntry?.savedStateHandle?.set("newExercise", updatedExercise)
+                                showNumberPicker = false
+                                navController.popBackStack()
+                            }
+                        ) {
+                            Text("Add")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showNumberPicker = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
             }
         }
     }
@@ -345,110 +477,6 @@ fun AddExerciseToWorkoutScreen(
             confirmButton = {
                 TextButton(onClick = { showFilterDialog = false }) {
                     Text("Close")
-                }
-            }
-        )
-    }
-
-    // Number Picker Dialog
-    if (showNumberPicker && selectedExercise != null) {
-        AlertDialog(
-            onDismissRequest = { showNumberPicker = false },
-            title = { Text("Set Exercise Details") },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // Sets
-                    Text("Sets")
-                    NumberPicker(
-                        value = sets,
-                        range = 1..10,
-                        onValueChange = { sets = it },
-                        unit = "sets"
-                    )
-
-                    // Reps
-                    Text("Reps")
-                    NumberPicker(
-                        value = reps,
-                        range = 1..50,
-                        onValueChange = { reps = it },
-                        unit = "reps"
-                    )
-
-                    // Weight
-                    Text("Weight")
-                    NumberPicker(
-                        value = weight,
-                        range = 0..200,
-                        onValueChange = { weight = it },
-                        unit = "kg"
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        coroutineScope.launch {
-                            try {
-                                selectedExercise?.let { exercise ->
-                                    // Check if we should return to workout creation
-                                    val returnTo = navController.currentBackStackEntry?.savedStateHandle?.get<String>("returnTo")
-                                    if (returnTo == "workout_creation") {
-                                        val newExercise = Exercise(
-                                            name = exercise.name,
-                                            sets = sets,
-                                            weight = weight,
-                                            reps = reps,
-                                            muscle = exercise.muscle,
-                                            part = exercise.part,
-                                            gifUrl = exercise.gifUrl
-                                        )
-                                        println("AddExerciseToWorkoutScreen: Setting newExercise in savedStateHandle: ${newExercise.name}")
-                                        navController.previousBackStackEntry?.savedStateHandle?.set("newExercise", newExercise)
-                                        println("AddExerciseToWorkoutScreen: Popping back stack")
-                                        navController.popBackStack()
-                                    } else {
-                                        // Add exercise to workout
-                                        try {
-                                            withContext(Dispatchers.IO) {
-                                                // Check if the exercise is already in the workout
-                                                val existingCrossRef = dao.getWorkoutExerciseCrossRef(workoutId, exercise.id)
-                                                if (existingCrossRef == null) {
-                                                    val crossRef = CrossRefWorkoutExercise(
-                                                        workoutId = workoutId,
-                                                        exerciseId = exercise.id
-                                                    )
-                                                    dao.insertWorkoutExerciseCrossRef(crossRef)
-                                                    Log.d("AddExerciseToWorkoutScreen", "Added exercise ${exercise.name} to workout $workoutId")
-                                                } else {
-                                                    Log.d("AddExerciseToWorkoutScreen", "Exercise ${exercise.name} already in workout $workoutId")
-                                                }
-                                            }
-                                            navController.popBackStack()
-                                        } catch (e: Exception) {
-                                            Log.e("AddExerciseToWorkoutScreen", "Error adding exercise to workout: ${e.message}")
-                                            e.printStackTrace()
-                                        }
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                Log.e("AddExerciseToWorkoutScreen", "Error saving exercise: ${e.message}")
-                            }
-                        }
-                        showNumberPicker = false
-                    }
-                ) {
-                    Text("Add")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showNumberPicker = false }) {
-                    Text("Cancel")
                 }
             }
         )

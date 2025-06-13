@@ -417,32 +417,46 @@ fun WorkoutDetailsScreen(
         )
     }
 
-    // Function to add an exercise to the workout
-    fun addExerciseToWorkout(exercise: EntityExercise) {
-        coroutineScope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    // Get the current max order
-                    val maxOrder = dao.getMaxExerciseOrder(workoutId) ?: -1
-                    val newOrder = maxOrder + 1
+    // Add LaunchedEffect to handle new exercise
+    LaunchedEffect(Unit) {
+        val newExercise = navController.currentBackStackEntry?.savedStateHandle?.get<EntityExercise>("newExercise")
+        if (newExercise != null) {
+            Log.d("WorkoutDetailsScreen", "Received exercise update: ${newExercise.name} with weight: ${newExercise.weight}")
+            coroutineScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        // First update the exercise with the new values
+                        dao.updateExercise(newExercise)
+                        
+                        // Check if the exercise is already in the workout
+                        val existingCrossRef = dao.getWorkoutExerciseCrossRef(workoutId, newExercise.id)
+                        
+                        if (existingCrossRef == null) {
+                            // If not in workout, add it
+                            val maxOrder = dao.getMaxExerciseOrder(workoutId) ?: -1
+                            val newOrder = maxOrder + 1
 
-                    // Create the cross reference with the new order
-                    val crossRef = CrossRefWorkoutExercise(
-                        workoutId = workoutId,
-                        exerciseId = exercise.id,
-                        order = newOrder
-                    )
-                    dao.insertWorkoutExerciseCrossRef(crossRef)
+                            // Create the cross reference with the new order
+                            val crossRef = CrossRefWorkoutExercise(
+                                workoutId = workoutId,
+                                exerciseId = newExercise.id,
+                                order = newOrder
+                            )
+                            dao.insertWorkoutExerciseCrossRef(crossRef)
+                        }
 
-                    // Refresh the workout data
-                    val updatedWorkoutData = dao.getWorkoutWithExercises(workoutId)
-                    withContext(Dispatchers.Main) {
-                        workoutWithExercises = updatedWorkoutData
+                        // Refresh the workout data
+                        val updatedWorkoutData = dao.getWorkoutWithExercises(workoutId)
+                        withContext(Dispatchers.Main) {
+                            workoutWithExercises = updatedWorkoutData
+                        }
                     }
+                } catch (e: Exception) {
+                    Log.e("WorkoutDetailsScreen", "Error updating exercise in workout: ${e.message}")
                 }
-            } catch (e: Exception) {
-                Log.e("WorkoutDetailsScreen", "Error adding exercise to workout: ${e.message}")
             }
+            // Clear the saved state
+            navController.currentBackStackEntry?.savedStateHandle?.remove<EntityExercise>("newExercise")
         }
     }
 
