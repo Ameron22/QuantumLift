@@ -9,11 +9,10 @@ import kotlinx.parcelize.Parcelize
 data class EntityExercise(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val name: String,
-    val sets: Int,
-    val reps: Int,
-    val weight: Int,
+    val description: String = "",
     val muscle: String, // Primary muscle group
-    val part: List<String>, // Specific parts of the muscle
-    val gifUrl: String = "", // Path to the stored GIF file
-    val difficulty: String = "Intermediate" // Difficulty level: Beginner, Intermediate, Advanced
+    val parts: List<String>, // Specific parts of the muscle
+    val difficulty: String = "Intermediate", // Difficulty level
+    val gifUrl: String = "",
+    val useTime: Boolean = false // True if exercise is time-based, false if rep-based
 ) : Parcelable

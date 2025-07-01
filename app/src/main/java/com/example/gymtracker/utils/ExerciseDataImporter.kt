@@ -99,7 +99,7 @@ class ExerciseDataImporter(private val context: Context, private val dao: Exerci
                         val parts = parseCsvLine(line!!)
                         Log.d(TAG, "Parsed parts for line $lineCount: ${parts.joinToString(" | ")}")
                         
-                        if (parts.size >= 8) {
+                        if (parts.size >= 9) {
                             try {
                                 val id = parts[0].toIntOrNull() ?: continue
                                 val title = parts[1]
@@ -108,13 +108,12 @@ class ExerciseDataImporter(private val context: Context, private val dao: Exerci
                                 val muscles = parts[4].trim().split(", ").map { it.trim() }
                                 val equipment = parts[5].trim().split(", ").map { it.trim() }.joinToString(", ")
                                 val difficulty = parts[6]
-                                
                                 // Construct GIF filename using ID and title
                                 val gifFilename = String.format("%04d_%s.gif", id, title.replace(" ", "_"))
                                 val gifPath = "exercise_gifs/$gifFilename"
-                                
-                                Log.d(TAG, "Processing exercise $lineCount: ID=$id, Title=$title, Category=$category, MuscleGroup=$muscleGroup, Muscles=$muscles, Equipment=$equipment, Difficulty=$difficulty")
-                                
+                                // Parse use_time column (last column)
+                                val useTime = parts.getOrNull(8)?.trim()?.lowercase() == "true"
+                                Log.d(TAG, "Processing exercise $lineCount: ID=$id, Title=$title, Category=$category, MuscleGroup=$muscleGroup, Muscles=$muscles, Equipment=$equipment, Difficulty=$difficulty, UseTime=$useTime")
                                 val exercise = CsvExercise(
                                     id = id,
                                     title = title,
@@ -123,17 +122,18 @@ class ExerciseDataImporter(private val context: Context, private val dao: Exerci
                                     muscles = muscles,
                                     equipment = equipment,
                                     difficulty = difficulty,
-                                    gifUrl = gifPath
+                                    gifUrl = gifPath,
+                                    useTime = useTime
                                 )
                                 exercises.add(exercise)
-                                Log.d(TAG, "Difficulty - Successfully parsed exercise: ${exercise.title} with difficulty: ${exercise.difficulty}")
+                                Log.d(TAG, "Difficulty - Successfully parsed exercise: ${exercise.title} with difficulty: ${exercise.difficulty} useTime: ${exercise.useTime}")
                             } catch (e: Exception) {
                                 Log.e(TAG, "Error parsing line $lineCount: ${e.message}")
                                 Log.e(TAG, "Line content: $line")
                                 Log.e(TAG, "Parsed parts: ${parts.joinToString(" | ")}")
                             }
                         } else {
-                            Log.e(TAG, "Invalid line format at line $lineCount: ${parts.size} parts found, expected 8")
+                            Log.e(TAG, "Invalid line format at line $lineCount: ${parts.size} parts found, expected 9")
                             Log.e(TAG, "Line content: $line")
                             Log.e(TAG, "Parsed parts: ${parts.joinToString(" | ")}")
                         }
@@ -201,13 +201,11 @@ class ExerciseDataImporter(private val context: Context, private val dao: Exerci
                     
                     val exercise = EntityExercise(
                         name = csvExercise.title,
-                        sets = 3, // Default value
-                        reps = 12, // Default value
-                        weight = 0, // Default value
                         muscle = csvExercise.muscleGroup,
-                        part = csvExercise.muscles,
+                        parts = csvExercise.muscles,
                         gifUrl = csvExercise.gifUrl,
-                        difficulty = convertedDifficulty
+                        difficulty = convertedDifficulty,
+                        useTime = csvExercise.useTime
                     )
                     
                     dao.insertExercise(exercise)

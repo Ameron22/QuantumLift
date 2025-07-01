@@ -37,7 +37,8 @@ import com.example.gymtracker.components.SliderWithLabel
 import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.SessionWorkoutEntity
 import com.example.gymtracker.data.WorkoutWithExercises
-import com.example.gymtracker.data.CrossRefWorkoutExercise
+import com.example.gymtracker.data.WorkoutExercise
+import com.example.gymtracker.data.ExerciseWithWorkoutData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -60,6 +61,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
+import com.example.gymtracker.data.WorkoutExerciseWithDetails
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,14 +75,16 @@ fun WorkoutDetailsScreen(
     val db = remember { AppDatabase.getDatabase(context) }
     val dao = remember { db.exerciseDao() }
     var workoutWithExercises by remember { mutableStateOf<List<WorkoutWithExercises>?>(null) }
+    var workoutName by remember { mutableStateOf("") }
     var startTimeWorkout: Long by remember { mutableLongStateOf(0L) }
     var workoutStarted by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(true) }
     var showSaveNotification by remember { mutableStateOf(false) }
 
     // Collect StateFlow values
     val workoutSession by viewModel.workoutSession.collectAsState()
     val recoveryFactors by viewModel.recoveryFactors.collectAsState()
+    val exercisesList by viewModel.exercisesList.collectAsState()
     var showRecoveryDialog by remember { mutableStateOf(false) }
     var currentRecoveryFactor by remember { mutableStateOf("") }
     var showRecoveryInfoDialog by remember { mutableStateOf(false) }
@@ -91,34 +95,39 @@ fun WorkoutDetailsScreen(
         Log.d("WorkoutDetailsScreen", "Synced workoutStarted state: $workoutStarted, session isStarted: ${workoutSession?.isStarted}")
     }
 
-    // Fetch workout data
+    // Fetch workout data and sync with ViewModel
     LaunchedEffect(workoutId) {
         try {
             Log.d("WorkoutDetailsScreen", "Loading workout data for ID: $workoutId")
+            
+            // Clear ViewModel state at the beginning to ensure clean state for each workout
+            viewModel.clearExercises()
+            viewModel.resetWorkoutSession()
 
             withContext(Dispatchers.IO) {
-                // Get the ordered list of exercises first
-                val orderedExercises = dao.getWorkoutExercisesOrdered(workoutId)
-                // Then get the workout with exercises
-                val workoutData = dao.getWorkoutWithExercises(workoutId)
+                // Get exercises with their workout-specific data
+                val exercisesData = dao.getExercisesWithWorkoutData(workoutId)
+                // Get the workout info
+                val workout = dao.getAllWorkouts().find { it.id == workoutId }
                 
                 withContext(Dispatchers.Main) {
-                    Log.d("WorkoutDetailsScreen", "Workout data loaded: ${workoutData?.size} items")
+                    Log.d("WorkoutDetailsScreen", "Workout data loaded: ${exercisesData.size} exercises")
 
-                    if (workoutData.isNullOrEmpty()) {
-                        Log.e("WorkoutDetailsScreen", "No workout data found for ID: $workoutId")
+                    if (exercisesData.isEmpty()) {
+                        Log.e("WorkoutDetailsScreen", "No exercises found for workout ID: $workoutId")
+                        // Add 5-second delay to show loading effect
+                        delay(5000)
+                        isLoading = false
                     } else {
-                        // Sort the exercises based on the order from orderedExercises
-                        workoutData.firstOrNull()?.let { workout ->
-                            val sortedExercises = workout.exercises.sortedBy { exercise ->
-                                orderedExercises.find { it.exerciseId == exercise.id }?.order ?: Int.MAX_VALUE
-                            }
-                            workoutWithExercises = listOf(workout.copy(exercises = sortedExercises))
-                        } ?: run {
-                            workoutWithExercises = workoutData
+                        // Convert to WorkoutExerciseWithDetails and sync with ViewModel
+                        val workoutExerciseWithDetails = exercisesData.map { 
+                            WorkoutExerciseWithDetails(it.workoutExercise, it.exercise) 
                         }
-
-                        val workoutName = workoutData.firstOrNull()?.workout?.name ?: "Unknown Workout"
+                        workoutExerciseWithDetails.forEach { exerciseWithDetails ->
+                            viewModel.addExercise(exerciseWithDetails)
+                        }
+                        
+                        workoutName = workout?.name ?: "Unknown Workout"
 
                         // Check if there's an existing session
                         if (workoutSession == null || workoutSession?.workoutId != workoutId) {
@@ -135,8 +144,12 @@ fun WorkoutDetailsScreen(
                         Log.d("WorkoutDetailsScreen", "Workout name: $workoutName")
                         Log.d(
                             "WorkoutDetailsScreen",
-                            "Number of exercises: ${workoutData.firstOrNull()?.exercises?.size}"
+                            "Number of exercises: ${exercisesData.size}"
                         )
+                        
+                        // Add 5-second delay to show loading effect
+                        delay(5000)
+                        isLoading = false
                     }
                 }
             }
@@ -147,6 +160,34 @@ fun WorkoutDetailsScreen(
                 navController.popBackStack()
             }
         }
+    }
+
+    // Listen for new exercises added from AddExerciseToWorkoutScreen
+    LaunchedEffect(Unit) {
+        navController.currentBackStackEntry?.savedStateHandle?.getStateFlow<Int?>("newExerciseId", null)
+            ?.collect { newExerciseId ->
+                if (newExerciseId != null) {
+                    Log.d("WorkoutDetailsScreen", "New exercise added with ID: $newExerciseId")
+                    // Refresh exercises from database
+                    coroutineScope.launch {
+                        withContext(Dispatchers.IO) {
+                            val updatedExercisesData = dao.getExercisesWithWorkoutData(workoutId)
+                            withContext(Dispatchers.Main) {
+                                // Update ViewModel
+                                val workoutExerciseWithDetails = updatedExercisesData.map { 
+                                    WorkoutExerciseWithDetails(it.workoutExercise, it.exercise) 
+                                }
+                                viewModel.clearExercises()
+                                workoutExerciseWithDetails.forEach { exerciseWithDetails ->
+                                    viewModel.addExercise(exerciseWithDetails)
+                                }
+                            }
+                        }
+                    }
+                    // Clear the flag
+                    navController.currentBackStackEntry?.savedStateHandle?.set("newExerciseId", null)
+                }
+            }
     }
 
     // Function to start the workout session
@@ -161,7 +202,7 @@ fun WorkoutDetailsScreen(
                 "WorkoutDetailsScreen",
                 "Navigating to exercise with sessionId: ${workoutSession?.sessionId}, isStarted: ${workoutSession?.isStarted}"
             )
-            navController.navigate(Screen.Exercise.createRoute(exId, workoutSession!!.sessionId.toLong()))
+            navController.navigate(Screen.Exercise.createRoute(exId, workoutSession!!.sessionId.toLong(), workoutId))
         } else {
             Log.e("WorkoutDetailsScreen", "Failed to start workout session: session is null")
         }
@@ -417,53 +458,11 @@ fun WorkoutDetailsScreen(
         )
     }
 
-    // Add LaunchedEffect to handle new exercise
-    LaunchedEffect(Unit) {
-        val newExercise = navController.currentBackStackEntry?.savedStateHandle?.get<EntityExercise>("newExercise")
-        if (newExercise != null) {
-            Log.d("WorkoutDetailsScreen", "Received exercise update: ${newExercise.name} with weight: ${newExercise.weight}")
-            coroutineScope.launch {
-                try {
-                    withContext(Dispatchers.IO) {
-                        // First update the exercise with the new values
-                        dao.updateExercise(newExercise)
-                        
-                        // Check if the exercise is already in the workout
-                        val existingCrossRef = dao.getWorkoutExerciseCrossRef(workoutId, newExercise.id)
-                        
-                        if (existingCrossRef == null) {
-                            // If not in workout, add it
-                            val maxOrder = dao.getMaxExerciseOrder(workoutId) ?: -1
-                            val newOrder = maxOrder + 1
-
-                            // Create the cross reference with the new order
-                            val crossRef = CrossRefWorkoutExercise(
-                                workoutId = workoutId,
-                                exerciseId = newExercise.id,
-                                order = newOrder
-                            )
-                            dao.insertWorkoutExerciseCrossRef(crossRef)
-                        }
-
-                        // Refresh the workout data
-                        val updatedWorkoutData = dao.getWorkoutWithExercises(workoutId)
-                        withContext(Dispatchers.Main) {
-                            workoutWithExercises = updatedWorkoutData
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e("WorkoutDetailsScreen", "Error updating exercise in workout: ${e.message}")
-                }
-            }
-            // Clear the saved state
-            navController.currentBackStackEntry?.savedStateHandle?.remove<EntityExercise>("newExercise")
-        }
-    }
-
     // Function to display exercise details
     @Composable
     fun ExerciseItem(
         exercise: EntityExercise,
+        workoutExercise: WorkoutExercise,
         onDelete: () -> Unit = {}
     ) {
         Card(
@@ -474,7 +473,7 @@ fun WorkoutDetailsScreen(
                     if (workoutSession == null) {
                         startWorkoutSession(exercise.id)
                     } else {
-                        navController.navigate(Screen.Exercise.createRoute(exercise.id, workoutSession!!.sessionId.toLong()))
+                        navController.navigate(Screen.Exercise.createRoute(exercise.id, workoutSession!!.sessionId.toLong(), workoutId))
                     }
                 },
             shape = RoundedCornerShape(12.dp),
@@ -512,17 +511,24 @@ fun WorkoutDetailsScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Sets: ${exercise.sets}",
+                            text = "Sets: ${workoutExercise.sets}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
                         Text(
-                            text = "Reps: ${exercise.reps}",
+                            text = if (exercise.useTime && workoutExercise.reps > 1000) {
+                                val timeInSeconds = workoutExercise.reps - 1000
+                                val minutes = timeInSeconds / 60
+                                val seconds = timeInSeconds % 60
+                                "Time: ${minutes}:${String.format("%02d", seconds)}"
+                            } else {
+                                "Reps: ${workoutExercise.reps}"
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
                         Text(
-                            text = "Weight: ${exercise.weight}kg",
+                            text = "Weight: ${workoutExercise.weight}kg",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
@@ -589,7 +595,7 @@ fun WorkoutDetailsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = workoutWithExercises?.firstOrNull()?.workout?.name ?: "Loading...",
+                        text = workoutName,
                         style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -636,253 +642,267 @@ fun WorkoutDetailsScreen(
             }
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Workout duration display
-            if (workoutStarted) {
-                WorkoutDurationDisplay(startTimeWorkout, workoutStarted)
-            }
-
-            // Exercise list
-            workoutWithExercises?.firstOrNull()?.exercises?.forEach { exercise ->
-                ExerciseItem(
-                    exercise = exercise,
-                    onDelete = {
-                        coroutineScope.launch {
-                            workoutWithExercises?.firstOrNull()?.let { currentWorkout ->
-                                val workout = currentWorkout.workout
-                                val exerciseToRemove = exercise
-                                
-                                // Get the cross reference
-                                val crossRef = dao.getWorkoutExerciseCrossRef(workout.id, exercise.id)
-                                
-                                // Remove the exercise from the workout
-                                crossRef?.let { dao.deleteWorkoutExerciseCrossRef(it) }
-                                
-                                // Update the local state by fetching the updated workout
-                                val updatedWorkout = dao.getWorkoutWithExercises(workout.id)
-                                workoutWithExercises = updatedWorkout
-                            }
-                        }
-                    }
-                )
-            }
-
-            // Add Exercise Button
-            Card(
+        if (isLoading) {
+            // Loading indicator in center of page
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .clickable {
-                        navController.navigate("addExerciseToWorkout/$workoutId")
-                    }
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(12.dp)
-                    ),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.plus_icon),
-                        contentDescription = "Add Exercise",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Add Exercise",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                Text(
+                    text = "Loading...",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Workout duration display
+                if (workoutStarted) {
+                    WorkoutDurationDisplay(startTimeWorkout, workoutStarted)
                 }
-            }
 
-            // Recovery Factors Section
-            Spacer(modifier = Modifier.height(24.dp))
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
-                ),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Recovery Factors",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            ),
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                        IconButton(
-                            onClick = { showRecoveryInfoDialog = true },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = "Recovery Factors Info",
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-                    }
-
-                    // Add Recovery Factors Info Dialog
-                    if (showRecoveryInfoDialog) {
-                        AlertDialog(
-                            onDismissRequest = { showRecoveryInfoDialog = false },
-                            title = { Text("Recovery Factors") },
-                            text = {
-                                Text(
-                                    "Recovery factors help calculate muscle stress and recovery more accurately. " +
-                                    "If you provide all recovery factors, the app will use a more detailed formula " +
-                                    "that takes into account your sleep quality, protein intake, hydration, and stress levels. " +
-                                    "If any factor is not provided (set to 0), the app will use a simplified formula " +
-                                    "based only on exercise load and volume.\n\n" +
-                                    "Factors:\n" +
-                                    "• Sleep Quality (1-10): How well you slept\n" +
-                                    "• Protein Intake (g): Amount of protein consumed\n" +
-                                    "• Hydration (1-10): Your hydration level\n" +
-                                    "• Stress Level (1-10): Your current stress level"
-                                )
-                            },
-                            confirmButton = {
-                                TextButton(onClick = { showRecoveryInfoDialog = false }) {
-                                    Text("OK")
+                // Exercise list
+                exercisesList.forEach { exerciseWithDetails ->
+                    ExerciseItem(
+                        exercise = exerciseWithDetails.entityExercise,
+                        workoutExercise = exerciseWithDetails.workoutExercise,
+                        onDelete = {
+                            coroutineScope.launch {
+                                // Remove the exercise from the workout
+                                dao.deleteWorkoutExercise(exerciseWithDetails.workoutExercise)
+                                // Update ViewModel by refreshing from database
+                                val updatedData = withContext(Dispatchers.IO) {
+                                    dao.getExercisesWithWorkoutData(workoutId)
+                                        .map { WorkoutExerciseWithDetails(it.workoutExercise, it.exercise) }
+                                }
+                                viewModel.clearExercises()
+                                updatedData.forEach { exerciseWithDetails ->
+                                    viewModel.addExercise(exerciseWithDetails)
                                 }
                             }
+                        }
+                    )
+                }
+
+                // Add Exercise Button
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .clickable {
+                            navController.navigate(Screen.AddExerciseToWorkout.createRoute(workoutId))
+                        }
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(12.dp)
+                        ),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.plus_icon),
+                            contentDescription = "Add Exercise",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Add Exercise",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
+                }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // Recovery Factors Section
+                Spacer(modifier = Modifier.height(24.dp))
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        listOf(
-                            Triple("Sleep", recoveryFactors.sleepQuality, "Sleep Quality (1-10)"),
-                            Triple("Protein", recoveryFactors.proteinIntake, "Protein Intake (g)"),
-                            Triple("Hydration", recoveryFactors.hydration, "Hydration Level (1-10)"),
-                            Triple("Stress Lvl", recoveryFactors.stressLevel, "Stress Level (1-10)")
-                        ).forEach { (shortLabel, value, fullLabel) ->
-                            Button(
-                                onClick = {
-                                    currentRecoveryFactor = fullLabel
-                                    showRecoveryDialog = true
-                                },
-                                modifier = Modifier
-                                    .height(80.dp)  // Increased height
-                                    .weight(1f),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (value > 0)
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                                    else
-                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-                                )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Recovery Factors",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                ),
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                            IconButton(
+                                onClick = { showRecoveryInfoDialog = true },
+                                modifier = Modifier.size(24.dp)
                             ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center,
-                                    modifier = Modifier.fillMaxWidth()
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Recovery Factors Info",
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
+
+                        // Add Recovery Factors Info Dialog
+                        if (showRecoveryInfoDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showRecoveryInfoDialog = false },
+                                title = { Text("Recovery Factors") },
+                                text = {
+                                    Text(
+                                        "Recovery factors help calculate muscle stress and recovery more accurately. " +
+                                        "If you provide all recovery factors, the app will use a more detailed formula " +
+                                        "that takes into account your sleep quality, protein intake, hydration, and stress levels. " +
+                                        "If any factor is not provided (set to 0), the app will use a simplified formula " +
+                                        "based only on exercise load and volume.\n\n" +
+                                        "Factors:\n" +
+                                        "• Sleep Quality (1-10): How well you slept\n" +
+                                        "• Protein Intake (g): Amount of protein consumed\n" +
+                                        "• Hydration (1-10): Your hydration level\n" +
+                                        "• Stress Level (1-10): Your current stress level"
+                                    )
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = { showRecoveryInfoDialog = false }) {
+                                        Text("OK")
+                                    }
+                                }
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(
+                                Triple("Sleep", recoveryFactors.sleepQuality, "Sleep Quality (1-10)"),
+                                Triple("Protein", recoveryFactors.proteinIntake, "Protein Intake (g)"),
+                                Triple("Hydration", recoveryFactors.hydration, "Hydration Level (1-10)"),
+                                Triple("Stress Lvl", recoveryFactors.stressLevel, "Stress Level (1-10)")
+                            ).forEach { (shortLabel, value, fullLabel) ->
+                                Button(
+                                    onClick = {
+                                        currentRecoveryFactor = fullLabel
+                                        showRecoveryDialog = true
+                                    },
+                                    modifier = Modifier
+                                        .height(80.dp)  // Increased height
+                                        .weight(1f),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (value > 0)
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                                        else
+                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                                    )
                                 ) {
-                                    if (value == 0) {
-                                        Row(
-                                            horizontalArrangement = Arrangement.Center,
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.padding(bottom = 4.dp)
-                                        ) {
-                                            Icon(
-                                                painter = painterResource(id = R.drawable.plus_icon),
-                                                contentDescription = "Add $shortLabel",
-                                                modifier = Modifier.size(20.dp),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        if (value == 0) {
+                                            Row(
+                                                horizontalArrangement = Arrangement.Center,
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(bottom = 4.dp)
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.plus_icon),
+                                                    contentDescription = "Add $shortLabel",
+                                                    modifier = Modifier.size(20.dp),
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+
+                                        // Factor-specific icon
+                                        when (shortLabel) {
+                                            "Sleep" -> Icon(
+                                                painter = painterResource(id = R.drawable.sleep_icon),
+                                                contentDescription = "Sleep Icon",
+                                                modifier = Modifier.size(24.dp),
+                                                tint = if (value > 0)
+                                                    MaterialTheme.colorScheme.onPrimary
+                                                else
+                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+
+                                            "Protein" -> Icon(
+                                                painter = painterResource(id = R.drawable.food_icon),
+                                                contentDescription = "Food Icon",
+                                                modifier = Modifier.size(24.dp),
+                                                tint = if (value > 0)
+                                                    MaterialTheme.colorScheme.onPrimary
+                                                else
+                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+
+                                            "Hydration" -> Icon(
+                                                painter = painterResource(id = R.drawable.drop_icon),
+                                                contentDescription = "Hydration Icon",
+                                                modifier = Modifier.size(24.dp),
+                                                tint = if (value > 0)
+                                                    MaterialTheme.colorScheme.onPrimary
+                                                else
+                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+
+                                            "Stress Lvl" -> Icon(
+                                                painter = painterResource(id = R.drawable.stress_icon),
+                                                contentDescription = "Stress Icon",
+                                                modifier = Modifier.size(24.dp),
+                                                tint = if (value > 0)
+                                                    MaterialTheme.colorScheme.onPrimary
+                                                else
+                                                    MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
-                                    }
 
-                                    // Factor-specific icon
-                                    when (shortLabel) {
-                                        "Sleep" -> Icon(
-                                            painter = painterResource(id = R.drawable.sleep_icon),
-                                            contentDescription = "Sleep Icon",
-                                            modifier = Modifier.size(24.dp),
-                                            tint = if (value > 0)
+                                        Spacer(modifier = Modifier.height(4.dp))
+
+                                        Text(
+                                            text = if (value == 0) shortLabel
+                                            else if (shortLabel == "Protein") "${value}g"
+                                            else "$value",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (value > 0)
                                                 MaterialTheme.colorScheme.onPrimary
                                             else
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-
-                                        "Protein" -> Icon(
-                                            painter = painterResource(id = R.drawable.food_icon),
-                                            contentDescription = "Food Icon",
-                                            modifier = Modifier.size(24.dp),
-                                            tint = if (value > 0)
-                                                MaterialTheme.colorScheme.onPrimary
-                                            else
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-
-                                        "Hydration" -> Icon(
-                                            painter = painterResource(id = R.drawable.drop_icon),
-                                            contentDescription = "Hydration Icon",
-                                            modifier = Modifier.size(24.dp),
-                                            tint = if (value > 0)
-                                                MaterialTheme.colorScheme.onPrimary
-                                            else
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-
-                                        "Stress Lvl" -> Icon(
-                                            painter = painterResource(id = R.drawable.stress_icon),
-                                            contentDescription = "Stress Icon",
-                                            modifier = Modifier.size(24.dp),
-                                            tint = if (value > 0)
-                                                MaterialTheme.colorScheme.onPrimary
-                                            else
-                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                                MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1
                                         )
                                     }
-
-                                    Spacer(modifier = Modifier.height(4.dp))
-
-                                    Text(
-                                        text = if (value == 0) shortLabel
-                                        else if (shortLabel == "Protein") "${value}g"
-                                        else "$value",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (value > 0)
-                                            MaterialTheme.colorScheme.onPrimary
-                                        else
-                                            MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1
-                                    )
                                 }
                             }
                         }

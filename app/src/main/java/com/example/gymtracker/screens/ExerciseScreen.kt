@@ -76,6 +76,8 @@ import com.example.gymtracker.classes.NumberPicker
 import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.SessionEntityExercise
+import com.example.gymtracker.data.WorkoutExercise
+import com.example.gymtracker.data.ExerciseWithWorkoutData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -98,6 +100,7 @@ import androidx.compose.runtime.DisposableEffect
 fun ExerciseScreen(
     exerciseId: Int,
     workoutSessionId: Long,
+    workoutId: Int,
     navController: NavController,
     viewModel: WorkoutDetailsViewModel = viewModel()
 ) {
@@ -105,7 +108,7 @@ fun ExerciseScreen(
     val context = LocalContext.current
     val db = remember { AppDatabase.getDatabase(context) }
     val dao = remember { db.exerciseDao() }
-    var exercise by remember { mutableStateOf<EntityExercise?>(null) }
+    var exerciseWithDetails by remember { mutableStateOf<ExerciseWithWorkoutData?>(null) }
     var showWeightPicker by remember { mutableStateOf(false) }
     var showRepsPicker by remember { mutableStateOf(false) }
     var showSaveNotification by remember { mutableStateOf(false) }
@@ -167,31 +170,31 @@ fun ExerciseScreen(
         }
     }
 
-    // Fetch exercise data
-    LaunchedEffect(exerciseId) {
+    // Fetch exercise and workoutExercise data using the new structure
+    LaunchedEffect(exerciseId, workoutId) {
         try {
-            Log.d("ExerciseScreen", "Fetching exercise with ID: $exerciseId")
+            Log.d("ExerciseScreen", "Fetching exercise with ID: $exerciseId and workoutId: $workoutId")
             withContext(Dispatchers.IO) {
-                val fetchedExercise = dao.getExerciseById(exerciseId)
+                // Get exercises with workout data for this workout
+                val exercisesData = dao.getExercisesWithWorkoutData(workoutId)
+                // Find the specific exercise we need
                 withContext(Dispatchers.Main) {
-                    if (fetchedExercise == null) {
-                        Log.e("ExerciseScreen", "Exercise not found with ID: $exerciseId")
+                    val foundExerciseWithDetails = exercisesData.find { it.exercise.id == exerciseId }
+                    if (foundExerciseWithDetails == null) {
+                        Log.e("ExerciseScreen", "Exercise not found in workout")
                         navController.popBackStack()
                         return@withContext
                     }
-
-                    exercise = fetchedExercise.also { ex ->
-                        Log.d("ExerciseScreen", "Exercise loaded: ${ex.name}")
-                // Initialize weights for all sets with the exercise weight
-                if (ex.weight != 0) {
-                    for (set in 1..ex.sets) {
-                        setWeights[set] = ex.weight
-                    }
-                }
-
-                for (set in 1..ex.sets) {
-                    setReps[set] = ex.reps
-                        }
+                    
+                    // Assign to the mutable state variable
+                    exerciseWithDetails =   foundExerciseWithDetails
+                    val workoutExercise = foundExerciseWithDetails.workoutExercise
+                    val exercise = foundExerciseWithDetails.exercise
+                    
+                    // Initialize weights and reps for all sets
+                    for (set in 1..workoutExercise.sets) {
+                        setWeights[set] = workoutExercise.weight
+                        setReps[set] = workoutExercise.reps
                     }
                 }
             }
@@ -206,33 +209,20 @@ fun ExerciseScreen(
 
     // Function to save exercise session
     suspend fun saveExerciseSession() {
-        val exercise = exercise ?: return
-
-        // Ensure completedSet doesn't exceed total sets
-        completedSet = minOf(completedSet, exercise.sets)
-
-        Log.d(
-            "ExerciseScreen",
-            "Saving exercise session - Exercise: ${exercise.name}, Completed Sets: $completedSet"
-        )
-
-        // Convert repsOrTime and weight to lists
-        val repsOrTimeList = (1..exercise.sets).map { setReps[it] ?: exercise.reps }
-        val weightList = (1..exercise.sets).map { setWeights[it] ?: exercise.weight }
-
-        // Get the maximum weight used in any set
+        val exercise = exerciseWithDetails?.exercise ?: return
+        val workoutExercise = exerciseWithDetails?.workoutExercise ?: return
+        completedSet = minOf(completedSet, workoutExercise.sets)
+        val repsOrTimeList = (1..workoutExercise.sets).map { setReps[it] ?: workoutExercise.reps }
+        val weightList = (1..workoutExercise.sets).map { setWeights[it] ?: workoutExercise.weight }
         val maxWeight = weightList.maxOrNull() ?: 0
-
-        Log.d("ExerciseScreen", "Session details - Reps: $repsOrTimeList, Weights: $weightList, Max Weight: $maxWeight")
-
         val exerciseSession = SessionEntityExercise(
             sessionId = workoutSessionId,
             exerciseId = exercise.id.toLong(),
-            sets = exercise.sets,
+            sets = workoutExercise.sets,
             repsOrTime = repsOrTimeList,
             weight = weightList,
             muscleGroup = exercise.muscle,
-            muscleParts = exercise.part.joinToString(", "),
+            muscleParts = exercise.parts.joinToString(", "),
             completedSets = completedSet,
             notes = "",
             eccentricFactor = eccentricFactor,
@@ -317,12 +307,13 @@ fun ExerciseScreen(
                         peeengSound.seekTo(0)
                         peeengSound.start()
                         activeSetIndex = activeSetIndex?.let { it + 1 }
-                        if (activeSetIndex != null && activeSetIndex!! <= exercise?.sets ?: 0) {
+                        val workoutExercise = exerciseWithDetails?.workoutExercise
+                        if (activeSetIndex != null && activeSetIndex!! <= workoutExercise?.sets ?: 0) {
                             remainingTime = exerciseTime
                         } else {
                             isTimerRunning = false
                             activeSetIndex = null
-                            completedSet = exercise?.sets ?: 0  // Set to total number of sets
+                            completedSet = workoutExercise?.sets ?: 0  // Set to total number of sets
                             try {
                                 coroutineScope.launch {
                                     saveExerciseSession()
@@ -334,10 +325,11 @@ fun ExerciseScreen(
                         }
                     } else {
                         completedSet += 1  // Increment completed sets after exercise time
-                        if (activeSetIndex!! >= (exercise?.sets ?: 0)) {
+                        val workoutExercise = exerciseWithDetails?.workoutExercise
+                        if (activeSetIndex!! >= (workoutExercise?.sets ?: 0)) {
                             isTimerRunning = false
                             activeSetIndex = null
-                            completedSet = exercise?.sets ?: 0  // Ensure we mark all sets as completed
+                            completedSet = workoutExercise?.sets ?: 0  // Ensure we mark all sets as completed
                             try {
                                 coroutineScope.launch {
                                     saveExerciseSession()
@@ -409,9 +401,10 @@ fun ExerciseScreen(
 
     // Function to start the timer for a specific set
     fun startTimer(setIndex: Int) {
+        val workoutExercise = exerciseWithDetails?.workoutExercise ?: return
         activeSetIndex = setIndex
-        exerciseTime = if (exercise?.reps!! > 50) {
-            exercise?.reps!! - 1000
+        exerciseTime = if (workoutExercise.reps > 50) {
+            workoutExercise.reps - 1000
         } else {
             setTimeReps
         }
@@ -441,10 +434,11 @@ fun ExerciseScreen(
     // Function to skip the current set
     fun skipSet() {
         if (isTimerRunning) {
+            val workoutExercise = exerciseWithDetails?.workoutExercise
             if (isBreakRunning) {
                 isBreakRunning = false
                 activeSetIndex = activeSetIndex?.let { it + 1 }
-                if (activeSetIndex != null && activeSetIndex!! <= exercise?.sets ?: 0) {
+                if (activeSetIndex != null && activeSetIndex!! <= workoutExercise?.sets ?: 0) {
                     remainingTime = exerciseTime
                 } else {
                     stopTimer()
@@ -514,7 +508,7 @@ fun ExerciseScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = exercise?.name ?: "Loading...",
+                        text = exerciseWithDetails?.exercise?.name ?: "Loading...",
                         style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -671,7 +665,8 @@ fun ExerciseScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Display exercise details
-            exercise?.let { ex ->
+            exerciseWithDetails?.let { ex ->
+                val we = ex.workoutExercise
                 // Display GIF and exercise details in a row
                 Row(
                     modifier = Modifier
@@ -680,9 +675,9 @@ fun ExerciseScreen(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     // Left side - GIF
-                    if (ex.gifUrl.isNotEmpty()) {
+                    if (ex.exercise.gifUrl.isNotEmpty()) {
                         ExerciseGif(
-                            gifPath = ex.gifUrl,
+                            gifPath = ex.exercise.gifUrl,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -694,14 +689,14 @@ fun ExerciseScreen(
                             .padding(vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        DetailItem("Muscle Group", ex.muscle)
-                        DetailItem("Muscles", ex.part.toString())
-                        DetailItem("Difficulty", ex.difficulty)
+                        DetailItem("Muscle Group", ex.exercise.muscle)
+                        DetailItem("Muscles", ex.exercise.parts.toString())
+                        DetailItem("Difficulty", ex.exercise.difficulty)
                     }
                 }
 
                 // Display sets with weight and reps
-                for (set in 1..ex.sets) {
+                for (set in 1..we.sets) {
                         val animatedBorder by animateColorAsState(if (activeSetIndex == set && isTimerRunning && !isBreakRunning) Color.Green else Color.Gray)
                         val elevation = if (activeSetIndex == set && isTimerRunning) 8.dp else 2.dp
 
@@ -784,7 +779,7 @@ fun ExerciseScreen(
                                     },
                                     modifier = Modifier.weight(1f)
                             )
-                            if (ex.weight != 0) {
+                            if (we.weight != 0) {
                                 if (showWeightPicker && editingSetIndex == set) {
                                     AlertDialog(
                                         onDismissRequest = {
@@ -806,7 +801,7 @@ fun ExerciseScreen(
                                                 contentAlignment = Alignment.Center // Center the NumberPicker
                                             ) {
                                                 NumberPicker(
-                                                    value = setWeights[set] ?: ex.weight,
+                                                    value = setWeights[set] ?: we.weight,
                                                     range = 0..200,
                                                     onValueChange = { weight ->
                                                         setWeights[set] = weight
@@ -829,7 +824,7 @@ fun ExerciseScreen(
                                 }
 
                                 Text(
-                                    text = "${setWeights[set] ?: ex.weight} Kg",
+                                    text = "${setWeights[set] ?: we.weight} Kg",
                                     style = MaterialTheme.typography.bodyLarge,
                                         color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier
@@ -845,7 +840,7 @@ fun ExerciseScreen(
                             }
 
 
-                            if (ex.reps < 50) {
+                            if (we.reps < 50) {
                                 if (showRepsPicker && editingSetIndex == set) {
                                     AlertDialog(
                                         onDismissRequest = {
@@ -867,7 +862,7 @@ fun ExerciseScreen(
                                                 contentAlignment = Alignment.Center // Center the NumberPicker
                                             ) {
                                                 NumberPicker(
-                                                    value = setReps[set] ?: ex.reps,
+                                                    value = setReps[set] ?: we.reps,
                                                     range = 0..50,
                                                     onValueChange = { reps ->
                                                         setReps[set] = reps
@@ -889,7 +884,7 @@ fun ExerciseScreen(
                                     )
                                 }
                                 Text(
-                                    text = "${setReps[set] ?: ex.reps} Reps",
+                                    text = "${setReps[set] ?: we.reps} Reps",
                                         color = MaterialTheme.colorScheme.onSurface,
                                     style = MaterialTheme.typography.bodyLarge,
                                     modifier = Modifier
@@ -989,14 +984,15 @@ fun ExerciseScreen(
                                 }
                             }
                                 // Add delete button only for the last set and if not completed
-                                if (!isTimerRunning && set == ex.sets && set > completedSet) {
+                                if (!isTimerRunning && set == we.sets && set > completedSet) {
                                     IconButton(
                                         onClick = {
-                                            // Remove the set from weights and reps maps
                                             setWeights.remove(set)
                                             setReps.remove(set)
-                                            // Update exercise with new set count
-                                            exercise = ex.copy(sets = ex.sets - 1)
+                                            // Update the exerciseWithDetails with the new workoutExercise
+                                            exerciseWithDetails = exerciseWithDetails?.copy(
+                                                workoutExercise = we.copy(sets = we.sets - 1)
+                                            )
                                         },
                                         modifier = Modifier.padding(start = 4.dp)
                                     ) {
@@ -1011,7 +1007,7 @@ fun ExerciseScreen(
                             }
                         }
                         // Add break indicator after each set except the last one
-                        if (set != ex.sets && isBreakRunning && set == activeSetIndex) {
+                        if (set != we.sets && isBreakRunning && set == activeSetIndex) {
                             BreakIndicatorBar()
                         }
 
@@ -1027,10 +1023,13 @@ fun ExerciseScreen(
                         ) {
                             IconButton(
                                 onClick = {
-                                    val newSet = ex.sets + 1
-                                    setWeights[newSet] = ex.weight
-                                    setReps[newSet] = ex.reps
-                                    exercise = ex.copy(sets = newSet)
+                                    val newSet = we.sets + 1
+                                    setWeights[newSet] = we.weight
+                                    setReps[newSet] = we.reps
+                                    // Update the exerciseWithDetails with the new workoutExercise
+                                    exerciseWithDetails = exerciseWithDetails?.copy(
+                                        workoutExercise = we.copy(sets = newSet)
+                                    )
                                 },
                                 modifier = Modifier
                                     .size(48.dp)
@@ -1054,7 +1053,7 @@ fun ExerciseScreen(
                         horizontalArrangement = Arrangement.Start
                     ) {
                         // Set time selector - only show for exercises with reps
-                        if (exercise?.reps!! < 50) {
+                        if (we.reps < 50) {
                             Card(
                                 modifier = Modifier
                                     .width(120.dp)
@@ -1487,7 +1486,7 @@ fun ExerciseScreen(
             }
 
                 // Show loading or error message
-            if (exercise == null) {
+            if (exerciseWithDetails == null) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -1528,12 +1527,12 @@ fun ExerciseScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "${exercise?.name}",
+                                text = "${exerciseWithDetails?.exercise?.name}",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Sets completed: $completedSet/${exercise?.sets}",
+                                text = "Sets completed: $completedSet/${exerciseWithDetails?.workoutExercise?.sets}",
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )

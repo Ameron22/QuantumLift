@@ -10,7 +10,7 @@ data class WorkoutWithExercises(
         parentColumn = "id",
         entityColumn = "id",
         associateBy = Junction(
-            value = CrossRefWorkoutExercise::class,
+            value = WorkoutExercise::class,
             parentColumn = "workoutId",
             entityColumn = "exerciseId"
         )

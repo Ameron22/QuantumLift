@@ -33,6 +33,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 @Composable
 fun CreateExerciseScreen(navController: NavController) {
     var currentExercise by remember { mutableStateOf("") }
+    var currentDescription by remember { mutableStateOf("") }
     var currentSets by remember { mutableIntStateOf(3) }
     var currentRepsTime by remember { mutableIntStateOf(12) }
     var currentMinutes by remember { mutableIntStateOf(1) }
@@ -40,10 +41,12 @@ fun CreateExerciseScreen(navController: NavController) {
     var useTime by remember { mutableStateOf(false) }
     var currentMuscle by remember { mutableStateOf("") }
     var currentPart by remember { mutableStateOf("") }
+    var currentDifficulty by remember { mutableStateOf("Intermediate") }
     var weight by remember { mutableIntStateOf(5) }
     var selectedParts by remember { mutableStateOf<List<String>>(emptyList()) }
     var isMuscleGroupDropdownExpanded by remember { mutableStateOf(false) }
     var isPartDropdownExpanded by remember { mutableStateOf(false) }
+    var isDifficultyDropdownExpanded by remember { mutableStateOf(false) }
     var gifPath by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
@@ -112,6 +115,24 @@ fun CreateExerciseScreen(navController: NavController) {
                 label = { Text("Exercise Name") },
                 modifier = Modifier.fillMaxWidth(),
                 interactionSource = interactionSource,
+                colors = TextFieldDefaults.colors(
+                    focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                    focusedContainerColor = MaterialTheme.colorScheme.background,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                    focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                    unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
+                )
+            )
+
+            // Description field
+            OutlinedTextField(
+                value = currentDescription,
+                onValueChange = { currentDescription = it },
+                label = { Text("Description (Optional)") },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 2,
+                maxLines = 4,
                 colors = TextFieldDefaults.colors(
                     focusedTextColor = MaterialTheme.colorScheme.onBackground,
                     unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -337,6 +358,84 @@ fun CreateExerciseScreen(navController: NavController) {
                 }
             }
 
+            // Difficulty selection section
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = MaterialTheme.shapes.medium,
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { 
+                                focusManager.clearFocus()
+                                isDifficultyDropdownExpanded = true 
+                            },
+                        shape = MaterialTheme.shapes.medium,
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Difficulty Level",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                                Text(
+                                    text = currentDifficulty,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = when (currentDifficulty) {
+                                        "Beginner" -> MaterialTheme.colorScheme.primary
+                                        "Intermediate" -> MaterialTheme.colorScheme.secondary
+                                        "Advanced" -> MaterialTheme.colorScheme.error
+                                        else -> MaterialTheme.colorScheme.onSurface
+                                    }
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "Dropdown Icon"
+                            )
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = isDifficultyDropdownExpanded,
+                        onDismissRequest = { isDifficultyDropdownExpanded = false }
+                    ) {
+                        listOf("Beginner", "Intermediate", "Advanced").forEach { difficulty ->
+                            DropdownMenuItem(
+                                text = { 
+                                    Text(
+                                        text = difficulty,
+                                        color = when (difficulty) {
+                                            "Beginner" -> MaterialTheme.colorScheme.primary
+                                            "Intermediate" -> MaterialTheme.colorScheme.secondary
+                                            "Advanced" -> MaterialTheme.colorScheme.error
+                                            else -> MaterialTheme.colorScheme.onSurface
+                                        }
+                                    )
+                                },
+                                onClick = {
+                                    currentDifficulty = difficulty
+                                    isDifficultyDropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
             // Add Part button centered below the dropdowns
             Box(
                 modifier = Modifier
@@ -410,12 +509,12 @@ fun CreateExerciseScreen(navController: NavController) {
 
                             val exercise = EntityExercise(
                                 name = currentExercise,
-                                sets = currentSets,
-                                weight = weight,
-                                reps = reps,
+                                description = currentDescription,
                                 muscle = currentMuscle,
-                                part = selectedParts,
-                                gifUrl = gifPath ?: ""
+                                parts = selectedParts,
+                                difficulty = currentDifficulty,
+                                gifUrl = gifPath ?: "",
+                                useTime = useTime
                             )
                             dao.insertExercise(exercise)
 
@@ -429,7 +528,9 @@ fun CreateExerciseScreen(navController: NavController) {
                                     reps = reps,
                                     muscle = currentMuscle,
                                     part = selectedParts,
-                                    gifUrl = gifPath ?: ""
+                                    gifUrl = gifPath ?: "",
+                                    description = currentDescription,
+                                    difficulty = currentDifficulty
                                 )
                                 navController.previousBackStackEntry?.savedStateHandle?.set("newExercise", newExercise)
                                 navController.popBackStack()

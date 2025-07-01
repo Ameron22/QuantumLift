@@ -25,18 +25,22 @@ import androidx.navigation.NavController
 import com.example.gymtracker.components.ExerciseGif
 import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.data.EntityExercise
-import com.example.gymtracker.data.CrossRefWorkoutExercise
+import com.example.gymtracker.data.WorkoutExercise
+import com.example.gymtracker.data.WorkoutExerciseWithDetails
 import com.example.gymtracker.classes.NumberPicker
 import com.example.gymtracker.data.Exercise
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.example.gymtracker.viewmodels.WorkoutDetailsViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddExerciseToWorkoutScreen(
     workoutId: Int,
-    navController: NavController
+    navController: NavController,
+    detailsViewModel: WorkoutDetailsViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val db = remember { AppDatabase.getDatabase(context) }
@@ -372,16 +376,50 @@ fun AddExerciseToWorkoutScreen(
                     confirmButton = {
                         TextButton(
                             onClick = {
-                                // Create a copy of the selected exercise with updated values
-                                val updatedExercise = selectedExercise!!.copy(
-                                    sets = sets,
-                                    weight = weight,
-                                    reps = if (useTime) (minutes * 60 + seconds) + 1000 else reps
-                                )
-                                Log.d("AddExerciseToWorkoutScreen", "Updating exercise with weight: $weight")
-                                navController.previousBackStackEntry?.savedStateHandle?.set("newExercise", updatedExercise)
-                                showNumberPicker = false
-                                navController.popBackStack()
+                                coroutineScope.launch {
+                                    val entityExercise = dao.getExerciseById(selectedExercise!!.id)
+                                    if (entityExercise != null) {
+                                        val workoutExercise = WorkoutExercise(
+                                            exerciseId = selectedExercise!!.id,
+                                            workoutId = workoutId,
+                                            sets = sets,
+                                            reps = if (useTime) (minutes * 60 + seconds) + 1000 else reps,
+                                            weight = weight,
+                                            order = 0 // order will be set when saving workout
+                                        )
+                                        val combined = WorkoutExerciseWithDetails(
+                                            workoutExercise = workoutExercise,
+                                            entityExercise = entityExercise
+                                        )
+                                        
+                                        withContext(Dispatchers.IO) {
+                                            // Get the next order for this workout
+                                            val existingExercises = dao.getWorkoutExercisesForWorkout(workoutId)
+                                            val nextOrder = existingExercises.size
+                                            
+                                            // Update the order
+                                            val updatedWorkoutExercise = workoutExercise.copy(order = nextOrder)
+                                            val updatedCombined = combined.copy(workoutExercise = updatedWorkoutExercise)
+                                            
+                                            // Save to database
+                                            dao.insertWorkoutExercise(updatedWorkoutExercise)
+                                            
+                                            withContext(Dispatchers.Main) {
+                                                // Add to ViewModel for UI updates
+                                                detailsViewModel.addExercise(updatedCombined)
+                                                Log.d("AddExerciseToWorkoutScreen", "Added exercise to database and DetailsViewModel: $updatedCombined")
+                                            }
+                                        }
+                                        
+                                        navController.previousBackStackEntry
+                                            ?.savedStateHandle
+                                            ?.set("newExerciseId", combined.workoutExercise.exerciseId)
+                                    } else {
+                                        Log.e("AddExerciseToWorkoutScreen", "EntityExercise not found for id: ${selectedExercise!!.id}")
+                                    }
+                                    showNumberPicker = false
+                                    navController.popBackStack()
+                                }
                             }
                         ) {
                             Text("Add")

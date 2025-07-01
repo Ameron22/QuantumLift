@@ -136,9 +136,6 @@ class MainActivity : ComponentActivity() {
                         composable(Screen.Achievements.route) {
                             AchievementsScreen(navController)
                         }
-                        composable(Screen.WorkoutCreation.route) {
-                            WorkoutCreationScreen(navController)
-                        }
                         composable(Screen.CreateExercise.route) {
                             CreateExerciseScreen(navController)
                         }
@@ -157,14 +154,17 @@ class MainActivity : ComponentActivity() {
                             Screen.Exercise.route,
                             arguments = listOf(
                                 navArgument("exerciseId") { type = NavType.IntType },
-                                navArgument("sessionId") { type = NavType.LongType }
+                                navArgument("sessionId") { type = NavType.LongType },
+                                navArgument("workoutId") { type = NavType.IntType }
                             )
                         ) { backStackEntry ->
                             val exerciseId = backStackEntry.arguments?.getInt("exerciseId") ?: 0
                             val workoutSessionId = backStackEntry.arguments?.getLong("sessionId") ?: 0L
+                            val workoutId = backStackEntry.arguments?.getInt("workoutId") ?: 0
                             ExerciseScreen(
                                 exerciseId = exerciseId,
                                 workoutSessionId = workoutSessionId,
+                                workoutId = workoutId,
                                 navController = navController,
                                 viewModel = workoutDetailsViewModel
                             )
@@ -174,7 +174,11 @@ class MainActivity : ComponentActivity() {
                             arguments = listOf(navArgument("workoutId") { type = NavType.IntType })
                         ) { backStackEntry ->
                             val workoutId = backStackEntry.arguments?.getInt("workoutId") ?: 0
-                            AddExerciseToWorkoutScreen(workoutId = workoutId, navController = navController)
+                            AddExerciseToWorkoutScreen(
+                                workoutId = workoutId, 
+                                navController = navController,
+                                detailsViewModel = workoutDetailsViewModel
+                            )
                         }
                     }
                 }

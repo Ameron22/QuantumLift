@@ -25,6 +25,7 @@ import com.example.gymtracker.components.BottomNavBar
 import com.example.gymtracker.components.WorkoutCard
 import com.example.gymtracker.navigation.Screen
 import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,6 +35,10 @@ fun LoadWorkoutScreen(navController: NavController) {
     val filteredWorkouts = remember { mutableStateOf(listOf<EntityWorkout>()) }
     val searchQuery = remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+    
+    // State for workout creation dialog
+    var showCreateWorkoutDialog by remember { mutableStateOf(false) }
+    var newWorkoutName by remember { mutableStateOf("") }
 
     // Load workouts
     LaunchedEffect(Unit) {
@@ -51,6 +56,25 @@ fun LoadWorkoutScreen(navController: NavController) {
         } else {
             workouts.value.filter { workout ->
                 workout.name.contains(searchQuery.value, ignoreCase = true)
+            }
+        }
+    }
+
+    // Function to create new workout and navigate to details
+    fun createNewWorkout() {
+        if (newWorkoutName.isNotEmpty()) {
+            scope.launch(Dispatchers.IO) {
+                val dao = AppDatabase.getDatabase(context).exerciseDao()
+                val newWorkout = EntityWorkout(name = newWorkoutName)
+                val workoutId = dao.insertWorkout(newWorkout).toInt()
+                
+                // Navigate to workout details screen with the new workout ID on main thread
+                withContext(Dispatchers.Main) {
+                    navController.navigate(Screen.Routes.workoutDetails(workoutId))
+                    // Clear the dialog and reset name only after successful creation
+                    newWorkoutName = ""
+                    showCreateWorkoutDialog = false
+                }
             }
         }
     }
@@ -97,7 +121,7 @@ fun LoadWorkoutScreen(navController: NavController) {
                     Icon(Icons.Default.Add, contentDescription = "Add Exercise")
                 }
                 FloatingActionButton(
-                    onClick = { navController.navigate(Screen.WorkoutCreation.route) },
+                    onClick = { showCreateWorkoutDialog = true },
                     containerColor = MaterialTheme.colorScheme.primary
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Add Workout")
@@ -120,5 +144,43 @@ fun LoadWorkoutScreen(navController: NavController) {
                 )
             }
         }
+    }
+
+    // Create Workout Dialog
+    if (showCreateWorkoutDialog) {
+        AlertDialog(
+            onDismissRequest = { 
+                showCreateWorkoutDialog = false
+                newWorkoutName = ""
+            },
+            title = { Text("Create New Workout") },
+            text = {
+                OutlinedTextField(
+                    value = newWorkoutName,
+                    onValueChange = { newWorkoutName = it },
+                    label = { Text("Workout Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { createNewWorkout() },
+                    enabled = newWorkoutName.isNotEmpty()
+                ) {
+                    Text("Create")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { 
+                        showCreateWorkoutDialog = false
+                        newWorkoutName = ""
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

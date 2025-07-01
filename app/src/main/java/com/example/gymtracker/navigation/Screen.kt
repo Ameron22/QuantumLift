@@ -2,7 +2,6 @@ package com.example.gymtracker.navigation
 
 sealed class Screen(val route: String) {
     object Home : Screen("home")
-    object WorkoutCreation : Screen("workout_creation")
     object LoadWorkout : Screen("load_workout")
     object LoadHistory : Screen("load_history")
     object Achievements : Screen("achievements")
@@ -10,8 +9,8 @@ sealed class Screen(val route: String) {
     object WorkoutDetails : Screen("workout_details/{workoutId}") {
         fun createRoute(workoutId: Int) = "workout_details/$workoutId"
     }
-    object Exercise : Screen("exercise/{exerciseId}/{sessionId}") {
-        fun createRoute(exerciseId: Int, sessionId: Long) = "exercise/$exerciseId/$sessionId"
+    object Exercise : Screen("exercise/{exerciseId}/{sessionId}/{workoutId}") {
+        fun createRoute(exerciseId: Int, sessionId: Long, workoutId: Int) = "exercise/$exerciseId/$sessionId/$workoutId"
     }
     object AddExerciseToWorkout : Screen("addExerciseToWorkout/{workoutId}") {
         fun createRoute(workoutId: Int) = "addExerciseToWorkout/$workoutId"

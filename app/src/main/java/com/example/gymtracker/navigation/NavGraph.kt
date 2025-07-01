@@ -10,6 +10,8 @@ import com.example.gymtracker.screens.AddExerciseToWorkoutScreen
 import com.example.gymtracker.screens.HomeScreen
 import com.example.gymtracker.screens.WorkoutDetailsScreen
 import com.example.gymtracker.screens.ExerciseScreen
+import com.example.gymtracker.viewmodels.WorkoutDetailsViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
 fun NavGraph(navController: NavHostController) {
@@ -38,14 +40,17 @@ fun NavGraph(navController: NavHostController) {
             route = Screen.Exercise.route,
             arguments = listOf(
                 navArgument("exerciseId") { type = NavType.IntType },
-                navArgument("sessionId") { type = NavType.IntType }
+                navArgument("sessionId") { type = NavType.LongType },
+                navArgument("workoutId") { type = NavType.IntType }
             )
         ) { backStackEntry ->
             val exerciseId = backStackEntry.arguments?.getInt("exerciseId") ?: return@composable
-            val sessionId = backStackEntry.arguments?.getInt("sessionId") ?: return@composable
+            val sessionId = backStackEntry.arguments?.getLong("sessionId") ?: return@composable
+            val workoutId = backStackEntry.arguments?.getInt("workoutId") ?: return@composable
             ExerciseScreen(
                 exerciseId = exerciseId,
-                workoutSessionId = sessionId.toLong(),
+                workoutSessionId = sessionId,
+                workoutId = workoutId,
                 navController = navController
             )
         }
@@ -59,7 +64,8 @@ fun NavGraph(navController: NavHostController) {
             val workoutId = backStackEntry.arguments?.getInt("workoutId") ?: return@composable
             AddExerciseToWorkoutScreen(
                 workoutId = workoutId,
-                navController = navController
+                navController = navController,
+                detailsViewModel = viewModel()
             )
         }
     }

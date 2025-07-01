@@ -8,5 +8,6 @@ data class CsvExercise(
     val muscles: List<String>,
     val equipment: String,
     val difficulty: String,
-    val gifUrl: String
+    val gifUrl: String,
+    val useTime: Boolean
 ) 

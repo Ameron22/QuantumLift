@@ -16,12 +16,12 @@ import kotlinx.coroutines.launch
     entities = [
         EntityExercise::class,
         EntityWorkout::class,
-        CrossRefWorkoutExercise::class,
         SessionWorkoutEntity::class,
         SessionEntityExercise::class,
-        AchievementEntity::class
+        AchievementEntity::class,
+        WorkoutExercise::class
     ],
-    version = 33,  // Increment version number to force database recreation
+    version = 35,  // Increment version number to force database recreation
     exportSchema = false
 )
 @TypeConverters(Converter::class)

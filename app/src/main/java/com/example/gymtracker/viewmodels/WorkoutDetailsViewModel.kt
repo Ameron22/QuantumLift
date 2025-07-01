@@ -2,6 +2,7 @@ package com.example.gymtracker.viewmodels
 
 import androidx.lifecycle.ViewModel
 import com.example.gymtracker.data.TempRecoveryFactors
+import com.example.gymtracker.data.WorkoutExerciseWithDetails
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +28,10 @@ class WorkoutDetailsViewModel : ViewModel() {
 
     private val _completedExercises = MutableStateFlow<Set<Int>>(emptySet())
     val completedExercises: StateFlow<Set<Int>> = _completedExercises.asStateFlow()
+
+    // Exercise management for existing workouts
+    private val _exercisesList = MutableStateFlow<List<WorkoutExerciseWithDetails>>(emptyList())
+    val exercisesList: StateFlow<List<WorkoutExerciseWithDetails>> = _exercisesList.asStateFlow()
 
     fun initializeWorkoutSession(workoutId: Int, workoutName: String) {
         val currentTime = System.currentTimeMillis()
@@ -96,5 +101,37 @@ class WorkoutDetailsViewModel : ViewModel() {
         _recoveryFactors.value = TempRecoveryFactors()
         _hasSetRecoveryFactors.value = false
         _completedExercises.value = emptySet()
+    }
+
+    // Exercise management methods for existing workouts
+    fun addExercise(exerciseWithDetails: WorkoutExerciseWithDetails) {
+        Log.d("WorkoutDetailsViewModel", "Adding exercise: ${exerciseWithDetails.entityExercise.name}")
+        Log.d("WorkoutDetailsViewModel", "Current list size: ${_exercisesList.value.size}")
+        val newList = _exercisesList.value.toMutableList()
+        newList.add(exerciseWithDetails)
+        _exercisesList.value = newList
+        Log.d("WorkoutDetailsViewModel", "New list size: ${_exercisesList.value.size}")
+    }
+/*  Update won't be used
+    fun updateExercise(index: Int, exerciseWithDetails: WorkoutExerciseWithDetails) {
+        Log.d("WorkoutDetailsViewModel", "Updating exercise at index $index: ${exerciseWithDetails.entityExercise.name}")
+        val newList = _exercisesList.value.toMutableList()
+        newList[index] = exerciseWithDetails
+        _exercisesList.value = newList
+        Log.d("WorkoutDetailsViewModel", "Updated list size: ${_exercisesList.value.size}")
+    }
+    */
+
+    fun removeExercise(index: Int) {
+        Log.d("WorkoutDetailsViewModel", "Removing exercise at index $index")
+        val newList = _exercisesList.value.toMutableList()
+        newList.removeAt(index)
+        _exercisesList.value = newList
+        Log.d("WorkoutDetailsViewModel", "New list size: ${_exercisesList.value.size}")
+    }
+
+    fun clearExercises() {
+        Log.d("WorkoutDetailsViewModel", "Clearing exercises")
+        _exercisesList.value = emptyList()
     }
 } 

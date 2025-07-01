@@ -4,6 +4,12 @@ import androidx.room.*
 import com.example.gymtracker.classes.SessionWorkoutWithMusclesStress
 import kotlinx.coroutines.flow.Flow
 
+// Data class to combine exercise info with workout-specific data
+data class ExerciseWithWorkoutData(
+    val exercise: EntityExercise,
+    val workoutExercise: WorkoutExercise
+)
+
 @Dao
 interface ExerciseDao {
     // Add this method to check if the database is empty
@@ -24,12 +30,6 @@ interface ExerciseDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWorkout(workout: EntityWorkout): Long
-
-    @Insert
-    suspend fun insertWorkoutExerciseCrossRef(crossRef: CrossRefWorkoutExercise)
-
-    @Delete
-    suspend fun deleteWorkoutExerciseCrossRef(crossRef: CrossRefWorkoutExercise)
 
     @Query("SELECT * FROM exercises WHERE id = :exerciseId")
     suspend fun getExerciseById(exerciseId: Int): EntityExercise?
@@ -90,12 +90,37 @@ interface ExerciseDao {
     @Query("SELECT * FROM workout_sessions WHERE sessionId = :sessionId")
     suspend fun getSessionWorkoutById(sessionId: Long): SessionWorkoutEntity?
 
-    @Query("SELECT * FROM workout_exercise_cross_ref WHERE workoutId = :workoutId AND exerciseId = :exerciseId")
-    suspend fun getWorkoutExerciseCrossRef(workoutId: Int, exerciseId: Int): CrossRefWorkoutExercise?
+    // --- WorkoutExercise methods ---
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWorkoutExercise(workoutExercise: WorkoutExercise): Long
 
-    @Query("SELECT * FROM workout_exercise_cross_ref WHERE workoutId = :workoutId ORDER BY `order` ASC")
-    suspend fun getWorkoutExercisesOrdered(workoutId: Int): List<CrossRefWorkoutExercise>
+    @Update
+    suspend fun updateWorkoutExercise(workoutExercise: WorkoutExercise)
 
-    @Query("SELECT MAX(`order`) FROM workout_exercise_cross_ref WHERE workoutId = :workoutId")
+    @Delete
+    suspend fun deleteWorkoutExercise(workoutExercise: WorkoutExercise)
+
+    @Query("SELECT * FROM workout_exercises WHERE workoutId = :workoutId ORDER BY `order` ASC")
+    suspend fun getWorkoutExercisesForWorkout(workoutId: Int): List<WorkoutExercise>
+
+    @Query("SELECT * FROM workout_exercises WHERE id = :id")
+    suspend fun getWorkoutExerciseById(id: Int): WorkoutExercise?
+
+    @Query("SELECT * FROM workout_exercises WHERE workoutId = :workoutId AND exerciseId = :exerciseId")
+    suspend fun getWorkoutExercise(workoutId: Int, exerciseId: Int): WorkoutExercise?
+
+    @Query("SELECT MAX(`order`) FROM workout_exercises WHERE workoutId = :workoutId")
     suspend fun getMaxExerciseOrder(workoutId: Int): Int?
+
+    // New method to get exercises with their workout-specific data
+    @Transaction
+    suspend fun getExercisesWithWorkoutData(workoutId: Int): List<ExerciseWithWorkoutData> {
+        val workoutExercises = getWorkoutExercisesForWorkout(workoutId)
+        val exercises = getAllExercises()
+        
+        return workoutExercises.mapNotNull { we ->
+            val exercise = exercises.find { it.id == we.exerciseId }
+            exercise?.let { ExerciseWithWorkoutData(it, we) }
+        }
+    }
 }
