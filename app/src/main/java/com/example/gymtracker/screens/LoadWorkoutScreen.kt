@@ -1,7 +1,10 @@
 package com.example.gymtracker.screens
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -13,13 +16,16 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.gymtracker.data.AppDatabase
 import androidx.compose.material3.*
 import com.example.gymtracker.data.EntityWorkout
+import com.example.gymtracker.data.WorkoutWithExercises
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.Alignment
 import kotlinx.coroutines.Dispatchers
 import com.example.gymtracker.components.BottomNavBar
 import com.example.gymtracker.components.WorkoutCard
@@ -31,32 +37,49 @@ import kotlinx.coroutines.withContext
 @Composable
 fun LoadWorkoutScreen(navController: NavController) {
     val context = LocalContext.current
-    val workouts = remember { mutableStateOf(listOf<EntityWorkout>()) }
-    val filteredWorkouts = remember { mutableStateOf(listOf<EntityWorkout>()) }
+    val workouts = remember { mutableStateOf(listOf<WorkoutWithExercises>()) }
+    val filteredWorkouts = remember { mutableStateOf(listOf<WorkoutWithExercises>()) }
     val searchQuery = remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
-    
+
     // State for workout creation dialog
     var showCreateWorkoutDialog by remember { mutableStateOf(false) }
     var newWorkoutName by remember { mutableStateOf("") }
 
-    // Load workouts
+    // State for workout deletion confirmation dialog
+    var showDeleteConfirmationDialog by remember { mutableStateOf(false) }
+    var workoutToDelete by remember { mutableStateOf<EntityWorkout?>(null) }
+
+    // State for filter dialog
+    var showFilterDialog by remember { mutableStateOf(false) }
+    var selectedMuscleGroup by remember { mutableStateOf<String?>(null) }
+
+    // Load workouts with exercises
     LaunchedEffect(Unit) {
         scope.launch(Dispatchers.IO) {
             val dao = AppDatabase.getDatabase(context).exerciseDao()
-            workouts.value = dao.getAllWorkouts()
+            val allWorkouts = dao.getAllWorkouts()
+            val workoutsWithExercises = allWorkouts.mapNotNull { workout ->
+                dao.getWorkoutWithExercises(workout.id).firstOrNull()
+            }
+            workouts.value = workoutsWithExercises
             filteredWorkouts.value = workouts.value
         }
     }
 
-    // Filter workouts when search query changes
-    LaunchedEffect(searchQuery.value) {
-        filteredWorkouts.value = if (searchQuery.value.isEmpty()) {
-            workouts.value
-        } else {
-            workouts.value.filter { workout ->
-                workout.name.contains(searchQuery.value, ignoreCase = true)
-            }
+    // Get unique muscle groups from all workouts
+    val muscleGroups = workouts.value.flatMap { workoutWithExercises ->
+        workoutWithExercises.exercises.map { it.muscle }
+    }.distinct().sorted()
+
+    // Filter workouts when search query or muscle group filter changes
+    LaunchedEffect(searchQuery.value, selectedMuscleGroup) {
+        filteredWorkouts.value = workouts.value.filter { workoutWithExercises ->
+            val matchesSearch = searchQuery.value.isEmpty() ||
+                    workoutWithExercises.workout.name.contains(searchQuery.value, ignoreCase = true)
+            val matchesMuscle = selectedMuscleGroup == null ||
+                    workoutWithExercises.exercises.any { it.muscle == selectedMuscleGroup }
+            matchesSearch && matchesMuscle
         }
     }
 
@@ -67,13 +90,51 @@ fun LoadWorkoutScreen(navController: NavController) {
                 val dao = AppDatabase.getDatabase(context).exerciseDao()
                 val newWorkout = EntityWorkout(name = newWorkoutName)
                 val workoutId = dao.insertWorkout(newWorkout).toInt()
-                
+
                 // Navigate to workout details screen with the new workout ID on main thread
                 withContext(Dispatchers.Main) {
                     navController.navigate(Screen.Routes.workoutDetails(workoutId))
                     // Clear the dialog and reset name only after successful creation
                     newWorkoutName = ""
                     showCreateWorkoutDialog = false
+                }
+            }
+        }
+    }
+
+    // Function to show delete confirmation dialog
+    fun showDeleteConfirmation(workout: EntityWorkout) {
+        workoutToDelete = workout
+        showDeleteConfirmationDialog = true
+    }
+
+    // Function to delete workout
+    fun deleteWorkout(workout: EntityWorkout) {
+        scope.launch(Dispatchers.IO) {
+            val dao = AppDatabase.getDatabase(context).exerciseDao()
+
+            // Delete all workout exercises first (foreign key constraint)
+            dao.deleteWorkoutExercisesForWorkout(workout.id)
+
+            // Delete the workout
+            dao.deleteWorkout(workout)
+
+            // Refresh the workouts list
+            withContext(Dispatchers.Main) {
+                val allWorkouts = dao.getAllWorkouts()
+                val workoutsWithExercises = allWorkouts.mapNotNull { w ->
+                    dao.getWorkoutWithExercises(w.id).firstOrNull()
+                }
+                workouts.value = workoutsWithExercises
+                filteredWorkouts.value = if (searchQuery.value.isEmpty()) {
+                    workouts.value
+                } else {
+                    workouts.value.filter { workoutWithExercises ->
+                        workoutWithExercises.workout.name.contains(
+                            searchQuery.value,
+                            ignoreCase = true
+                        )
+                    }
                 }
             }
         }
@@ -97,35 +158,51 @@ fun LoadWorkoutScreen(navController: NavController) {
                     placeholder = { Text("Search workouts...") },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                     trailingIcon = {
-                        if (searchQuery.value.isNotEmpty()) {
-                            IconButton(onClick = { searchQuery.value = "" }) {
-                                Icon(Icons.Default.Close, contentDescription = "Clear search")
+                        Row {
+                            if (searchQuery.value.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery.value = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear search")
+                                }
+                            }
+                            IconButton(onClick = { showFilterDialog = true }) {
+                                Text(
+                                    text = "Filter",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    style = MaterialTheme.typography.labelLarge
+                                )
                             }
                         }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 4.dp)
-                ) { }
+                ) {}
+
+                // Active filters in top bar
+                if (selectedMuscleGroup != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = true,
+                            onClick = { selectedMuscleGroup = null },
+                            label = { Text(selectedMuscleGroup!!) }
+                        )
+                    }
+                }
+
             }
         },
         bottomBar = { BottomNavBar(navController) },
         floatingActionButton = {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            FloatingActionButton(
+                onClick = { navController.navigate(Screen.CreateExercise.route) },
+                containerColor = MaterialTheme.colorScheme.secondary
             ) {
-                FloatingActionButton(
-                    onClick = { navController.navigate(Screen.CreateExercise.route) },
-                    containerColor = MaterialTheme.colorScheme.secondary
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Exercise")
-                }
-                FloatingActionButton(
-                    onClick = { showCreateWorkoutDialog = true },
-                    containerColor = MaterialTheme.colorScheme.primary
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Workout")
-                }
+                Icon(Icons.Default.Add, contentDescription = "Add Exercise")
             }
         },
         containerColor = Color.Transparent
@@ -133,14 +210,63 @@ fun LoadWorkoutScreen(navController: NavController) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp),
+                .padding(paddingValues),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(filteredWorkouts.value) { workout ->
+            // New Workout Button at the top
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 2.dp)
+                        .clickable { showCreateWorkoutDialog = true },
+                    shape = RoundedCornerShape(12.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Add Workout",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "New Workout",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            }
+
+            // Spacer between New Workout button and workout cards
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            // Existing workout cards
+            items(filteredWorkouts.value) { workoutWithExercises ->
                 WorkoutCard(
-                    workout = workout,
-                    onClick = { navController.navigate(Screen.Routes.workoutDetails(workout.id)) }
+                    workout = workoutWithExercises.workout,
+                    muscleGroups = workoutWithExercises.exercises.map { it.muscle }.distinct(),
+                    onClick = {
+                        navController.navigate(
+                            Screen.Routes.workoutDetails(
+                                workoutWithExercises.workout.id
+                            )
+                        )
+                    },
+                    onDelete = { showDeleteConfirmation(workoutWithExercises.workout) }
                 )
             }
         }
@@ -149,7 +275,7 @@ fun LoadWorkoutScreen(navController: NavController) {
     // Create Workout Dialog
     if (showCreateWorkoutDialog) {
         AlertDialog(
-            onDismissRequest = { 
+            onDismissRequest = {
                 showCreateWorkoutDialog = false
                 newWorkoutName = ""
             },
@@ -173,12 +299,95 @@ fun LoadWorkoutScreen(navController: NavController) {
             },
             dismissButton = {
                 TextButton(
-                    onClick = { 
+                    onClick = {
                         showCreateWorkoutDialog = false
                         newWorkoutName = ""
                     }
                 ) {
                     Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Delete Workout Confirmation Dialog
+    if (showDeleteConfirmationDialog && workoutToDelete != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showDeleteConfirmationDialog = false
+                workoutToDelete = null
+            },
+            title = { Text("Delete Workout") },
+            text = {
+                Text("Are you sure you want to delete '${workoutToDelete!!.name}'? This action cannot be undone and will also remove all exercises in this workout.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deleteWorkout(workoutToDelete!!)
+                        showDeleteConfirmationDialog = false
+                        workoutToDelete = null
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirmationDialog = false
+                        workoutToDelete = null
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
+    // Filter Dialog
+    if (showFilterDialog) {
+        AlertDialog(
+            onDismissRequest = { showFilterDialog = false },
+            title = { Text("Filter Workouts") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Muscle Group Filter
+                    Text(
+                        text = "Muscle Group",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = selectedMuscleGroup == null,
+                            onClick = { selectedMuscleGroup = null },
+                            label = { Text("All") }
+                        )
+                        muscleGroups.forEach { muscle ->
+                            FilterChip(
+                                selected = selectedMuscleGroup == muscle,
+                                onClick = { selectedMuscleGroup = muscle },
+                                label = { Text(muscle) }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showFilterDialog = false }) {
+                    Text("Close")
                 }
             }
         )

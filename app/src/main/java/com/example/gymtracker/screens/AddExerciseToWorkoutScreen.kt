@@ -13,6 +13,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -54,7 +56,6 @@ fun AddExerciseToWorkoutScreen(
     var sets by remember { mutableStateOf(3) }
     var reps by remember { mutableStateOf(12) }
     var weight by remember { mutableStateOf(5) }
-    var useTime by remember { mutableStateOf(false) }
     var minutes by remember { mutableStateOf(1) }
     var seconds by remember { mutableStateOf(0) }
     var showFilterDialog by remember { mutableStateOf(false) }
@@ -103,27 +104,82 @@ fun AddExerciseToWorkoutScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Add Exercise",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.primary
+            Column {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "Add Exercise",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.primary
                         )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                    )
                 )
-            )
+                SearchBar(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    onSearch = { },
+                    active = false,
+                    onActiveChange = { },
+                    placeholder = { Text("Search exercises...") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                    trailingIcon = {
+                        Row {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear search")
+                                }
+                            }
+                            IconButton(onClick = { showFilterDialog = true }) {
+                                Text(
+                                    text = "Filter",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                ) { }
+                
+                // Active filters in top bar
+                if (selectedMuscleGroup != null || selectedDifficulty != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (selectedMuscleGroup != null) {
+                            FilterChip(
+                                selected = true,
+                                onClick = { selectedMuscleGroup = null },
+                                label = { Text(selectedMuscleGroup!!) }
+                            )
+                        }
+                        if (selectedDifficulty != null) {
+                            FilterChip(
+                                selected = true,
+                                onClick = { selectedDifficulty = null },
+                                label = { Text(selectedDifficulty!!) }
+                            )
+                        }
+                    }
+                }
+            }
         }
     ) { paddingValues ->
         Column(
@@ -132,55 +188,6 @@ fun AddExerciseToWorkoutScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            // Search bar with filter button
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                placeholder = { Text("Search exercises...") },
-                singleLine = true,
-                trailingIcon = {
-                    IconButton(onClick = { showFilterDialog = true }) {
-                        Text(
-                            text = "Filter",
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    }
-                },
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                    focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                    unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
-                )
-            )
-
-            // Active filters
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (selectedMuscleGroup != null) {
-                    FilterChip(
-                        selected = true,
-                        onClick = { selectedMuscleGroup = null },
-                        label = { Text(selectedMuscleGroup!!) }
-                    )
-                }
-                if (selectedDifficulty != null) {
-                    FilterChip(
-                        selected = true,
-                        onClick = { selectedDifficulty = null },
-                        label = { Text(selectedDifficulty!!) }
-                    )
-                }
-            }
-
             // Exercise list
             LazyColumn(
                 modifier = Modifier
@@ -197,6 +204,14 @@ fun AddExerciseToWorkoutScreen(
                                 indication = null
                             ) {
                                 selectedExercise = exercise
+                                // Set appropriate default values based on exercise type
+                                if (exercise.useTime) {
+                                    minutes = 1
+                                    seconds = 0
+                                } else {
+                                    reps = 12
+                                    weight = 5
+                                }
                                 showNumberPicker = true
                             }
                             .border(
@@ -275,19 +290,6 @@ fun AddExerciseToWorkoutScreen(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            // Switch between Reps and Time
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("Reps/Time")
-                                Switch(
-                                    checked = useTime,
-                                    onCheckedChange = { useTime = it }
-                                )
-                            }
-
                             // Number pickers section
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -308,7 +310,7 @@ fun AddExerciseToWorkoutScreen(
                                     )
                                 }
 
-                                if (useTime) {
+                                if (selectedExercise!!.useTime) {
                                     Spacer(modifier = Modifier.width(8.dp))
                                     // Minutes picker
                                     Column(
@@ -383,7 +385,7 @@ fun AddExerciseToWorkoutScreen(
                                             exerciseId = selectedExercise!!.id,
                                             workoutId = workoutId,
                                             sets = sets,
-                                            reps = if (useTime) (minutes * 60 + seconds) + 1000 else reps,
+                                            reps = if (selectedExercise!!.useTime) (minutes * 60 + seconds) + 1000 else reps,
                                             weight = weight,
                                             order = 0 // order will be set when saving workout
                                         )

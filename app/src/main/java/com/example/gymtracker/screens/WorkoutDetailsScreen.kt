@@ -113,6 +113,9 @@ fun WorkoutDetailsScreen(
                 withContext(Dispatchers.Main) {
                     Log.d("WorkoutDetailsScreen", "Workout data loaded: ${exercisesData.size} exercises")
 
+                    // Set workout name regardless of whether there are exercises or not
+                    workoutName = workout?.name ?: "Unknown Workout"
+
                     if (exercisesData.isEmpty()) {
                         Log.e("WorkoutDetailsScreen", "No exercises found for workout ID: $workoutId")
                         // Add 5-second delay to show loading effect
@@ -126,8 +129,6 @@ fun WorkoutDetailsScreen(
                         workoutExerciseWithDetails.forEach { exerciseWithDetails ->
                             viewModel.addExercise(exerciseWithDetails)
                         }
-                        
-                        workoutName = workout?.name ?: "Unknown Workout"
 
                         // Check if there's an existing session
                         if (workoutSession == null || workoutSession?.workoutId != workoutId) {

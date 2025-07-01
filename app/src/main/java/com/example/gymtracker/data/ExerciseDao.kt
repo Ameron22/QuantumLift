@@ -31,6 +31,9 @@ interface ExerciseDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWorkout(workout: EntityWorkout): Long
 
+    @Delete
+    suspend fun deleteWorkout(workout: EntityWorkout)
+
     @Query("SELECT * FROM exercises WHERE id = :exerciseId")
     suspend fun getExerciseById(exerciseId: Int): EntityExercise?
 
@@ -108,6 +111,9 @@ interface ExerciseDao {
 
     @Query("SELECT * FROM workout_exercises WHERE workoutId = :workoutId AND exerciseId = :exerciseId")
     suspend fun getWorkoutExercise(workoutId: Int, exerciseId: Int): WorkoutExercise?
+
+    @Query("DELETE FROM workout_exercises WHERE workoutId = :workoutId")
+    suspend fun deleteWorkoutExercisesForWorkout(workoutId: Int)
 
     @Query("SELECT MAX(`order`) FROM workout_exercises WHERE workoutId = :workoutId")
     suspend fun getMaxExerciseOrder(workoutId: Int): Int?

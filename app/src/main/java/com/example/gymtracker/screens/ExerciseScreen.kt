@@ -187,7 +187,7 @@ fun ExerciseScreen(
                     }
                     
                     // Assign to the mutable state variable
-                    exerciseWithDetails =   foundExerciseWithDetails
+                    exerciseWithDetails = foundExerciseWithDetails
                     val workoutExercise = foundExerciseWithDetails.workoutExercise
                     val exercise = foundExerciseWithDetails.exercise
                     
@@ -508,9 +508,10 @@ fun ExerciseScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = exerciseWithDetails?.exercise?.name ?: "Loading...",
+                        text = exerciseWithDetails?.exercise?.name ?: "Exercise",
                         style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 },
                 navigationIcon = {
@@ -523,7 +524,7 @@ fun ExerciseScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             )
         },
@@ -974,36 +975,50 @@ fun ExerciseScreen(
                                     textAlign = TextAlign.Center
                                 )
                             }
-                                if (completedSet == (set - 1) && !isTimerRunning) {
-                                IconButton(onClick = { startTimer(set) }) {
-                                    Icon(
-                                        imageVector = Icons.Default.PlayArrow,
-                                        contentDescription = "Start Set",
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-                                // Add delete button only for the last set and if not completed
-                                if (!isTimerRunning && set == we.sets && set > completedSet) {
-                                    IconButton(
-                                        onClick = {
-                                            setWeights.remove(set)
-                                            setReps.remove(set)
-                                            // Update the exerciseWithDetails with the new workoutExercise
-                                            exerciseWithDetails = exerciseWithDetails?.copy(
-                                                workoutExercise = we.copy(sets = we.sets - 1)
+                                                            // Action buttons area - always present for consistent alignment
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(start = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                when {
+                                    // Show play button for next set to complete
+                                    completedSet == (set - 1) && !isTimerRunning -> {
+                                        IconButton(onClick = { startTimer(set) }) {
+                                            Icon(
+                                                imageVector = Icons.Default.PlayArrow,
+                                                contentDescription = "Start Set",
+                                                tint = MaterialTheme.colorScheme.primary
                                             )
-                                        },
-                                        modifier = Modifier.padding(start = 4.dp)
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.minus_icon),
-                                            contentDescription = "Delete Set",
-                                            tint = Color.Red,
-                                            modifier = Modifier.size(24.dp)
-                                        )
+                                        }
+                                    }
+                                    // Show delete button only for the last set and if not completed
+                                    !isTimerRunning && set == we.sets && set > completedSet -> {
+                                        IconButton(
+                                            onClick = {
+                                                setWeights.remove(set)
+                                                setReps.remove(set)
+                                                // Update the exerciseWithDetails with the new workoutExercise
+                                                exerciseWithDetails = exerciseWithDetails?.copy(
+                                                    workoutExercise = we.copy(sets = we.sets - 1)
+                                                )
+                                            }
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(id = R.drawable.minus_icon),
+                                                contentDescription = "Delete Set",
+                                                tint = Color.Red,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+                                    }
+                                    // Invisible placeholder for consistent alignment
+                                    else -> {
+                                        Spacer(modifier = Modifier.size(48.dp))
                                     }
                                 }
+                            }
                             }
                         }
                         // Add break indicator after each set except the last one
