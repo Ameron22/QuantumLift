@@ -14,6 +14,8 @@ import com.example.gymtracker.navigation.Screen
 import androidx.compose.material3.Icon
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 
 @Composable
 fun BottomNavBar(navController: NavController) {
@@ -21,7 +23,8 @@ fun BottomNavBar(navController: NavController) {
         Screen.Home,
         Screen.LoadWorkout,
         Screen.LoadHistory,
-        Screen.Achievements
+        Screen.Achievements,
+        Screen.Settings
     )
 
     NavigationBar(
@@ -54,8 +57,13 @@ fun BottomNavBar(navController: NavController) {
                             contentDescription = "Achievements",
                             modifier = Modifier.size(40.dp) // Standard icon size
                         )
+                        Screen.Settings -> Icon(
+                            painter = painterResource(id = R.drawable.settings_svgrepo_com),
+                            contentDescription = "Settings",
+                            modifier = Modifier.size(26.dp)
+                        )
                         else -> Icon(
-                            painter = painterResource(id = R.drawable.dumbell_icon),
+                            painter = painterResource(id = R.drawable.food_icon),
                             contentDescription = screen.route,
                             modifier = Modifier.size(40.dp) // Standard icon size
                         )

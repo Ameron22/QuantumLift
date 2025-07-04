@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,6 +47,7 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.gymtracker.viewmodels.WorkoutDetailsViewModel
+import com.example.gymtracker.viewmodels.GeneralViewModel
 import com.example.gymtracker.data.AchievementManager
 import com.example.gymtracker.data.ExerciseDao
 import java.util.Calendar
@@ -62,13 +64,16 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import com.example.gymtracker.data.WorkoutExerciseWithDetails
+import com.example.gymtracker.components.LoadingSpinner
+import com.example.gymtracker.components.ExerciseGif
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkoutDetailsScreen(
-    workoutId: Int, 
+    workoutId: Int,
     navController: NavController,
-    viewModel: WorkoutDetailsViewModel = viewModel()
+    viewModel: WorkoutDetailsViewModel = viewModel(),
+    generalViewModel: GeneralViewModel
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -85,14 +90,22 @@ fun WorkoutDetailsScreen(
     val workoutSession by viewModel.workoutSession.collectAsState()
     val recoveryFactors by viewModel.recoveryFactors.collectAsState()
     val exercisesList by viewModel.exercisesList.collectAsState()
+    val currentWorkout by generalViewModel.currentWorkout.collectAsState()
     var showRecoveryDialog by remember { mutableStateOf(false) }
     var currentRecoveryFactor by remember { mutableStateOf("") }
     var showRecoveryInfoDialog by remember { mutableStateOf(false) }
+    
+    // State for workout rename dialog
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var newWorkoutName by remember { mutableStateOf("") }
 
-    // Add LaunchedEffect to sync workoutStarted with ViewModel state
-    LaunchedEffect(workoutSession) {
-        workoutStarted = workoutSession?.isStarted ?: false
-        Log.d("WorkoutDetailsScreen", "Synced workoutStarted state: $workoutStarted, session isStarted: ${workoutSession?.isStarted}")
+    // Add LaunchedEffect to sync workoutStarted with CurrentWorkoutViewModel state
+    LaunchedEffect(currentWorkout) {
+        workoutStarted = currentWorkout?.isActive ?: false
+        if (currentWorkout?.isActive == true) {
+            startTimeWorkout = currentWorkout?.startTime ?: System.currentTimeMillis()
+        }
+        Log.d("WorkoutDetailsScreen", "Synced workoutStarted state: $workoutStarted, currentWorkout isActive: ${currentWorkout?.isActive}")
     }
 
     // Fetch workout data and sync with ViewModel
@@ -102,7 +115,23 @@ fun WorkoutDetailsScreen(
             
             // Clear ViewModel state at the beginning to ensure clean state for each workout
             viewModel.clearExercises()
-            viewModel.resetWorkoutSession()
+            
+            // Check if we have an active workout for this workoutId
+            val hasActiveWorkout = currentWorkout?.workoutId == workoutId && currentWorkout?.isActive == true
+            val hasCompletedExercises = currentWorkout?.completedExercises?.isNotEmpty() == true
+            
+            Log.d("WorkoutDetailsScreen", "Current workout state: workoutId=${currentWorkout?.workoutId}, isActive=${currentWorkout?.isActive}, completedExercises=${currentWorkout?.completedExercises}")
+            Log.d("WorkoutDetailsScreen", "hasActiveWorkout=$hasActiveWorkout, hasCompletedExercises=$hasCompletedExercises")
+            
+            if (hasActiveWorkout || hasCompletedExercises) {
+                Log.d("WorkoutDetailsScreen", "Resuming existing workout - preserving completed exercises")
+                viewModel.resetWorkoutSession()
+            } else {
+                Log.d("WorkoutDetailsScreen", "Starting fresh workout - clearing completed exercises")
+                viewModel.resetWorkoutSessionAndClearCompleted()
+                // Start a new workout session in GeneralViewModel
+                generalViewModel.startWorkout(workoutId, workoutName)
+            }
 
             withContext(Dispatchers.IO) {
                 // Get exercises with their workout-specific data
@@ -118,8 +147,8 @@ fun WorkoutDetailsScreen(
 
                     if (exercisesData.isEmpty()) {
                         Log.e("WorkoutDetailsScreen", "No exercises found for workout ID: $workoutId")
-                        // Add 5-second delay to show loading effect
-                        delay(5000)
+                        // Add 1-second delay to show loading effect
+                        delay(1000)
                         isLoading = false
                     } else {
                         // Convert to WorkoutExerciseWithDetails and sync with ViewModel
@@ -130,16 +159,18 @@ fun WorkoutDetailsScreen(
                             viewModel.addExercise(exerciseWithDetails)
                         }
 
-                        // Check if there's an existing session
-                        if (workoutSession == null || workoutSession?.workoutId != workoutId) {
+                        // Check if we have an active workout in GeneralViewModel
+                        val hasActiveWorkout = currentWorkout?.workoutId == workoutId && currentWorkout?.isActive == true
+                        
+                        if (hasActiveWorkout) {
+                            Log.d("WorkoutDetailsScreen", "Using existing workout session from GeneralViewModel")
+                            workoutStarted = currentWorkout?.isActive ?: false
+                            if (workoutStarted) {
+                                startTimeWorkout = currentWorkout?.startTime ?: System.currentTimeMillis()
+                            }
+                        } else {
                             Log.d("WorkoutDetailsScreen", "Initializing new workout session")
                             viewModel.initializeWorkoutSession(workoutId, workoutName)
-                        } else {
-                            Log.d("WorkoutDetailsScreen", "Using existing workout session")
-                            workoutStarted = workoutSession?.isStarted ?: false
-                            if (workoutStarted) {
-                                startTimeWorkout = workoutSession?.startTime ?: System.currentTimeMillis()
-                            }
                         }
 
                         Log.d("WorkoutDetailsScreen", "Workout name: $workoutName")
@@ -148,8 +179,8 @@ fun WorkoutDetailsScreen(
                             "Number of exercises: ${exercisesData.size}"
                         )
                         
-                        // Add 5-second delay to show loading effect
-                        delay(5000)
+                        // Add 1-second delay to show loading effect
+                        delay(500)
                         isLoading = false
                     }
                 }
@@ -198,14 +229,42 @@ fun WorkoutDetailsScreen(
         viewModel.startWorkoutSession(currentTime)
         startTimeWorkout = currentTime
         workoutStarted = true  // Explicitly set workoutStarted to true
-        if (workoutSession != null) {
+        val sessionId = generalViewModel.getCurrentSessionId()
+        if (sessionId > 0) {
             Log.d(
                 "WorkoutDetailsScreen",
-                "Navigating to exercise with sessionId: ${workoutSession?.sessionId}, isStarted: ${workoutSession?.isStarted}"
+                "Navigating to exercise with sessionId: $sessionId, isStarted: $workoutStarted"
             )
-            navController.navigate(Screen.Exercise.createRoute(exId, workoutSession!!.sessionId.toLong(), workoutId))
+            navController.navigate(Screen.Exercise.createRoute(exId, sessionId, workoutId))
         } else {
             Log.e("WorkoutDetailsScreen", "Failed to start workout session: session is null")
+        }
+    }
+
+    // Function to rename the workout
+    fun renameWorkout() {
+        if (newWorkoutName.isNotEmpty()) {
+            coroutineScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        val dao = AppDatabase.getDatabase(context).exerciseDao()
+                        val workout = dao.getAllWorkouts().find { it.id == workoutId }
+                        workout?.let {
+                            val updatedWorkout = it.copy(name = newWorkoutName)
+                            dao.updateWorkout(updatedWorkout)
+                        }
+                    }
+                    
+                    withContext(Dispatchers.Main) {
+                        workoutName = newWorkoutName
+                        newWorkoutName = ""
+                        showRenameDialog = false
+                    }
+                } catch (e: Exception) {
+                    Log.e("WorkoutDetailsScreen", "Error renaming workout: ${e.message}")
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -262,6 +321,9 @@ fun WorkoutDetailsScreen(
                 withContext(Dispatchers.Main) {
                     // Stop the workout session
                     viewModel.stopWorkoutSession()
+                    
+                    // End the current workout
+                    generalViewModel.endWorkout()
                     
                     // Show save notification
                     showSaveNotification = true
@@ -402,20 +464,13 @@ fun WorkoutDetailsScreen(
         if (showSaveNotification) {
             delay(3000)
             showSaveNotification = false
-            viewModel.resetWorkoutSession()
+            viewModel.resetWorkoutSessionAndClearCompleted() // Clear completed exercises when workout is finished
+            generalViewModel.endWorkout() // End the current workout
             navController.popBackStack()
         }
     }
 
-    // Animation for breathing effect
-    val brightness by animateFloatAsState(
-        targetValue = if (isLoading) 1.2f else 1f, // Target brightness
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "brightnessAnimation"
-    )
+
 
     // Function to format duration in HH:MM:SS format
     fun formatDuration(durationInMillis: Long): String {
@@ -488,16 +543,11 @@ fun WorkoutDetailsScreen(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     // Exercise GIF
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data("file:///android_asset/${exercise.gifUrl}")
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = "Exercise GIF",
+                    ExerciseGif(
+                        gifPath = exercise.gifUrl,
                         modifier = Modifier
                             .size(100.dp)
-                            .clip(RoundedCornerShape(8.dp)),
-                        contentScale = ContentScale.Crop
+                            .clip(RoundedCornerShape(8.dp))
                     )
 
                     // Exercise details
@@ -528,11 +578,13 @@ fun WorkoutDetailsScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
-                        Text(
-                            text = "Weight: ${workoutExercise.weight}kg",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
+                        if (!exercise.useTime) {
+                            Text(
+                                text = "Weight: ${workoutExercise.weight}kg",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                        }
                         Text(
                             text = "Difficulty: ${exercise.difficulty}",
                             style = MaterialTheme.typography.bodyMedium,
@@ -574,14 +626,21 @@ fun WorkoutDetailsScreen(
                 }
 
                 // Completion indicator moved to bottom right
-                if (viewModel.isExerciseCompleted(exercise.id)) {
+                val isCompleted = generalViewModel.isExerciseCompleted(exercise.id)
+                Log.d("WorkoutDetailsScreen", "Exercise ${exercise.id} (${exercise.name}) completed: $isCompleted")
+                if (isCompleted) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(8.dp)
-                            .size(12.dp)
+                            .size(14.dp)
                             .background(
                                 color = Color.Green,
+                                shape = CircleShape
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = Color.White,
                                 shape = CircleShape
                             )
                     )
@@ -606,6 +665,20 @@ fun WorkoutDetailsScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            newWorkoutName = workoutName
+                            showRenameDialog = true
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Rename Workout",
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -651,11 +724,14 @@ fun WorkoutDetailsScreen(
                     .padding(paddingValues),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "Loading...",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    LoadingSpinner(
+                        modifier = Modifier.size(80.dp)
+                    )
+                }
             }
         } else {
             Column(
@@ -911,6 +987,44 @@ fun WorkoutDetailsScreen(
                 }
             }
         }
+    }
+
+    // Rename Workout Dialog
+    if (showRenameDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showRenameDialog = false
+                newWorkoutName = ""
+            },
+            title = { Text("Rename Workout") },
+            text = {
+                OutlinedTextField(
+                    value = newWorkoutName,
+                    onValueChange = { newWorkoutName = it },
+                    label = { Text("Workout Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { renameWorkout() },
+                    enabled = newWorkoutName.isNotEmpty()
+                ) {
+                    Text("Rename")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showRenameDialog = false
+                        newWorkoutName = ""
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

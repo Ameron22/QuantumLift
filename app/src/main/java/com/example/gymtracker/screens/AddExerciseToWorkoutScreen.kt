@@ -30,7 +30,6 @@ import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.WorkoutExercise
 import com.example.gymtracker.data.WorkoutExerciseWithDetails
 import com.example.gymtracker.classes.NumberPicker
-import com.example.gymtracker.data.Exercise
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -386,7 +385,7 @@ fun AddExerciseToWorkoutScreen(
                                             workoutId = workoutId,
                                             sets = sets,
                                             reps = if (selectedExercise!!.useTime) (minutes * 60 + seconds) + 1000 else reps,
-                                            weight = weight,
+                                            weight = if (selectedExercise!!.useTime) 0 else weight,
                                             order = 0 // order will be set when saving workout
                                         )
                                         val combined = WorkoutExerciseWithDetails(

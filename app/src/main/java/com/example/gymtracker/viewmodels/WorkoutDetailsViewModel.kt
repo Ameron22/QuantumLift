@@ -43,6 +43,19 @@ class WorkoutDetailsViewModel : ViewModel() {
             startTime = currentTime,
             isStarted = false
         )
+        // Don't clear completed exercises here - they should persist during the workout
+    }
+
+    fun initializeWorkoutSessionAndClearCompleted(workoutId: Int, workoutName: String) {
+        val currentTime = System.currentTimeMillis()
+        Log.d("WorkoutViewModel", "Initializing workout session and clearing completed exercises at time: $currentTime")
+        _workoutSession.value = WorkoutSessionState(
+            sessionId = currentTime,
+            workoutId = workoutId,
+            workoutName = workoutName,
+            startTime = currentTime,
+            isStarted = false
+        )
         _completedExercises.value = emptySet()
     }
 
@@ -88,11 +101,16 @@ class WorkoutDetailsViewModel : ViewModel() {
 
     fun markExerciseAsCompleted(exerciseId: Int) {
         Log.d("WorkoutViewModel", "Marking exercise $exerciseId as completed")
-        _completedExercises.value = _completedExercises.value + exerciseId
+        val currentCompleted = _completedExercises.value.toMutableSet()
+        currentCompleted.add(exerciseId)
+        _completedExercises.value = currentCompleted
+        Log.d("WorkoutViewModel", "Updated completed exercises: ${_completedExercises.value}")
     }
 
     fun isExerciseCompleted(exerciseId: Int): Boolean {
-        return _completedExercises.value.contains(exerciseId)
+        val isCompleted = _completedExercises.value.contains(exerciseId)
+        Log.d("WorkoutViewModel", "Checking if exercise $exerciseId is completed: $isCompleted (total completed: ${_completedExercises.value.size})")
+        return isCompleted
     }
 
     fun resetWorkoutSession() {
@@ -100,6 +118,19 @@ class WorkoutDetailsViewModel : ViewModel() {
         _workoutSession.value = null
         _recoveryFactors.value = TempRecoveryFactors()
         _hasSetRecoveryFactors.value = false
+        // Don't clear completed exercises here - they should persist during the workout
+    }
+
+    fun resetWorkoutSessionAndClearCompleted() {
+        Log.d("WorkoutViewModel", "Resetting workout session and clearing completed exercises")
+        _workoutSession.value = null
+        _recoveryFactors.value = TempRecoveryFactors()
+        _hasSetRecoveryFactors.value = false
+        _completedExercises.value = emptySet()
+    }
+
+    fun clearCompletedExercises() {
+        Log.d("WorkoutViewModel", "Clearing completed exercises")
         _completedExercises.value = emptySet()
     }
 

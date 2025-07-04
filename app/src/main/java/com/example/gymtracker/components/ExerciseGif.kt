@@ -7,8 +7,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -21,6 +21,7 @@ import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
 import com.example.gymtracker.utils.GifUtils
 import pl.droidsonroids.gif.GifImageView
+import android.util.Log
 
 @Composable
 fun ExerciseGif(
@@ -29,31 +30,49 @@ fun ExerciseGif(
 ) {
     val context = LocalContext.current
     val gifUri = GifUtils.getGifUri(context, gifPath)
+    var hasError by remember { mutableStateOf(false) }
 
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(200.dp),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
+    // Debug logging
+    LaunchedEffect(gifPath) {
+        Log.d("ExerciseGif", "GIF path: $gifPath")
+        Log.d("ExerciseGif", "GIF URI: $gifUri")
+        Log.d("ExerciseGif", "Has error: $hasError")
+    }
+
+    if (gifUri != null && !hasError) {
+        AndroidView(
+            factory = { context ->
+                GifImageView(context).apply {
+                    try {
+                        setImageURI(gifUri)
+                        Log.d("ExerciseGif", "Successfully set GIF URI: $gifUri")
+                    } catch (e: Exception) {
+                        Log.e("ExerciseGif", "Error loading GIF: ${e.message}", e)
+                        hasError = true
+                    }
+                }
+            },
+            modifier = modifier,
+            update = { view ->
+                try {
+                    view.setImageURI(gifUri)
+                } catch (e: Exception) {
+                    Log.e("ExerciseGif", "Error updating GIF: ${e.message}", e)
+                    hasError = true
+                }
+            }
+        )
+    } else {
+        // Fallback: show error message
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = modifier,
             contentAlignment = Alignment.Center
         ) {
-            gifUri?.let { uri ->
-                AndroidView(
-                    factory = { context ->
-                        GifImageView(context).apply {
-                            setImageURI(uri)
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                    update = { view ->
-                        view.setImageURI(uri)
-                    }
-                )
-            }
+            Text(
+                text = if (gifUri == null) "GIF not found: $gifPath" else "Failed to load GIF",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
         }
     }
 } 

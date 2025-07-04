@@ -56,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,6 +65,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -87,6 +89,7 @@ import androidx.activity.compose.BackHandler
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.gymtracker.data.AchievementManager
 import com.example.gymtracker.viewmodels.WorkoutDetailsViewModel
+import com.example.gymtracker.viewmodels.GeneralViewModel
 import com.example.gymtracker.components.ExerciseGif
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -94,6 +97,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.compose.runtime.DisposableEffect
+import com.example.gymtracker.data.UserSettingsPreferences
+import com.example.gymtracker.utils.TimerServiceManager
+import com.example.gymtracker.utils.FloatingTimerManager
+import android.app.NotificationManager
+import android.content.Intent
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,7 +113,8 @@ fun ExerciseScreen(
     workoutSessionId: Long,
     workoutId: Int,
     navController: NavController,
-    viewModel: WorkoutDetailsViewModel = viewModel()
+    viewModel: WorkoutDetailsViewModel = viewModel(),
+    generalViewModel: GeneralViewModel
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -120,8 +132,8 @@ fun ExerciseScreen(
     var isTimerRunning by remember { mutableStateOf(false) }
     var isBreakRunning by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(false) }
-    var breakTime by remember { mutableIntStateOf(7) } // Default break time in seconds (7 seconds)
-    var setTimeReps by remember { mutableIntStateOf(5) } // Default time in seconds for reps (5 seconds)
+    var breakTime by remember { mutableIntStateOf(60) } // Will be set from user preferences
+    var setTimeReps by remember { mutableIntStateOf(30) } // Will be set from user preferences
     var pausedTime by remember { mutableStateOf(0L) }
     // Add new state for countdown
     var showCountdown by remember { mutableStateOf(false) }
@@ -155,12 +167,17 @@ fun ExerciseScreen(
     var hasProvidedSorenessData by remember { mutableStateOf(false) }
     var defaultSorenessValues by remember { mutableStateOf(true) }  // Changed to true to make checkbox unchecked by default
 
+
     // Add state for back confirmation dialog
     var showBackConfirmationDialog by remember { mutableStateOf(false) }
 
     // Add MediaPlayer instances
     val pingSound = remember { MediaPlayer.create(context, R.raw.ping) }
     val peeengSound = remember { MediaPlayer.create(context, R.raw.peeeng) }
+    
+    // Load user settings
+    val userSettings = remember { UserSettingsPreferences(context) }
+    val settings by userSettings.settingsFlow.collectAsState(initial = null)
 
     // Clean up MediaPlayer when leaving the screen
     DisposableEffect(Unit) {
@@ -169,7 +186,109 @@ fun ExerciseScreen(
             peeengSound.release()
         }
     }
+    
+    // Clean up timer service callback when leaving the screen
+    DisposableEffect(Unit) {
+        onDispose {
+            TimerServiceManager.clearOnTimerUpdateCallback()
+        }
+    }
+    
+    // Stop timer service when leaving screen if timer is running
+    DisposableEffect(Unit) {
+        onDispose {
+            if (isTimerRunning) {
+                TimerServiceManager.stopTimer(context)
+            }
+            // Always stop floating timer when leaving screen
+            FloatingTimerManager.stopTimer(context)
+        }
+    }
+    
+    // Lifecycle observer to detect when app goes to background/foreground
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> {
+                    // App going to background - start floating timer if timer is running
+                    if (isTimerRunning) {
+                        Log.d("ExerciseScreen", "App going to background - starting floating timer")
+                        FloatingTimerManager.startTimer(
+                            context,
+                            remainingTime,
+                            isBreakRunning,
+                            exerciseWithDetails?.exercise?.name ?: "Exercise"
+                        )
+                        // If the app timer was paused, pause the floating timer too
+                        if (isPaused) {
+                            Log.d("ExerciseScreen", "App timer was paused, pausing floating timer")
+                            FloatingTimerManager.pauseTimer(context)
+                        }
+                    }
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    // App coming to foreground - stop floating timer and sync pause state
+                    if (isTimerRunning) {
+                        Log.d("ExerciseScreen", "App coming to foreground - stopping floating timer")
+                        val floatingTimerPaused = FloatingTimerManager.isTimerPaused()
+                        
+                        // Stop the floating timer (make it disappear)
+                        FloatingTimerManager.stopTimer(context)
+                        
+                        // If floating timer was paused, pause the app timer too
+                        if (floatingTimerPaused && !isPaused) {
+                            Log.d("ExerciseScreen", "Floating timer was paused, pausing app timer")
+                            isPaused = true
+                        }
+                    }
+                }
+                else -> {}
+            }
+        }
+        
+        lifecycleOwner.lifecycle.addObserver(observer)
+        
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+    
+    // Set up callbacks for floating timer pause/resume requests
+    DisposableEffect(Unit) {
+        FloatingTimerManager.onPauseRequest = {
+            Log.d("ExerciseScreen", "Pause request from floating timer")
+            isPaused = true
+        }
+        FloatingTimerManager.onResumeRequest = {
+            Log.d("ExerciseScreen", "Resume request from floating timer")
+            isPaused = false
+        }
+        FloatingTimerManager.onTimerDeleted = {
+            Log.d("ExerciseScreen", "Timer deleted from floating timer")
+            // Stop the timer in the app as well
+            isTimerRunning = false
+            isPaused = false
+            isBreakRunning = false
+            remainingTime = 0
+            activeSetIndex = null
+        }
+        
+        onDispose {
+            FloatingTimerManager.onPauseRequest = null
+            FloatingTimerManager.onResumeRequest = null
+            FloatingTimerManager.onTimerDeleted = null
+        }
+    }
 
+    // Load user settings when they become available
+    LaunchedEffect(settings) {
+        settings?.let { userSettings: com.example.gymtracker.data.UserSettings ->
+            breakTime = userSettings.defaultBreakTime
+            setTimeReps = userSettings.defaultWorkTime
+        }
+    }
+    
     // Fetch exercise and workoutExercise data using the new structure
     LaunchedEffect(exerciseId, workoutId) {
         try {
@@ -209,9 +328,13 @@ fun ExerciseScreen(
 
     // Function to save exercise session
     suspend fun saveExerciseSession() {
+        Log.d("ExerciseScreen", "saveExerciseSession called")
         val exercise = exerciseWithDetails?.exercise ?: return
         val workoutExercise = exerciseWithDetails?.workoutExercise ?: return
+        
+        // Ensure completedSet reflects the actual completed sets
         completedSet = minOf(completedSet, workoutExercise.sets)
+        
         val repsOrTimeList = (1..workoutExercise.sets).map { setReps[it] ?: workoutExercise.reps }
         val weightList = (1..workoutExercise.sets).map { setWeights[it] ?: workoutExercise.weight }
         val maxWeight = weightList.maxOrNull() ?: 0
@@ -242,8 +365,9 @@ fun ExerciseScreen(
                 achievementManager.updateStrengthProgress(exercise.name, maxWeight.toFloat())
             }
             
-            // Mark exercise as completed in ViewModel
-            viewModel.markExerciseAsCompleted(exercise.id)
+            // Mark exercise as completed in GeneralViewModel
+            Log.d("ExerciseScreen", "Marking exercise ${exercise.id} (${exercise.name}) as completed")
+            generalViewModel.markExerciseAsCompleted(exercise.id)
             
             // Show success notification and navigate back
             withContext(Dispatchers.Main) {
@@ -255,6 +379,7 @@ fun ExerciseScreen(
                     isTimerRunning = false
                 }
                 navController.previousBackStackEntry?.savedStateHandle?.set("exerciseCompleted", true)
+                // Navigate back after the notification timer expires
                 navController.popBackStack()
             }
         } catch (e: Exception) {
@@ -266,54 +391,86 @@ fun ExerciseScreen(
         }
     }
 
-    // Timer logic
+    // Timer logic with service integration and fallback
     LaunchedEffect(isTimerRunning, isPaused) {
+        Log.d("ExerciseScreen", "Timer LaunchedEffect started: isTimerRunning=$isTimerRunning, isPaused=$isPaused")
+        
+        // Service is now only for notifications, UI controls countdown
+        Log.d("ExerciseScreen", "Timer service setup complete - UI controls countdown, service handles notifications")
+        
+        // Main timer loop - handles both service and fallback modes
         while (isTimerRunning) {
+            // Check local pause state (floating timer is stopped when in app)
             if (!isPaused) {
                 if (remainingTime > 0) {
                     // Check if we're in the last 5 seconds of break
                     if (isBreakRunning && remainingTime <= 5) {
                         showCountdown = true
                         countdownNumber = remainingTime
-                        // Vibrate and play sound when countdown number changes
-                        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
-                        } else {
-                            @Suppress("DEPRECATION")
-                            vibrator.vibrate(100)
+                        // Vibrate and play sound when countdown number changes (check user preferences)
+                        if (settings?.vibrationEnabled == true) {
+                            val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
+                            } else {
+                                @Suppress("DEPRECATION")
+                                vibrator.vibrate(100)
+                            }
                         }
-                        // Play ping sound
-                        pingSound.seekTo(0)
-                        pingSound.start()
+                        // Play ping sound (check user preferences)
+                        if (settings?.soundEnabled == true) {
+                            pingSound.seekTo(0)
+                            pingSound.setVolume(settings?.soundVolume ?: 0.5f, settings?.soundVolume ?: 0.5f)
+                            pingSound.start()
+                        }
                     } else {
                         showCountdown = false
                     }
                     delay(1000)
                     remainingTime--
+                    
+                    // Update floating timer (it will be visible when app goes to background)
+                    Log.d("ExerciseScreen", "Updating floating timer: $remainingTime seconds")
+                    FloatingTimerManager.updateTimer(context, remainingTime, isBreakRunning, exerciseWithDetails?.exercise?.name ?: "Exercise")
                 } else {
                     showCountdown = false
                     if (isBreakRunning) {
+                        // Break time finished, start next exercise set
                         isBreakRunning = false
-                        // Long vibration and sound when exercise starts
-                        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
-                        } else {
-                            @Suppress("DEPRECATION")
-                            vibrator.vibrate(500)
+                        // Long vibration and sound when exercise starts (check user preferences)
+                        if (settings?.vibrationEnabled == true) {
+                            val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
+                            } else {
+                                @Suppress("DEPRECATION")
+                                vibrator.vibrate(500)
+                            }
                         }
-                        // Play peeeng sound
-                        peeengSound.seekTo(0)
-                        peeengSound.start()
-                        activeSetIndex = activeSetIndex?.let { it + 1 }
+                        // Play peeeng sound (check user preferences)
+                        if (settings?.soundEnabled == true) {
+                            peeengSound.seekTo(0)
+                            peeengSound.setVolume(settings?.soundVolume ?: 0.5f, settings?.soundVolume ?: 0.5f)
+                            peeengSound.start()
+                        }
+                        
                         val workoutExercise = exerciseWithDetails?.workoutExercise
-                        if (activeSetIndex != null && activeSetIndex!! <= workoutExercise?.sets ?: 0) {
+                        if (activeSetIndex != null && activeSetIndex!! < (workoutExercise?.sets ?: 0)) {
+                            // Start next set
+                            activeSetIndex = activeSetIndex!! + 1
                             remainingTime = exerciseTime
+                            Log.d("ExerciseScreen", "Starting next set: ${activeSetIndex}")
+                            // Update floating timer immediately when switching to exercise mode
+                            Log.d("ExerciseScreen", "Updating floating timer to EXERCISE mode: $remainingTime seconds")
+                            FloatingTimerManager.updateTimer(context, remainingTime, isBreakRunning, exerciseWithDetails?.exercise?.name ?: "Exercise")
                         } else {
+                            // All sets completed
+                            Log.d("ExerciseScreen", "All sets completed, saving exercise session")
                             isTimerRunning = false
                             activeSetIndex = null
-                            completedSet = workoutExercise?.sets ?: 0  // Set to total number of sets
+                            completedSet = workoutExercise?.sets ?: 0
+                            // Stop floating timer when exercise is completed
+                            FloatingTimerManager.stopTimer(context)
                             try {
                                 coroutineScope.launch {
                                     saveExerciseSession()
@@ -324,12 +481,17 @@ fun ExerciseScreen(
                             }
                         }
                     } else {
-                        completedSet += 1  // Increment completed sets after exercise time
+                        // Exercise time finished, start break
+                        completedSet += 1
                         val workoutExercise = exerciseWithDetails?.workoutExercise
                         if (activeSetIndex!! >= (workoutExercise?.sets ?: 0)) {
+                            // All sets completed
+                            Log.d("ExerciseScreen", "All sets completed (exercise time), saving exercise session")
                             isTimerRunning = false
                             activeSetIndex = null
-                            completedSet = workoutExercise?.sets ?: 0  // Ensure we mark all sets as completed
+                            completedSet = workoutExercise?.sets ?: 0
+                            // Stop floating timer when exercise is completed
+                            FloatingTimerManager.stopTimer(context)
                             try {
                                 coroutineScope.launch {
                                     saveExerciseSession()
@@ -339,12 +501,18 @@ fun ExerciseScreen(
                                 navController.popBackStack()
                             }
                         } else {
+                            // Start break time
                             isBreakRunning = true
                             remainingTime = breakTime
+                            Log.d("ExerciseScreen", "Starting break time: $breakTime seconds")
+                            // Update floating timer immediately when switching to break mode
+                            Log.d("ExerciseScreen", "Updating floating timer to BREAK mode: $remainingTime seconds")
+                            FloatingTimerManager.updateTimer(context, remainingTime, isBreakRunning, exerciseWithDetails?.exercise?.name ?: "Exercise")
                         }
                     }
                 }
             } else {
+                // Timer is paused (either locally or by floating timer), just wait
                 delay(100)
             }
         }
@@ -352,11 +520,28 @@ fun ExerciseScreen(
 
     // Function to stop the timer
     fun stopTimer() {
+        Log.d("ExerciseScreen", "stopTimer called")
         isTimerRunning = false
         isPaused = false
         isBreakRunning = false
         remainingTime = 0
         pausedTime = 0L
+        showCountdown = false  // Hide countdown display when stopping timer
+        
+        // Cancel all notifications immediately
+        try {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.cancelAll()
+            Log.d("ExerciseScreen", "All notifications cancelled")
+        } catch (e: Exception) {
+            Log.e("ExerciseScreen", "Error cancelling notifications: ${e.message}")
+        }
+        
+        // Stop floating timer
+        FloatingTimerManager.stopTimer(context)
+        
+        // Reset active set index when stopping timer
+        activeSetIndex = null
         // Don't reset completedSet to maintain progress
     }
 
@@ -401,18 +586,45 @@ fun ExerciseScreen(
 
     // Function to start the timer for a specific set
     fun startTimer(setIndex: Int) {
-        val workoutExercise = exerciseWithDetails?.workoutExercise ?: return
-        activeSetIndex = setIndex
-        exerciseTime = if (workoutExercise.reps > 50) {
-            workoutExercise.reps - 1000
-        } else {
-            setTimeReps
+        try {
+            Log.d("ExerciseScreen", "startTimer called with setIndex: $setIndex")
+            val workoutExercise = exerciseWithDetails?.workoutExercise ?: return
+            activeSetIndex = setIndex
+            exerciseTime = if (workoutExercise.reps > 50) {
+                workoutExercise.reps - 1000
+            } else {
+                setTimeReps
+            }
+            remainingTime = exerciseTime
+            isTimerRunning = true
+            isBreakRunning = false
+            isPaused = false
+            pausedTime = 0L
+            
+            // Check for overlay permission
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !android.provider.Settings.canDrawOverlays(context)) {
+                // Request overlay permission
+                val intent = Intent(
+                    android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    android.net.Uri.parse("package:${context.packageName}")
+                )
+                context.startActivity(intent)
+                return
+            }
+            
+            // Don't start floating timer when in the app - it will start when app goes to background
+            Log.d("ExerciseScreen", "Timer started in app - floating timer will appear when app goes to background")
+            
+            Log.d("ExerciseScreen", "Timer started: exerciseTime=$exerciseTime, remainingTime=$remainingTime, sets=${workoutExercise.sets}")
+            
+            // Floating timer will be started when app goes to background
+            Log.d("ExerciseScreen", "Timer started - floating timer will appear when app goes to background")
+        } catch (e: Exception) {
+            Log.e("ExerciseScreen", "Error starting timer: ${e.message}")
+            e.printStackTrace()
+            // Continue without floating timer
+            Log.d("ExerciseScreen", "Continuing timer without floating timer")
         }
-        remainingTime = exerciseTime
-        isTimerRunning = true
-        isBreakRunning = false
-        isPaused = false
-        pausedTime = 0L
     }
 
     // Function to pause the timer
@@ -420,6 +632,8 @@ fun ExerciseScreen(
         if (isTimerRunning && !isPaused) {
             isPaused = true
             pausedTime = System.currentTimeMillis()
+            // Pause timer service
+            TimerServiceManager.updateTimer(context, remainingTime, isBreakRunning, exerciseWithDetails?.exercise?.name ?: "Exercise")
         }
     }
 
@@ -427,30 +641,51 @@ fun ExerciseScreen(
     fun resumeTimer() {
         if (isTimerRunning && isPaused) {
             isPaused = false
-            // No need to adjust remainingTime since we want to resume from exactly where we paused
+            // Resume timer service
+            TimerServiceManager.updateTimer(context, remainingTime, isBreakRunning, exerciseWithDetails?.exercise?.name ?: "Exercise")
         }
     }
 
     // Function to skip the current set
     fun skipSet() {
+        Log.d("ExerciseScreen", "skipSet called")
         if (isTimerRunning) {
             val workoutExercise = exerciseWithDetails?.workoutExercise
             if (isBreakRunning) {
+                Log.d("ExerciseScreen", "Skipping break, moving to next set")
                 isBreakRunning = false
                 activeSetIndex = activeSetIndex?.let { it + 1 }
                 if (activeSetIndex != null && activeSetIndex!! <= workoutExercise?.sets ?: 0) {
                     remainingTime = exerciseTime
+                    // Update service with new exercise time
+                    TimerServiceManager.updateTimer(context, remainingTime, isBreakRunning, exerciseWithDetails?.exercise?.name ?: "Exercise")
                 } else {
+                    Log.d("ExerciseScreen", "All sets completed (skip break), saving exercise session")
                     stopTimer()
                     coroutineScope.launch {
                         saveExerciseSession()
                     }
                 }
             } else {
-                isBreakRunning = true
+                Log.d("ExerciseScreen", "Skipping exercise set, completedSet=$completedSet, totalSets=${workoutExercise?.sets}")
                 completedSet += 1  // Increment completed sets when skipping
-                //activeSetIndex = activeSetIndex?.let { it + 1 }
-                remainingTime = breakTime
+                activeSetIndex = activeSetIndex?.let { it + 1 }
+                
+                // Check if this was the last set
+                if (activeSetIndex != null && activeSetIndex!! > (workoutExercise?.sets ?: 0)) {
+                    Log.d("ExerciseScreen", "Last set completed (skip exercise), saving exercise session")
+                    completedSet = workoutExercise?.sets ?: 0  // Mark all sets as completed
+                    stopTimer()
+                    coroutineScope.launch {
+                        saveExerciseSession()
+                    }
+                } else {
+                    // Start break for next set
+                    isBreakRunning = true
+                    remainingTime = breakTime
+                    // Update service with break time
+                    TimerServiceManager.updateTimer(context, remainingTime, isBreakRunning, exerciseWithDetails?.exercise?.name ?: "Exercise")
+                }
             }
         }
     }
@@ -654,6 +889,8 @@ fun ExerciseScreen(
                     }
                 }
             }
+            
+
         }
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize()) {
@@ -679,7 +916,10 @@ fun ExerciseScreen(
                     if (ex.exercise.gifUrl.isNotEmpty()) {
                         ExerciseGif(
                             gifPath = ex.exercise.gifUrl,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(200.dp)
+                                .clip(RoundedCornerShape(8.dp))
                         )
                     }
 
@@ -780,7 +1020,7 @@ fun ExerciseScreen(
                                     },
                                     modifier = Modifier.weight(1f)
                             )
-                            if (we.weight != 0) {
+                            if (we.weight != 0 && !ex.exercise.useTime) {
                                 if (showWeightPicker && editingSetIndex == set) {
                                     AlertDialog(
                                         onDismissRequest = {
@@ -1547,7 +1787,7 @@ fun ExerciseScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Sets completed: $completedSet/${exerciseWithDetails?.workoutExercise?.sets}",
+                                text = "Sets completed: ${exerciseWithDetails?.workoutExercise?.sets}/${exerciseWithDetails?.workoutExercise?.sets}",
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )

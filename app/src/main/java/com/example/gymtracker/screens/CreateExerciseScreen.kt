@@ -12,6 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,29 +26,28 @@ import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.Exercise
 import com.example.gymtracker.utils.GifUtils
+import com.example.gymtracker.components.ExerciseGif
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import android.util.Log
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateExerciseScreen(navController: NavController) {
     var currentExercise by remember { mutableStateOf("") }
     var currentDescription by remember { mutableStateOf("") }
-    var currentSets by remember { mutableIntStateOf(3) }
-    var currentRepsTime by remember { mutableIntStateOf(12) }
-    var currentMinutes by remember { mutableIntStateOf(1) }
-    var currentSeconds by remember { mutableIntStateOf(0) }
     var useTime by remember { mutableStateOf(false) }
     var currentMuscle by remember { mutableStateOf("") }
     var currentPart by remember { mutableStateOf("") }
     var currentDifficulty by remember { mutableStateOf("Intermediate") }
-    var weight by remember { mutableIntStateOf(5) }
     var selectedParts by remember { mutableStateOf<List<String>>(emptyList()) }
     var isMuscleGroupDropdownExpanded by remember { mutableStateOf(false) }
     var isPartDropdownExpanded by remember { mutableStateOf(false) }
     var isDifficultyDropdownExpanded by remember { mutableStateOf(false) }
     var gifPath by remember { mutableStateOf<String?>(null) }
+    var showGifError by remember { mutableStateOf(false) }
+    var gifErrorMessage by remember { mutableStateOf("") }
 
     val context = LocalContext.current
     val db = remember { AppDatabase.getDatabase(context) }
@@ -57,12 +57,38 @@ fun CreateExerciseScreen(navController: NavController) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused = interactionSource.collectIsFocusedAsState().value
 
-    // Launcher for picking GIF from gallery
+    // Launcher for picking GIF from gallery with better error handling
     val gifPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        uri?.let {
-            gifPath = GifUtils.saveGifToInternalStorage(context, it)
+        if (uri != null) {
+            try {
+                Log.d("CreateExerciseScreen", "GIF selected: $uri")
+                
+                // Validate that it's actually a GIF file
+                if (!GifUtils.isValidGifFile(context, uri)) {
+                    showGifError = true
+                    gifErrorMessage = "Please select a valid GIF file."
+                    Log.e("CreateExerciseScreen", "Invalid file type selected")
+                    return@rememberLauncherForActivityResult
+                }
+                
+                val savedPath = GifUtils.saveGifToInternalStorage(context, uri)
+                if (savedPath != null) {
+                    gifPath = savedPath
+                    showGifError = false
+                    gifErrorMessage = ""
+                    Log.d("CreateExerciseScreen", "GIF saved successfully: $savedPath")
+                } else {
+                    showGifError = true
+                    gifErrorMessage = "Failed to save GIF. Please try again."
+                    Log.e("CreateExerciseScreen", "Failed to save GIF")
+                }
+            } catch (e: Exception) {
+                showGifError = true
+                gifErrorMessage = "Error processing GIF: ${e.message}"
+                Log.e("CreateExerciseScreen", "Error processing GIF", e)
+            }
         }
     }
 
@@ -143,22 +169,97 @@ fun CreateExerciseScreen(navController: NavController) {
                 )
             )
 
-            // GIF Selection Button
-            Button(
-                onClick = { gifPickerLauncher.launch("image/gif") },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                )
+            // GIF Selection Section
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = MaterialTheme.shapes.medium,
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Select GIF",
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(if (gifPath != null) "Change GIF" else "Select GIF")
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Exercise GIF",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    // GIF Preview
+                    if (gifPath != null) {
+                        // Debug logging
+                        LaunchedEffect(gifPath) {
+                            Log.d("CreateExerciseScreen", "GIF path for preview: $gifPath")
+                        }
+                        
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            shape = MaterialTheme.shapes.medium,
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                ExerciseGif(
+                                    gifPath = gifPath!!,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                
+                                // Remove GIF button
+                                IconButton(
+                                    onClick = {
+                                        gifPath = null
+                                        showGifError = false
+                                        gifErrorMessage = ""
+                                    },
+                                    modifier = Modifier.align(Alignment.TopEnd)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Remove GIF",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    
+                    // GIF Selection Button
+                    Button(
+                        onClick = { gifPickerLauncher.launch("image/gif") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Select GIF",
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(if (gifPath != null) "Change GIF" else "Select GIF")
+                    }
+                    
+                    // Error message
+                    if (showGifError) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = gifErrorMessage,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
             }
 
             // Switch between Reps and Time
@@ -169,100 +270,92 @@ fun CreateExerciseScreen(navController: NavController) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Reps/Time")
+                Text("Track by Repetitions or Time?")
                 Switch(
                     checked = useTime,
                     onCheckedChange = { useTime = it }
                 )
             }
 
-            // Number pickers section
-            Row(
+            // Difficulty selection section (moved up)
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
+                shape = MaterialTheme.shapes.medium,
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
-                // Sets picker
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Sets", style = MaterialTheme.typography.bodyMedium)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    NumberPicker(
-                        value = currentSets,
-                        onValueChange = { currentSets = it },
-                        range = 1..10
-                    )
-                }
-
-                if (useTime) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    // Minutes picker
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Minutes", style = MaterialTheme.typography.bodyMedium)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        NumberPicker(
-                            value = currentMinutes,
-                            onValueChange = { currentMinutes = it },
-                            range = 0..59
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { 
+                                focusManager.clearFocus()
+                                isDifficultyDropdownExpanded = true 
+                            },
+                        shape = MaterialTheme.shapes.medium,
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
                         )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Difficulty Level",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                                Text(
+                                    text = currentDifficulty,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = when (currentDifficulty) {
+                                        "Beginner" -> MaterialTheme.colorScheme.primary
+                                        "Intermediate" -> MaterialTheme.colorScheme.secondary
+                                        "Advanced" -> MaterialTheme.colorScheme.error
+                                        else -> MaterialTheme.colorScheme.onSurface
+                                    }
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "Dropdown Icon"
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.width(4.dp))
-                    // Seconds picker
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f)
+                    DropdownMenu(
+                        expanded = isDifficultyDropdownExpanded,
+                        onDismissRequest = { isDifficultyDropdownExpanded = false }
                     ) {
-                        Text("Seconds", style = MaterialTheme.typography.bodyMedium)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        NumberPicker(
-                            value = currentSeconds,
-                            onValueChange = { currentSeconds = it },
-                            range = 0..59
-                        )
-                    }
-                } else {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    // Weight picker
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Weight (kg)", style = MaterialTheme.typography.bodyMedium)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        NumberPicker(
-                            value = weight,
-                            onValueChange = { weight = it },
-                            range = 0..500,
-                            unit = "kg"
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-                    // Reps picker
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Reps", style = MaterialTheme.typography.bodyMedium)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        NumberPicker(
-                            value = currentRepsTime,
-                            onValueChange = { currentRepsTime = it },
-                            range = 1..50
-                        )
+                        listOf("Beginner", "Intermediate", "Advanced").forEach { difficulty ->
+                            DropdownMenuItem(
+                                text = { 
+                                    Text(
+                                        text = difficulty,
+                                        color = when (difficulty) {
+                                            "Beginner" -> MaterialTheme.colorScheme.primary
+                                            "Intermediate" -> MaterialTheme.colorScheme.secondary
+                                            "Advanced" -> MaterialTheme.colorScheme.error
+                                            else -> MaterialTheme.colorScheme.onSurface
+                                        }
+                                    )
+                                },
+                                onClick = {
+                                    currentDifficulty = difficulty
+                                    isDifficultyDropdownExpanded = false
+                                }
+                            )
+                        }
                     }
                 }
             }
 
-            // Muscle selection section
+            // Muscle selection section (moved down)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -358,84 +451,6 @@ fun CreateExerciseScreen(navController: NavController) {
                 }
             }
 
-            // Difficulty selection section
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = MaterialTheme.shapes.medium,
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { 
-                                focusManager.clearFocus()
-                                isDifficultyDropdownExpanded = true 
-                            },
-                        shape = MaterialTheme.shapes.medium,
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text(
-                                    text = "Difficulty Level",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                )
-                                Text(
-                                    text = currentDifficulty,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = when (currentDifficulty) {
-                                        "Beginner" -> MaterialTheme.colorScheme.primary
-                                        "Intermediate" -> MaterialTheme.colorScheme.secondary
-                                        "Advanced" -> MaterialTheme.colorScheme.error
-                                        else -> MaterialTheme.colorScheme.onSurface
-                                    }
-                                )
-                            }
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = "Dropdown Icon"
-                            )
-                        }
-                    }
-
-                    DropdownMenu(
-                        expanded = isDifficultyDropdownExpanded,
-                        onDismissRequest = { isDifficultyDropdownExpanded = false }
-                    ) {
-                        listOf("Beginner", "Intermediate", "Advanced").forEach { difficulty ->
-                            DropdownMenuItem(
-                                text = { 
-                                    Text(
-                                        text = difficulty,
-                                        color = when (difficulty) {
-                                            "Beginner" -> MaterialTheme.colorScheme.primary
-                                            "Intermediate" -> MaterialTheme.colorScheme.secondary
-                                            "Advanced" -> MaterialTheme.colorScheme.error
-                                            else -> MaterialTheme.colorScheme.onSurface
-                                        }
-                                    )
-                                },
-                                onClick = {
-                                    currentDifficulty = difficulty
-                                    isDifficultyDropdownExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
             // Add Part button centered below the dropdowns
             Box(
                 modifier = Modifier
@@ -501,12 +516,6 @@ fun CreateExerciseScreen(navController: NavController) {
                 onClick = {
                     scope.launch {
                         try {
-                            val reps = if (useTime) {
-                                (currentMinutes * 60 + currentSeconds) + 1000
-                            } else {
-                                currentRepsTime
-                            }
-
                             val exercise = EntityExercise(
                                 name = currentExercise,
                                 description = currentDescription,
@@ -523,9 +532,6 @@ fun CreateExerciseScreen(navController: NavController) {
                             if (returnTo == "workout_creation") {
                                 val newExercise = Exercise(
                                     name = currentExercise,
-                                    sets = currentSets,
-                                    weight = weight,
-                                    reps = reps,
                                     muscle = currentMuscle,
                                     part = selectedParts,
                                     gifUrl = gifPath ?: "",

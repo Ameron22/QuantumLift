@@ -15,6 +15,7 @@ sealed class Screen(val route: String) {
     object AddExerciseToWorkout : Screen("addExerciseToWorkout/{workoutId}") {
         fun createRoute(workoutId: Int) = "addExerciseToWorkout/$workoutId"
     }
+    object Settings : Screen("settings")
     
     // Helper object for parameterized routes
     object Routes {

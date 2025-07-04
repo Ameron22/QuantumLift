@@ -24,13 +24,18 @@ import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.data.AchievementManager
 import com.example.gymtracker.utils.ExerciseDataImporter
 import com.example.gymtracker.viewmodels.WorkoutDetailsViewModel
+import com.example.gymtracker.viewmodels.GeneralViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleObserver
+import androidx.lifecycle.OnLifecycleEvent
+import com.example.gymtracker.utils.FloatingTimerManager
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), LifecycleObserver {
     private val viewModel: HistoryViewModel by viewModels {
         object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -88,10 +93,25 @@ class MainActivity : ComponentActivity() {
 
         return streak
     }
+    
+    @OnLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+    fun onAppPause() {
+        Log.d("MainActivity", "App paused - hiding delete zone")
+        FloatingTimerManager.hideDeleteZone(this)
+    }
+    
+    @OnLifecycleEvent(Lifecycle.Event.ON_STOP)
+    fun onAppStop() {
+        Log.d("MainActivity", "App stopped - hiding delete zone")
+        FloatingTimerManager.hideDeleteZone(this)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        
+        // Add lifecycle observer to hide delete zone when app goes to background
+        lifecycle.addObserver(this)
         
         // Initialize AchievementManager
         AchievementManager.initialize(applicationContext)
@@ -117,8 +137,9 @@ class MainActivity : ComponentActivity() {
             QuantumLiftTheme {
                 GradientBackground {
                     val navController = rememberNavController()
-                    // Create a shared ViewModel instance
+                    // Create shared ViewModel instances
                     val workoutDetailsViewModel = viewModel<WorkoutDetailsViewModel>()
+                    val generalViewModel = viewModel<GeneralViewModel>()
 
                     NavHost(
                         navController = navController,
@@ -139,6 +160,9 @@ class MainActivity : ComponentActivity() {
                         composable(Screen.CreateExercise.route) {
                             CreateExerciseScreen(navController)
                         }
+                                composable(Screen.Settings.route) {
+            SettingsScreen(navController)
+        }
                         composable(
                             Screen.Routes.WORKOUT_DETAILS,
                             arguments = listOf(navArgument("workoutId") { type = NavType.IntType })
@@ -147,7 +171,8 @@ class MainActivity : ComponentActivity() {
                             WorkoutDetailsScreen(
                                 workoutId = workoutId, 
                                 navController = navController,
-                                viewModel = workoutDetailsViewModel
+                                viewModel = workoutDetailsViewModel,
+                                generalViewModel = generalViewModel
                             )
                         }
                         composable(
@@ -166,7 +191,8 @@ class MainActivity : ComponentActivity() {
                                 workoutSessionId = workoutSessionId,
                                 workoutId = workoutId,
                                 navController = navController,
-                                viewModel = workoutDetailsViewModel
+                                viewModel = workoutDetailsViewModel,
+                                generalViewModel = generalViewModel
                             )
                         }
                         composable(

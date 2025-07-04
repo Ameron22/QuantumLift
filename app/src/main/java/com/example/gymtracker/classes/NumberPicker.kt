@@ -72,9 +72,10 @@ fun NumberPicker(
     LaunchedEffect(listState.isScrollInProgress) {
         if (!listState.isScrollInProgress) {
             // Scroll has stopped, snap to the nearest item
-            val middleIndex = listState.firstVisibleItemIndex
+            val currentIndex = listState.firstVisibleItemIndex
+            val targetIndex = currentIndex + offsetFromCenter
             coroutineScope.launch {
-                listState.scrollToItem(middleIndex)
+                listState.scrollToItem(targetIndex - offsetFromCenter)
             }
         }
     }
@@ -118,7 +119,9 @@ fun NumberPicker(
                             .padding(horizontal = 11.dp)
                             .clickable {
                                 coroutineScope.launch {
-                                    listState.scrollToItem(index)
+                                    // Calculate the correct index to center the selected item
+                                    val targetIndex = index - offsetFromCenter
+                                    listState.scrollToItem(targetIndex)
                                     onValueChange(itemValue)
                                     vibrateOnValueChange()
                                 }

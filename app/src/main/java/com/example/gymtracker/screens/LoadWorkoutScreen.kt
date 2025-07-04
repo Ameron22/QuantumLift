@@ -32,6 +32,7 @@ import com.example.gymtracker.components.WorkoutCard
 import com.example.gymtracker.navigation.Screen
 import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.withContext
+import com.example.gymtracker.components.LoadingSpinner
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,6 +42,7 @@ fun LoadWorkoutScreen(navController: NavController) {
     val filteredWorkouts = remember { mutableStateOf(listOf<WorkoutWithExercises>()) }
     val searchQuery = remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+    var isLoading by remember { mutableStateOf(true) }
 
     // State for workout creation dialog
     var showCreateWorkoutDialog by remember { mutableStateOf(false) }
@@ -62,8 +64,14 @@ fun LoadWorkoutScreen(navController: NavController) {
             val workoutsWithExercises = allWorkouts.mapNotNull { workout ->
                 dao.getWorkoutWithExercises(workout.id).firstOrNull()
             }
-            workouts.value = workoutsWithExercises
-            filteredWorkouts.value = workouts.value
+            
+            withContext(Dispatchers.Main) {
+                // Add 1-second delay to show loading effect
+                kotlinx.coroutines.delay(500)
+                workouts.value = workoutsWithExercises
+                filteredWorkouts.value = workouts.value
+                isLoading = false
+            }
         }
     }
 
@@ -207,12 +215,30 @@ fun LoadWorkoutScreen(navController: NavController) {
         },
         containerColor = Color.Transparent
     ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+        if (isLoading) {
+            // Loading indicator in center of page
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    LoadingSpinner(
+                        modifier = Modifier.size(80.dp)
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
             // New Workout Button at the top
             item {
                 Card(
@@ -392,4 +418,5 @@ fun LoadWorkoutScreen(navController: NavController) {
             }
         )
     }
+}
 }
