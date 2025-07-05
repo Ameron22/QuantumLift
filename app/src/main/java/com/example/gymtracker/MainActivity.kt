@@ -1,5 +1,6 @@
 package com.example.gymtracker
 
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -47,6 +48,12 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
             }
         }
     }
+    
+    // Navigation state for floating timer
+    private var navigationExerciseId = 0
+    private var navigationSessionId = 0L
+    private var navigationWorkoutId = 0
+    private var shouldNavigateToExercise = false
 
     private fun checkAchievements(dao: ExerciseDao) {
         val achievementManager = AchievementManager.getInstance()
@@ -105,6 +112,20 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
         Log.d("MainActivity", "App stopped - hiding delete zone")
         FloatingTimerManager.hideDeleteZone(this)
     }
+    
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        handleNavigationIntent(intent)
+    }
+    
+    private fun handleNavigationIntent(intent: Intent?) {
+        intent?.let { intentData ->
+            if (intentData.getBooleanExtra("from_floating_timer", false)) {
+                Log.d("MainActivity", "App brought to foreground from floating timer")
+                // Just bring the app to foreground, no specific navigation needed
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -132,6 +153,9 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                 Log.e("MainActivity", "Error during initialization", e)
             }
         }
+        
+        // Handle navigation intent from floating timer
+        handleNavigationIntent(intent)
 
         setContent {
             QuantumLiftTheme {
@@ -140,6 +164,11 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                     // Create shared ViewModel instances
                     val workoutDetailsViewModel = viewModel<WorkoutDetailsViewModel>()
                     val generalViewModel = viewModel<GeneralViewModel>()
+
+                    // Handle navigation from floating timer (simplified - just bring app to foreground)
+                    LaunchedEffect(Unit) {
+                        // No specific navigation needed, just bring app to foreground
+                    }
 
                     NavHost(
                         navController = navController,

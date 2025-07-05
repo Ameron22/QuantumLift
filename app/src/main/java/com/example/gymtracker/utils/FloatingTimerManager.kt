@@ -13,15 +13,18 @@ object FloatingTimerManager {
     // Callback for when floating timer is deleted
     var onTimerDeleted: (() -> Unit)? = null
     
-    fun startTimer(context: Context, remainingTime: Int, isBreak: Boolean, exerciseName: String) {
+    fun startTimer(context: Context, remainingTime: Int, isBreak: Boolean, exerciseName: String, exerciseId: Int = 0, sessionId: Long = 0L, workoutId: Int = 0) {
         try {
-            Log.d("FloatingTimerManager", "Starting floating timer: $remainingTime seconds, break: $isBreak, exercise: $exerciseName")
+            Log.d("FloatingTimerManager", "Starting floating timer: $remainingTime seconds, break: $isBreak, exercise: $exerciseName, exerciseId: $exerciseId, sessionId: $sessionId, workoutId: $workoutId")
             
             val intent = Intent(context, FloatingTimerService::class.java).apply {
                 action = "START_TIMER"
                 putExtra("remaining_time", remainingTime)
                 putExtra("is_break", isBreak)
                 putExtra("exercise_name", exerciseName)
+                putExtra("exercise_id", exerciseId)
+                putExtra("session_id", sessionId)
+                putExtra("workout_id", workoutId)
             }
             
             context.startService(intent)
@@ -32,15 +35,18 @@ object FloatingTimerManager {
         }
     }
     
-    fun updateTimer(context: Context, remainingTime: Int, isBreak: Boolean, exerciseName: String) {
+    fun updateTimer(context: Context, remainingTime: Int, isBreak: Boolean, exerciseName: String, exerciseId: Int = 0, sessionId: Long = 0L, workoutId: Int = 0) {
         try {
-            Log.d("FloatingTimerManager", "Updating floating timer: $remainingTime seconds, break: $isBreak, exercise: $exerciseName")
+            Log.d("FloatingTimerManager", "Updating floating timer: $remainingTime seconds, break: $isBreak, exercise: $exerciseName, exerciseId: $exerciseId, sessionId: $sessionId, workoutId: $workoutId")
             
             val intent = Intent(context, FloatingTimerService::class.java).apply {
                 action = "UPDATE_TIMER"
                 putExtra("remaining_time", remainingTime)
                 putExtra("is_break", isBreak)
                 putExtra("exercise_name", exerciseName)
+                putExtra("exercise_id", exerciseId)
+                putExtra("session_id", sessionId)
+                putExtra("workout_id", workoutId)
             }
             
             context.startService(intent)

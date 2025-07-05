@@ -218,7 +218,10 @@ fun ExerciseScreen(
                             context,
                             remainingTime,
                             isBreakRunning,
-                            exerciseWithDetails?.exercise?.name ?: "Exercise"
+                            exerciseWithDetails?.exercise?.name ?: "Exercise",
+                            exerciseId,
+                            workoutSessionId,
+                            workoutId
                         )
                         // If the app timer was paused, pause the floating timer too
                         if (isPaused) {
