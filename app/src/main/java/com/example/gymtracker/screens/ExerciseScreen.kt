@@ -658,7 +658,7 @@ fun ExerciseScreen(
                 Log.d("ExerciseScreen", "Skipping break, moving to next set")
                 isBreakRunning = false
                 activeSetIndex = activeSetIndex?.let { it + 1 }
-                if (activeSetIndex != null && activeSetIndex!! <= workoutExercise?.sets ?: 0) {
+                if (activeSetIndex != null && activeSetIndex!! <= (workoutExercise?.sets ?: 0)) {
                     remainingTime = exerciseTime
                     // Update service with new exercise time
                     TimerServiceManager.updateTimer(context, remainingTime, isBreakRunning, exerciseWithDetails?.exercise?.name ?: "Exercise")
@@ -672,10 +672,9 @@ fun ExerciseScreen(
             } else {
                 Log.d("ExerciseScreen", "Skipping exercise set, completedSet=$completedSet, totalSets=${workoutExercise?.sets}")
                 completedSet += 1  // Increment completed sets when skipping
-                activeSetIndex = activeSetIndex?.let { it + 1 }
                 
                 // Check if this was the last set
-                if (activeSetIndex != null && activeSetIndex!! > (workoutExercise?.sets ?: 0)) {
+                if (activeSetIndex!! >= (workoutExercise?.sets ?: 0)) {
                     Log.d("ExerciseScreen", "Last set completed (skip exercise), saving exercise session")
                     completedSet = workoutExercise?.sets ?: 0  // Mark all sets as completed
                     stopTimer()
@@ -960,7 +959,7 @@ fun ExerciseScreen(
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = when {
-                                set <= completedSet || completedSet == (set - 1) -> MaterialTheme.colorScheme.surface.copy(
+                                set <= completedSet -> MaterialTheme.colorScheme.surface.copy(
                                     alpha = 0.9f
                                 )
 
@@ -976,7 +975,7 @@ fun ExerciseScreen(
                                     .height(40.dp)
                                     .background(
                                         brush = when {
-                                            set <= completedSet || completedSet == (set - 1) -> Brush.horizontalGradient(
+                                            set <= completedSet -> Brush.horizontalGradient(
                                                 colors = listOf(
                                                     MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
                                                     MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
@@ -1017,7 +1016,7 @@ fun ExerciseScreen(
                                 text = "Set: $set",
                                 style = MaterialTheme.typography.bodyLarge,
                                     color = when {
-                                        set <= completedSet || completedSet == (set - 1) -> MaterialTheme.colorScheme.onSurface
+                                        set <= completedSet -> MaterialTheme.colorScheme.onSurface
                                         set == activeSetIndex && isTimerRunning -> MaterialTheme.colorScheme.onSurface
                                         else -> MaterialTheme.colorScheme.onSurfaceVariant
                                     },
@@ -1265,7 +1264,7 @@ fun ExerciseScreen(
                             }
                         }
                         // Add break indicator after each set except the last one
-                        if (set != we.sets && isBreakRunning && set == activeSetIndex) {
+                        if (set != we.sets && isBreakRunning && set == completedSet) {
                             BreakIndicatorBar()
                         }
 
