@@ -1,9 +1,11 @@
 package com.example.gymtracker.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
@@ -23,12 +25,18 @@ fun WorkoutCard(
     workout: EntityWorkout,
     muscleGroups: List<String>,
     onClick: () -> Unit,
-    onDelete: () -> Unit = {}
+    onDelete: () -> Unit = {},
+    isActive: Boolean = false
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .border(
+                width = if (isActive) 2.dp else 0.dp,
+                color = if (isActive) Color(0xFF2D1B69) else Color.Transparent,
+                shape = RoundedCornerShape(12.dp)
+            ),
         onClick = onClick
     ) {
         Box {
@@ -43,6 +51,7 @@ fun WorkoutCard(
                 Text(
                     text = workout.name,
                     style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)

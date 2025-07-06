@@ -20,6 +20,9 @@ import com.example.gymtracker.classes.HistoryViewModel
 import com.example.gymtracker.classes.SessionWorkoutWithMuscles
 import com.example.gymtracker.components.BottomNavBar
 import com.example.gymtracker.components.WorkoutHistoryCard
+import com.example.gymtracker.components.WorkoutIndicator
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.gymtracker.viewmodels.GeneralViewModel
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -27,16 +30,43 @@ import java.time.format.DateTimeFormatter
 private val SectionSpacing = 16.dp
 private val ItemPadding = 8.dp
 
+// Function to format duration in MM:SS or HH:MM:SS format
+private fun formatDuration(durationInMillis: Long): String {
+    val durationInSeconds = durationInMillis / 1000
+    val hours = durationInSeconds / 3600
+    val minutes = (durationInSeconds % 3600) / 60
+    val seconds = durationInSeconds % 60
+    return when {
+        hours > 0 -> String.format("%02d:%02d:%02d", hours, minutes, seconds)
+        else -> String.format("%02d:%02d", minutes, seconds)
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LoadHistoryScreen(navController: NavController, viewModel: HistoryViewModel) {
+fun LoadHistoryScreen(
+    navController: NavController,
+    viewModel: HistoryViewModel,
+    generalViewModel: GeneralViewModel
+) {
     val workoutSessions by viewModel.workoutSessions.collectAsState()
     val muscleSoreness by viewModel.muscleSoreness.collectAsState()
+    
+    // Debug logging
+    LaunchedEffect(workoutSessions) {
+        android.util.Log.d("LoadHistoryScreen", "Workout sessions loaded: ${workoutSessions.size}")
+        workoutSessions.forEach { session ->
+            android.util.Log.d("LoadHistoryScreen", "Session: ID=${session.sessionId}, Name='${session.workoutName}', Start=${session.startTime}, End=${session.endTime}, Duration=${(session.endTime - session.startTime) / (60 * 1000)} min")
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("History") },
+                actions = {
+                    WorkoutIndicator(generalViewModel = generalViewModel, navController = navController)
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
                 )
@@ -110,7 +140,6 @@ fun WorkoutSessionCard(session: SessionWorkoutWithMuscles) {
     
     val formattedDate = localDateTime.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))
     val formattedTime = localDateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
-    val durationInMinutes = (session.endTime - session.startTime) / (60 * 1000) // Convert milliseconds to minutes
 
     Card(
         modifier = Modifier
@@ -150,7 +179,7 @@ fun WorkoutSessionCard(session: SessionWorkoutWithMuscles) {
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    text = "Duration: $durationInMinutes min",
+                    text = formatDuration(session.endTime - session.startTime),
                     style = MaterialTheme.typography.bodyMedium
                 )
             }

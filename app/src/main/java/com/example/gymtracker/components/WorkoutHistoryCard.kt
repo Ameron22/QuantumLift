@@ -16,13 +16,27 @@ fun WorkoutHistoryCard(
     session: SessionWorkoutWithMuscles,
     onClick: () -> Unit
 ) {
+    // Debug logging
+    android.util.Log.d("WorkoutHistoryCard", "Rendering session: ID=${session.sessionId}, Name='${session.workoutName}', Start=${session.startTime}, End=${session.endTime}")
+    
     val instant = Instant.ofEpochMilli(session.startTime)
     val zoneId = ZoneId.of("Europe/London") // Use London timezone
     val localDateTime = instant.atZone(zoneId)
     
     val formattedDate = localDateTime.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))
     val formattedTime = localDateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
-    val durationInMinutes = (session.endTime - session.startTime) / (60 * 1000) // Convert milliseconds to minutes
+    
+    // Function to format duration in MM:SS or HH:MM:SS format
+    fun formatDuration(durationInMillis: Long): String {
+        val durationInSeconds = durationInMillis / 1000
+        val hours = durationInSeconds / 3600
+        val minutes = (durationInSeconds % 3600) / 60
+        val seconds = durationInSeconds % 60
+        return when {
+            hours > 0 -> String.format("%02d:%02d:%02d", hours, minutes, seconds)
+            else -> String.format("%02d:%02d", minutes, seconds)
+        }
+    }
 
     Card(
         modifier = Modifier
@@ -58,7 +72,7 @@ fun WorkoutHistoryCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Duration: $durationInMinutes min",
+                    text = "Duration: ${formatDuration(session.endTime - session.startTime)}",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(

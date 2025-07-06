@@ -18,6 +18,9 @@ import com.example.gymtracker.classes.NumberPicker
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.gymtracker.components.BottomNavBar
+import com.example.gymtracker.components.WorkoutIndicator
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.gymtracker.viewmodels.GeneralViewModel
 import androidx.activity.compose.BackHandler
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -26,8 +29,12 @@ import com.example.gymtracker.R
 import com.example.gymtracker.navigation.Screen
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(navController: NavController) {
+fun SettingsScreen(
+    navController: NavController,
+    generalViewModel: GeneralViewModel
+) {
     val context = LocalContext.current
     val prefs = remember { UserSettingsPreferences(context) }
     val settings by prefs.settingsFlow.collectAsState(initial = null)
@@ -73,6 +80,17 @@ fun SettingsScreen(navController: NavController) {
     }
 
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Settings") },
+                actions = {
+                    WorkoutIndicator(generalViewModel = generalViewModel, navController = navController)
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+                )
+            )
+        },
         bottomBar = { 
             // Custom bottom navigation that checks for changes
             val items = listOf(
@@ -99,7 +117,7 @@ fun SettingsScreen(navController: NavController) {
                                     modifier = Modifier.size(36.dp)
                                 )
                                 Screen.LoadWorkout -> Icon(
-                                    painter = painterResource(id = R.drawable.dumbell_icon),
+                                    painter = painterResource(id = R.drawable.dumbell_icon2),
                                     contentDescription = "Workouts",
                                     modifier = Modifier.size(44.dp)
                                 )

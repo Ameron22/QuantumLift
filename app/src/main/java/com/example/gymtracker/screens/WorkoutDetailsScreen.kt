@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
 import androidx.navigation.NavController
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import com.example.gymtracker.R
@@ -48,6 +49,7 @@ import java.util.concurrent.TimeUnit
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.gymtracker.viewmodels.WorkoutDetailsViewModel
 import com.example.gymtracker.viewmodels.GeneralViewModel
+import com.example.gymtracker.viewmodels.CurrentWorkoutState
 import com.example.gymtracker.data.AchievementManager
 import com.example.gymtracker.data.ExerciseDao
 import java.util.Calendar
@@ -66,6 +68,14 @@ import androidx.compose.ui.graphics.Color
 import com.example.gymtracker.data.WorkoutExerciseWithDetails
 import com.example.gymtracker.components.LoadingSpinner
 import com.example.gymtracker.components.ExerciseGif
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.zIndex
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import android.widget.Toast
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,13 +109,64 @@ fun WorkoutDetailsScreen(
     var showRenameDialog by remember { mutableStateOf(false) }
     var newWorkoutName by remember { mutableStateOf("") }
 
+    // Drag and drop state
+    var isDragging by remember { mutableStateOf(false) }
+    var draggedItem by remember { mutableStateOf<WorkoutExerciseWithDetails?>(null) }
+    var draggedItemIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    var reorderedExercises by remember { mutableStateOf<List<WorkoutExerciseWithDetails>>(emptyList()) }
+    var dragStartY by remember { mutableStateOf(0f) }
+    var hasStartedDragging by remember { mutableStateOf(false) }
+    
+    // Initialize reorderedExercises when exercisesList changes
+    LaunchedEffect(exercisesList) {
+        reorderedExercises = exercisesList
+    }
+    
+    // Function to handle real-time reordering during drag
+    fun handleDragMove(dragAmount: Offset) {
+        val fromIndex = draggedItemIndex ?: return
+        
+        // Only start processing after we've actually started dragging
+        if (!hasStartedDragging) {
+            hasStartedDragging = true
+            return
+        }
+        
+        // Accumulate the drag amount
+        dragOffset += dragAmount
+        
+        // Use a fixed threshold that's approximately the card height in pixels
+        // For most devices, 136dp converts to roughly 300-400 pixels
+        val threshold = 300f
+        
+        if (kotlin.math.abs(dragOffset.y) > threshold) {
+            val newIndex = when {
+                dragOffset.y < -threshold && fromIndex > 0 -> fromIndex - 1 // Moving up
+                dragOffset.y > threshold && fromIndex < reorderedExercises.size - 1 -> fromIndex + 1 // Moving down
+                else -> fromIndex // No movement
+            }
+            
+            if (newIndex != fromIndex) {
+                val newList = reorderedExercises.toMutableList()
+                val itemToMove = newList.removeAt(fromIndex)
+                newList.add(newIndex, itemToMove)
+                reorderedExercises = newList
+                draggedItemIndex = newIndex
+                
+                // Reset drag offset to prevent immediate jumping to next position
+                dragOffset = Offset.Zero
+            }
+        }
+    }
+
     // Add LaunchedEffect to sync workoutStarted with CurrentWorkoutViewModel state
     LaunchedEffect(currentWorkout) {
         workoutStarted = currentWorkout?.isActive ?: false
-        if (currentWorkout?.isActive == true) {
+        if (currentWorkout?.isActive == true && currentWorkout?.startTime != 0L) {
             startTimeWorkout = currentWorkout?.startTime ?: System.currentTimeMillis()
         }
-        Log.d("WorkoutDetailsScreen", "Synced workoutStarted state: $workoutStarted, currentWorkout isActive: ${currentWorkout?.isActive}")
+        Log.d("WorkoutDetailsScreen", "Synced workoutStarted state: $workoutStarted, currentWorkout isActive: ${currentWorkout?.isActive}, startTime: ${currentWorkout?.startTime}")
     }
 
     // Fetch workout data and sync with ViewModel
@@ -116,21 +177,25 @@ fun WorkoutDetailsScreen(
             // Clear ViewModel state at the beginning to ensure clean state for each workout
             viewModel.clearExercises()
             
-            // Check if we have an active workout for this workoutId
+                        // Check if we have an active workout for this workoutId
             val hasActiveWorkout = currentWorkout?.workoutId == workoutId && currentWorkout?.isActive == true
             val hasCompletedExercises = currentWorkout?.completedExercises?.isNotEmpty() == true
+            val hasInitializedWorkout = currentWorkout?.workoutId == workoutId && currentWorkout?.isActive == false
             
             Log.d("WorkoutDetailsScreen", "Current workout state: workoutId=${currentWorkout?.workoutId}, isActive=${currentWorkout?.isActive}, completedExercises=${currentWorkout?.completedExercises}")
-            Log.d("WorkoutDetailsScreen", "hasActiveWorkout=$hasActiveWorkout, hasCompletedExercises=$hasCompletedExercises")
+            Log.d("WorkoutDetailsScreen", "hasActiveWorkout=$hasActiveWorkout, hasCompletedExercises=$hasCompletedExercises, hasInitializedWorkout=$hasInitializedWorkout")
             
             if (hasActiveWorkout || hasCompletedExercises) {
                 Log.d("WorkoutDetailsScreen", "Resuming existing workout - preserving completed exercises")
                 viewModel.resetWorkoutSession()
+            } else if (hasInitializedWorkout) {
+                Log.d("WorkoutDetailsScreen", "Using existing initialized workout")
+                viewModel.resetWorkoutSession()
             } else {
                 Log.d("WorkoutDetailsScreen", "Starting fresh workout - clearing completed exercises")
                 viewModel.resetWorkoutSessionAndClearCompleted()
-                // Start a new workout session in GeneralViewModel
-                generalViewModel.startWorkout(workoutId, workoutName)
+                // Initialize a new workout session in GeneralViewModel (not active yet)
+                // We'll initialize it later after we get the workout name from database
             }
 
             withContext(Dispatchers.IO) {
@@ -144,6 +209,7 @@ fun WorkoutDetailsScreen(
 
                     // Set workout name regardless of whether there are exercises or not
                     workoutName = workout?.name ?: "Unknown Workout"
+                   
 
                     if (exercisesData.isEmpty()) {
                         Log.e("WorkoutDetailsScreen", "No exercises found for workout ID: $workoutId")
@@ -161,16 +227,28 @@ fun WorkoutDetailsScreen(
 
                         // Check if we have an active workout in GeneralViewModel
                         val hasActiveWorkout = currentWorkout?.workoutId == workoutId && currentWorkout?.isActive == true
+                        val hasInitializedWorkout = currentWorkout?.workoutId == workoutId && currentWorkout?.isActive == false
                         
                         if (hasActiveWorkout) {
-                            Log.d("WorkoutDetailsScreen", "Using existing workout session from GeneralViewModel")
+                            Log.d("WorkoutDetailsScreen", "Using existing active workout session from GeneralViewModel")
                             workoutStarted = currentWorkout?.isActive ?: false
                             if (workoutStarted) {
                                 startTimeWorkout = currentWorkout?.startTime ?: System.currentTimeMillis()
                             }
+                        } else if (hasInitializedWorkout) {
+                            Log.d("WorkoutDetailsScreen", "Using existing initialized workout session from GeneralViewModel")
+                            workoutStarted = false // Not started yet
                         } else {
                             Log.d("WorkoutDetailsScreen", "Initializing new workout session")
                             viewModel.initializeWorkoutSession(workoutId, workoutName)
+                            // Only initialize a new workout in GeneralViewModel if there's no workout at all
+                            val hasAnyWorkout = currentWorkout != null
+                            if (!hasAnyWorkout) {
+                                // Initialize a new workout session in GeneralViewModel (not active yet)
+                                coroutineScope.launch {
+                                    generalViewModel.initializeWorkoutWithName(workoutId, context)
+                                }
+                            }
                         }
 
                         Log.d("WorkoutDetailsScreen", "Workout name: $workoutName")
@@ -229,6 +307,10 @@ fun WorkoutDetailsScreen(
         viewModel.startWorkoutSession(currentTime)
         startTimeWorkout = currentTime
         workoutStarted = true  // Explicitly set workoutStarted to true
+        
+        // Activate the workout in GeneralViewModel
+        generalViewModel.activateWorkout()
+        
         val sessionId = generalViewModel.getCurrentSessionId()
         if (sessionId > 0) {
             Log.d(
@@ -268,6 +350,46 @@ fun WorkoutDetailsScreen(
         }
     }
 
+    // Function to reorder exercises
+    fun reorderExercises(fromIndex: Int, toIndex: Int) {
+        if (fromIndex != toIndex && fromIndex in reorderedExercises.indices && toIndex in reorderedExercises.indices) {
+            val newList = reorderedExercises.toMutableList()
+            val itemToMove = newList.removeAt(fromIndex)
+            newList.add(toIndex, itemToMove)
+            reorderedExercises = newList
+            
+            // Update database in background
+            coroutineScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        val dao = AppDatabase.getDatabase(context).exerciseDao()
+                        
+                        // Update the order in the database
+                        reorderedExercises.forEachIndexed { index, exerciseWithDetails ->
+                            val updatedWorkoutExercise = exerciseWithDetails.workoutExercise.copy(
+                                order = index
+                            )
+                            dao.updateWorkoutExercise(updatedWorkoutExercise)
+                        }
+                        
+                        // Update ViewModel
+                        withContext(Dispatchers.Main) {
+                            val updatedData = dao.getExercisesWithWorkoutData(workoutId)
+                                .map { WorkoutExerciseWithDetails(it.workoutExercise, it.exercise) }
+                            viewModel.clearExercises()
+                            updatedData.forEach { exerciseWithDetails ->
+                                viewModel.addExercise(exerciseWithDetails)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("WorkoutDetailsScreen", "Error reordering exercises: ${e.message}")
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
     // Function to end the workout session
     fun endWorkoutSession() {
         Log.d("WorkoutDetailsScreen", "Ending workout session")
@@ -276,18 +398,27 @@ fun WorkoutDetailsScreen(
                 // First, save the workout session data
                 withContext(Dispatchers.IO) {
                     val endTime = System.currentTimeMillis()
-                    val duration = endTime - (workoutSession?.startTime ?: endTime)
+                    val currentWorkoutState = currentWorkout
                     
-                    Log.d("WorkoutDetailsScreen", "Saving workout session - Start: ${workoutSession?.startTime}, End: $endTime, Duration: $duration")
-                    Log.d("WorkoutDetailsScreen", "Session details - ID: ${workoutSession?.sessionId}, Workout ID: ${workoutSession?.workoutId}, Name: ${workoutSession?.workoutName}")
+                    if (currentWorkoutState == null || !currentWorkoutState.isActive) {
+                        Log.d("WorkoutDetailsScreen", "No active workout to save")
+                        return@withContext
+                    }
+                    
+                    val duration = endTime - currentWorkoutState.startTime
+                    
+                    Log.d("WorkoutDetailsScreen", "Saving workout session - Start: ${currentWorkoutState.startTime}, End: $endTime, Duration: $duration")
+                    Log.d("WorkoutDetailsScreen", "Session details - ID: ${currentWorkoutState.sessionId}, Workout ID: ${currentWorkoutState.workoutId}, Name: ${currentWorkoutState.workoutName}")
 
                     val sessionWorkout = SessionWorkoutEntity(
-                        sessionId = workoutSession?.sessionId ?: 0,
-                        workoutId = workoutSession?.workoutId ?: 0,
-                        workoutName = workoutSession?.workoutName ?: "",
-                        startTime = workoutSession?.startTime ?: endTime,
+                        sessionId = currentWorkoutState.sessionId,
+                        workoutId = currentWorkoutState.workoutId,
+                        workoutName = currentWorkoutState.workoutName,
+                        startTime = currentWorkoutState.startTime,
                         endTime = endTime
                     )
+
+                    Log.d("WorkoutDetailsScreen", "Saving session: ID=${sessionWorkout.sessionId}, Name='${sessionWorkout.workoutName}', Start=${sessionWorkout.startTime}, End=${sessionWorkout.endTime}, Duration=${(sessionWorkout.endTime - sessionWorkout.startTime) / (60 * 1000)} min")
 
                     // Check if session already exists
                     val existingSession = dao.getWorkoutSession(sessionWorkout.sessionId)
@@ -298,6 +429,10 @@ fun WorkoutDetailsScreen(
                         Log.d("WorkoutDetailsScreen", "Inserting new session: ${sessionWorkout.sessionId}")
                         dao.insertWorkoutSession(sessionWorkout)
                     }
+                    
+                    // Verify the session was saved
+                    val savedSession = dao.getWorkoutSession(sessionWorkout.sessionId)
+                    Log.d("WorkoutDetailsScreen", "Verification - Saved session: ${savedSession?.workoutName}, Duration: ${savedSession?.let { (it.endTime - it.startTime) / (60 * 1000) }} min")
 
                     // Update achievements
                     val totalWorkouts = dao.getTotalWorkoutCount()
@@ -319,20 +454,16 @@ fun WorkoutDetailsScreen(
 
                 // Switch to main thread for UI updates
                 withContext(Dispatchers.Main) {
-                    // Stop the workout session
+                    // Stop the workout session in ViewModel
                     viewModel.stopWorkoutSession()
                     
-                    // End the current workout
+                    // End the current workout in GeneralViewModel
                     generalViewModel.endWorkout()
                     
-                    // Show save notification
-                    showSaveNotification = true
+                    // Show toast message
+                    Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
                     
-                    // Wait for 3 seconds
-                    delay(3000)
-                    
-                    // Hide notification and navigate back
-                    showSaveNotification = false
+                    // Navigate back immediately
                     viewModel.resetWorkoutSession()
                     navController.popBackStack()
                 }
@@ -347,47 +478,9 @@ fun WorkoutDetailsScreen(
         }
     }
 
-    // Add state for back confirmation dialog
-    var showBackConfirmationDialog by remember { mutableStateOf(false) }
-
-    // Handle back navigation
+    // Handle back navigation - just go back without confirmation
     BackHandler {
-        if (workoutSession != null) {
-            showBackConfirmationDialog = true
-        } else {
-            navController.popBackStack()
-        }
-    }
-
-    // Back confirmation dialog
-    if (showBackConfirmationDialog) {
-        AlertDialog(
-            onDismissRequest = { showBackConfirmationDialog = false },
-            title = { Text("Save Exercise?") },
-            text = { Text("Do you want to save this workout before going back?") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        endWorkoutSession()
-                        showBackConfirmationDialog = false
-                        navController.popBackStack()
-                    }
-                ) {
-                    Text("Save")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showBackConfirmationDialog = false
-                        navController.popBackStack()
-                    }
-                ) {
-                    Text("No")
-                }
-            },
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+        navController.popBackStack()
     }
 
     // Update the Recovery Factor Dialog
@@ -459,16 +552,7 @@ fun WorkoutDetailsScreen(
         )
     }
 
-    // Auto-dismiss notification after 3 seconds
-    LaunchedEffect(showSaveNotification) {
-        if (showSaveNotification) {
-            delay(3000)
-            showSaveNotification = false
-            viewModel.resetWorkoutSessionAndClearCompleted() // Clear completed exercises when workout is finished
-            generalViewModel.endWorkout() // End the current workout
-            navController.popBackStack()
-        }
-    }
+
 
 
 
@@ -487,7 +571,7 @@ fun WorkoutDetailsScreen(
     // Function to calculate current duration
     fun calculateCurrentDuration(startTimeWorkout: Long, workoutStarted: Boolean): String {
         return if (startTimeWorkout > 0 && workoutStarted) {
-            val currentDuration = (System.currentTimeMillis() - startTimeWorkout) / 1000
+            val currentDuration = System.currentTimeMillis() - startTimeWorkout
             formatDuration(currentDuration)
         } else {
             "00:00"
@@ -519,21 +603,79 @@ fun WorkoutDetailsScreen(
     fun ExerciseItem(
         exercise: EntityExercise,
         workoutExercise: WorkoutExercise,
-        onDelete: () -> Unit = {}
+        index: Int,
+        context: Context,
+        currentWorkout: CurrentWorkoutState?,
+        onDelete: () -> Unit = {},
+        onDragStart: (WorkoutExerciseWithDetails, Int) -> Unit = { _, _ -> },
+        onDragEnd: () -> Unit = {},
+        onDragMove: (Offset) -> Unit = {}
     ) {
+        val isBeingDragged = draggedItemIndex == index
+        val scale by animateFloatAsState(
+            targetValue = if (isBeingDragged) 1.05f else 1f,
+            animationSpec = tween(200),
+            label = "scale"
+        )
+        
+        val elevation by animateFloatAsState(
+            targetValue = if (isBeingDragged) 8f else 2f,
+            animationSpec = tween(200),
+            label = "elevation"
+        )
+
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 2.dp)  // Reduced vertical padding
-                .clickable {
-                    if (workoutSession == null) {
-                        startWorkoutSession(exercise.id)
+                .padding(horizontal = 16.dp, vertical = 2.dp)
+                .scale(scale)
+                .zIndex(if (isBeingDragged) 1000f else 0f)
+                .pointerInput(Unit) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { offset ->
+                            isDragging = true
+                            draggedItem = WorkoutExerciseWithDetails(workoutExercise, exercise)
+                            draggedItemIndex = index
+                            dragOffset = offset
+                            onDragStart(WorkoutExerciseWithDetails(workoutExercise, exercise), index)
+                        },
+                        onDragEnd = {
+                            isDragging = false
+                            draggedItem = null
+                            draggedItemIndex = null
+                            dragOffset = Offset.Zero
+                            onDragEnd()
+                        },
+                        onDragCancel = {
+                            isDragging = false
+                            draggedItem = null
+                            draggedItemIndex = null
+                            dragOffset = Offset.Zero
+                            onDragEnd()
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            onDragMove(dragAmount)
+                        }
+                    )
+                }
+                .clickable(enabled = !isDragging) {
+                    // Check if there's an active workout from a different workout
+                    val hasActiveWorkoutFromDifferentWorkout = currentWorkout?.isActive == true && currentWorkout?.workoutId != workoutId
+                    
+                    if (hasActiveWorkoutFromDifferentWorkout) {
+                        // Show toast message and block navigation
+                        Toast.makeText(context, "Please finish your active workout first", Toast.LENGTH_SHORT).show()
                     } else {
-                        navController.navigate(Screen.Exercise.createRoute(exercise.id, workoutSession!!.sessionId.toLong(), workoutId))
+                        if (workoutSession == null) {
+                            startWorkoutSession(exercise.id)
+                        } else {
+                            navController.navigate(Screen.Exercise.createRoute(exercise.id, workoutSession!!.sessionId.toLong(), workoutId))
+                        }
                     }
                 },
             shape = RoundedCornerShape(12.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = elevation.dp)
         ) {
             Box {
                 Row(
@@ -598,36 +740,47 @@ fun WorkoutDetailsScreen(
                     }
                 }
 
-                // Delete button and completion indicator
-                Column(
+                // Delete button (top right)
+                Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // Delete button
-                    Box(
-                        modifier = Modifier
-                            .size(20.dp)
-                            .background(
-                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
-                                shape = CircleShape
-                            )
-                            .clickable(onClick = onDelete),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.minus_icon),
-                            contentDescription = "Delete Exercise",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(12.dp)
+                        .padding(8.dp)
+                        .size(20.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
+                            shape = CircleShape
                         )
-                    }
+                        .clickable(onClick = onDelete),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.minus_icon),
+                        contentDescription = "Delete Exercise",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(12.dp)
+                    )
                 }
 
+                // Drag handle (middle right)
+                Icon(
+                    painter = painterResource(id = R.drawable.drag_handle_icon),
+                    contentDescription = "Drag to reorder",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 8.dp)
+                        .size(24.dp)
+                )
+
                 // Completion indicator moved to bottom right
-                val isCompleted = generalViewModel.isExerciseCompleted(exercise.id)
-                Log.d("WorkoutDetailsScreen", "Exercise ${exercise.id} (${exercise.name}) completed: $isCompleted")
+                // Only show completed exercises when we're viewing the active workout
+                val isActiveWorkout = currentWorkout?.workoutId == workoutId && currentWorkout?.isActive == true
+                val isCompleted = if (isActiveWorkout) {
+                    generalViewModel.isExerciseCompleted(exercise.id)
+                } else {
+                    false
+                }
+                Log.d("WorkoutDetailsScreen", "Exercise ${exercise.id} (${exercise.name}) completed: $isCompleted, isActiveWorkout: $isActiveWorkout")
                 if (isCompleted) {
                     Box(
                         modifier = Modifier
@@ -689,28 +842,32 @@ fun WorkoutDetailsScreen(
             )
         },
         bottomBar = {
-            BottomAppBar(
-                modifier = Modifier.fillMaxWidth(),
-                containerColor = MaterialTheme.colorScheme.surface
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+            // Only show Finish Workout button if we're viewing the active workout
+            val isActiveWorkout = currentWorkout?.workoutId == workoutId && currentWorkout?.isActive == true
+            if (workoutStarted && isActiveWorkout) {
+                BottomAppBar(
+                    modifier = Modifier.fillMaxWidth(),
+                    containerColor = MaterialTheme.colorScheme.surface
                 ) {
-                    Button(
-                        onClick = { endWorkoutSession() },
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        ),
-                        enabled = !showSaveNotification // Disable button while showing notification
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Save Workout")
+                        Button(
+                            onClick = { endWorkoutSession() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ),
+                            enabled = !showSaveNotification // Disable button while showing notification
+                        ) {
+                            Text("Finish Workout")
+                        }
                     }
                 }
             }
@@ -748,10 +905,13 @@ fun WorkoutDetailsScreen(
                 }
 
                 // Exercise list
-                exercisesList.forEach { exerciseWithDetails ->
+                reorderedExercises.forEachIndexed { index, exerciseWithDetails ->
                     ExerciseItem(
                         exercise = exerciseWithDetails.entityExercise,
                         workoutExercise = exerciseWithDetails.workoutExercise,
+                        index = index,
+                        context = context,
+                        currentWorkout = currentWorkout,
                         onDelete = {
                             coroutineScope.launch {
                                 // Remove the exercise from the workout
@@ -766,6 +926,50 @@ fun WorkoutDetailsScreen(
                                     viewModel.addExercise(exerciseWithDetails)
                                 }
                             }
+                        },
+                        onDragStart = { _, _ ->
+                            // Drag started
+                            dragStartY = 0f
+                            hasStartedDragging = false
+                        },
+                                                onDragEnd = {
+                            // Reset dragging state
+                            hasStartedDragging = false
+                            
+                            // Save the final order to database when drag ends
+                            draggedItemIndex?.let { finalIndex ->
+                                coroutineScope.launch {
+                                    try {
+                                        withContext(Dispatchers.IO) {
+                                            val dao = AppDatabase.getDatabase(context).exerciseDao()
+                                            
+                                            // Update the order in the database
+                                            reorderedExercises.forEachIndexed { index, exerciseWithDetails ->
+                                                val updatedWorkoutExercise = exerciseWithDetails.workoutExercise.copy(
+                                                    order = index
+                                                )
+                                                dao.updateWorkoutExercise(updatedWorkoutExercise)
+                                            }
+                                            
+                                            // Update ViewModel
+                                            withContext(Dispatchers.Main) {
+                                                val updatedData = dao.getExercisesWithWorkoutData(workoutId)
+                                                .map { WorkoutExerciseWithDetails(it.workoutExercise, it.exercise) }
+                                                viewModel.clearExercises()
+                                                updatedData.forEach { exerciseWithDetails ->
+                                                    viewModel.addExercise(exerciseWithDetails)
+                                                }
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        Log.e("WorkoutDetailsScreen", "Error saving reordered exercises: ${e.message}")
+                                        e.printStackTrace()
+                                    }
+                                }
+                            }
+                        },
+                        onDragMove = { offset ->
+                            handleDragMove(offset)
                         }
                     )
                 }

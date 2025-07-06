@@ -38,6 +38,20 @@ class GeneralViewModel : ViewModel() {
         )
     }
 
+    fun initializeWorkout(workoutId: Int, workoutName: String) {
+        val sessionId = System.currentTimeMillis()
+        Log.d("GeneralViewModel", "Initializing workout: $workoutId ($workoutName)")
+        _currentWorkout.value = CurrentWorkoutState(
+            workoutId = workoutId,
+            workoutName = workoutName,
+            sessionId = sessionId,
+            isActive = false, // Not active until first exercise is started
+            startTime = 0, // Will be set when workout actually starts
+            completedExercises = emptySet()
+        )
+        Log.d("GeneralViewModel", "Workout initialized - new state: ${_currentWorkout.value}")
+    }
+
     fun markExerciseAsCompleted(exerciseId: Int) {
         Log.d("GeneralViewModel", "markExerciseAsCompleted called with exerciseId: $exerciseId")
         val currentState = _currentWorkout.value
@@ -90,6 +104,31 @@ class GeneralViewModel : ViewModel() {
         _currentWorkout.value = null
     }
 
+    fun activateWorkout() {
+        val currentState = _currentWorkout.value
+        Log.d("GeneralViewModel", "activateWorkout called - currentState: $currentState")
+        if (currentState != null && !currentState.isActive) {
+            Log.d("GeneralViewModel", "Activating workout with name: '${currentState.workoutName}'")
+            _currentWorkout.value = currentState.copy(
+                isActive = true,
+                startTime = System.currentTimeMillis()
+            )
+            Log.d("GeneralViewModel", "Workout activated - new state: ${_currentWorkout.value}")
+        } else {
+            Log.d("GeneralViewModel", "Cannot activate workout - currentState is null or already active")
+        }
+    }
+
+    fun updateWorkoutName(workoutName: String) {
+        val currentState = _currentWorkout.value
+        if (currentState != null) {
+            Log.d("GeneralViewModel", "Updating workout name to: $workoutName")
+            _currentWorkout.value = currentState.copy(
+                workoutName = workoutName
+            )
+        }
+    }
+
     fun clearCompletedExercises() {
         val currentState = _currentWorkout.value
         if (currentState != null) {
@@ -98,6 +137,38 @@ class GeneralViewModel : ViewModel() {
                 completedExercises = emptySet()
             )
         }
+    }
+
+    fun hasActiveWorkout(): Boolean {
+        return _currentWorkout.value != null
+    }
+
+    suspend fun initializeWorkoutWithName(workoutId: Int, context: android.content.Context) {
+        val sessionId = System.currentTimeMillis()
+        Log.d("GeneralViewModel", "Initializing workout with name lookup: $workoutId")
+        
+        // Get workout name from database
+        val workoutName = try {
+            val dao = com.example.gymtracker.data.AppDatabase.getDatabase(context).exerciseDao()
+            val workouts = dao.getAllWorkouts()
+            val workout = workouts.find { it.id == workoutId }
+            val name = workout?.name ?: "Unknown Workout"
+            Log.d("GeneralViewModel", "Found workout name: '$name' for workoutId: $workoutId")
+            name
+        } catch (e: Exception) {
+            Log.e("GeneralViewModel", "Error getting workout name: ${e.message}")
+            "Unknown Workout"
+        }
+        
+        _currentWorkout.value = CurrentWorkoutState(
+            workoutId = workoutId,
+            workoutName = workoutName,
+            sessionId = sessionId,
+            isActive = false, // Not active until first exercise is started
+            startTime = 0, // Will be set when workout actually starts
+            completedExercises = emptySet()
+        )
+        Log.d("GeneralViewModel", "Workout initialized with name - new state: ${_currentWorkout.value}")
     }
 
     // General app methods can be added here

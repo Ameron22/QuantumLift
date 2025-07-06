@@ -16,10 +16,16 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.components.BottomNavBar
+import com.example.gymtracker.components.WorkoutIndicator
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.gymtracker.viewmodels.GeneralViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(navController: NavController) {
+fun HomeScreen(
+    navController: NavController,
+    generalViewModel: GeneralViewModel
+) {
     val context = LocalContext.current
     val db = remember { AppDatabase.getDatabase(context) }
     val dao = remember { db.exerciseDao() }
@@ -33,6 +39,9 @@ fun HomeScreen(navController: NavController) {
                         style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.primary
                     )
+                },
+                actions = {
+                    WorkoutIndicator(generalViewModel = generalViewModel, navController = navController)
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)

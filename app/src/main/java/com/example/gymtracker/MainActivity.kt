@@ -175,23 +175,23 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                         startDestination = Screen.Home.route
                     ) {
                         composable(Screen.Home.route) {
-                            HomeScreen(navController)
+                            HomeScreen(navController, generalViewModel)
                         }
                         composable(Screen.LoadWorkout.route) {
-                            LoadWorkoutScreen(navController)
+                            LoadWorkoutScreen(navController, generalViewModel)
                         }
                         composable(Screen.LoadHistory.route) {
-                            LoadHistoryScreen(navController, viewModel)
+                            LoadHistoryScreen(navController, viewModel, generalViewModel)
                         }
                         composable(Screen.Achievements.route) {
-                            AchievementsScreen(navController)
+                            AchievementsScreen(navController, generalViewModel)
                         }
                         composable(Screen.CreateExercise.route) {
                             CreateExerciseScreen(navController)
                         }
-                                composable(Screen.Settings.route) {
-            SettingsScreen(navController)
-        }
+                        composable(Screen.Settings.route) {
+                            SettingsScreen(navController, generalViewModel)
+                        }
                         composable(
                             Screen.Routes.WORKOUT_DETAILS,
                             arguments = listOf(navArgument("workoutId") { type = NavType.IntType })

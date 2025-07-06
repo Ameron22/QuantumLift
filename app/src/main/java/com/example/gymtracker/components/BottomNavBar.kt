@@ -43,7 +43,7 @@ fun BottomNavBar(navController: NavController) {
                             modifier = Modifier.size(36.dp)
                         )
                         Screen.LoadWorkout -> Icon(
-                            painter = painterResource(id = R.drawable.dumbell_icon),
+                            painter = painterResource(id = R.drawable.dumbell_icon2),
                             contentDescription = "Workouts",
                             modifier = Modifier.size(44.dp) // Slightly bigger dumbbell icon
                         )

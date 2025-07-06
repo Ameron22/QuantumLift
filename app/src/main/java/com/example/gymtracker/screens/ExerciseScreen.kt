@@ -72,6 +72,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
 import androidx.navigation.NavController
 import com.example.gymtracker.R
 import com.example.gymtracker.classes.NumberPicker
@@ -486,6 +487,13 @@ fun ExerciseScreen(
                     } else {
                         // Exercise time finished, start break
                         completedSet += 1
+                        
+                        // Activate the workout when the first set is completed
+                        if (completedSet == 1) {
+                            Log.d("ExerciseScreen", "First set completed - activating workout")
+                            generalViewModel.activateWorkout()
+                        }
+                        
                         val workoutExercise = exerciseWithDetails?.workoutExercise
                         if (activeSetIndex!! >= (workoutExercise?.sets ?: 0)) {
                             // All sets completed
@@ -553,7 +561,13 @@ fun ExerciseScreen(
         if (isTimerRunning) {
             stopTimer()
         }
-        showBackConfirmationDialog = true
+        // Only show confirmation dialog if at least one set is completed
+        if (completedSet > 0) {
+            showBackConfirmationDialog = true
+        } else {
+            // If no sets completed, just go back without confirmation
+            navController.popBackStack()
+        }
     }
 
     // Back confirmation dialog
@@ -565,6 +579,7 @@ fun ExerciseScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
+                        showBackConfirmationDialog = false
                         coroutineScope.launch {
                             saveExerciseSession()
                         }
@@ -591,7 +606,17 @@ fun ExerciseScreen(
     fun startTimer(setIndex: Int) {
         try {
             Log.d("ExerciseScreen", "startTimer called with setIndex: $setIndex")
+            
             val workoutExercise = exerciseWithDetails?.workoutExercise ?: return
+            
+            // Initialize workout if not already initialized
+            if (!generalViewModel.hasActiveWorkout()) {
+                Log.d("ExerciseScreen", "Initializing workout at timer start")
+                coroutineScope.launch {
+                    generalViewModel.initializeWorkoutWithName(workoutId, context)
+                }
+            }
+            
             activeSetIndex = setIndex
             exerciseTime = if (workoutExercise.reps > 50) {
                 workoutExercise.reps - 1000
@@ -673,6 +698,12 @@ fun ExerciseScreen(
                 Log.d("ExerciseScreen", "Skipping exercise set, completedSet=$completedSet, totalSets=${workoutExercise?.sets}")
                 completedSet += 1  // Increment completed sets when skipping
                 
+                // Activate the workout when the first set is completed
+                if (completedSet == 1) {
+                    Log.d("ExerciseScreen", "First set completed (skip) - activating workout")
+                    generalViewModel.activateWorkout()
+                }
+                
                 // Check if this was the last set
                 if (activeSetIndex!! >= (workoutExercise?.sets ?: 0)) {
                     Log.d("ExerciseScreen", "Last set completed (skip exercise), saving exercise session")
@@ -752,7 +783,18 @@ fun ExerciseScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { 
+                        if (isTimerRunning) {
+                            stopTimer()
+                        }
+                        // Only show confirmation dialog if at least one set is completed
+                        if (completedSet > 0) {
+                            showBackConfirmationDialog = true
+                        } else {
+                            // If no sets completed, just go back without confirmation
+                            navController.popBackStack()
+                        }
+                    }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
@@ -863,8 +905,8 @@ fun ExerciseScreen(
                             }
                         }
                     }
-                } else {
-                    // Save Exercise Button when timer is not running
+                } else if (completedSet > 0) {
+                    // Save Exercise Button when timer is not running and at least one set is completed
                 BottomAppBar(
                         modifier = Modifier.fillMaxWidth()
                 ) {
@@ -1235,8 +1277,8 @@ fun ExerciseScreen(
                                             )
                                         }
                                     }
-                                    // Show delete button only for the last set and if not completed
-                                    !isTimerRunning && set == we.sets && set > completedSet -> {
+                                    // Show delete button only for the last set, if not completed, and not the active set during timer
+                                    set == we.sets && set > completedSet && !(isTimerRunning && activeSetIndex == set) -> {
                                         IconButton(
                                             onClick = {
                                                 setWeights.remove(set)
@@ -1271,34 +1313,32 @@ fun ExerciseScreen(
                     }
 
                     // Add Set Button
-                    if (!isTimerRunning) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp),
-                            horizontalArrangement = Arrangement.Start
-                        ) {
-                            IconButton(
-                                onClick = {
-                                    val newSet = we.sets + 1
-                                    setWeights[newSet] = we.weight
-                                    setReps[newSet] = we.reps
-                                    // Update the exerciseWithDetails with the new workoutExercise
-                                    exerciseWithDetails = exerciseWithDetails?.copy(
-                                        workoutExercise = we.copy(sets = newSet)
-                                    )
-                                },
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .padding(start = 8.dp)
-                            ) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.plus_icon),
-                                    contentDescription = "Add Set",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.Start
+                    ) {
+                        IconButton(
+                            onClick = {
+                                val newSet = we.sets + 1
+                                setWeights[newSet] = we.weight
+                                setReps[newSet] = we.reps
+                                // Update the exerciseWithDetails with the new workoutExercise
+                                exerciseWithDetails = exerciseWithDetails?.copy(
+                                    workoutExercise = we.copy(sets = newSet)
                                 )
-                            }
+                            },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .padding(start = 8.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.plus_icon),
+                                contentDescription = "Add Set",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
                     }
 
@@ -1757,54 +1797,11 @@ fun ExerciseScreen(
 
             // Save Notification
             if (showSaveNotification) {
-                AlertDialog(
-                    onDismissRequest = { 
-                        showSaveNotification = false
-                        navController.popBackStack()
-                    },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Success",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(48.dp)
-                        )
-                    },
-                    title = {
-                        Text(
-                            text = "Exercise Saved",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    text = {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = "${exerciseWithDetails?.exercise?.name}",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Sets completed: ${exerciseWithDetails?.workoutExercise?.sets}/${exerciseWithDetails?.workoutExercise?.sets}",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            )
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { 
-                            showSaveNotification = false
-                            navController.popBackStack()
-                        }) {
-                            Text("OK")
-                        }
-                    },
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                LaunchedEffect(Unit) {
+                    Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
+                    showSaveNotification = false
+                    navController.popBackStack()
+                }
             }
         }
     }

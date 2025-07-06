@@ -11,12 +11,18 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.gymtracker.components.AchievementCard
 import com.example.gymtracker.components.BottomNavBar
+import com.example.gymtracker.components.WorkoutIndicator
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.gymtracker.viewmodels.GeneralViewModel
 import com.example.gymtracker.data.AchievementCategory
 import com.example.gymtracker.data.AchievementManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AchievementsScreen(navController: NavController) {
+fun AchievementsScreen(
+    navController: NavController,
+    generalViewModel: GeneralViewModel
+) {
     val achievementManager = remember { AchievementManager.getInstance() }
     val achievements by achievementManager.achievements.collectAsState()
     val newlyUnlocked by achievementManager.newlyUnlockedAchievements.collectAsState()
@@ -27,6 +33,9 @@ fun AchievementsScreen(navController: NavController) {
         topBar = {
             TopAppBar(
                 title = { Text("Achievements") },
+                actions = {
+                    WorkoutIndicator(generalViewModel = generalViewModel, navController = navController)
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
                 )

@@ -49,6 +49,7 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
 
                         // First, add all workout sessions to the map
                         workoutSessions.forEach { workoutSession ->
+                            Log.d("HistoryViewModel", "Processing workout session: ID=${workoutSession.sessionId}, Name='${workoutSession.workoutName}', Start=${workoutSession.startTime}, End=${workoutSession.endTime}, Duration=${(workoutSession.endTime - workoutSession.startTime) / (60 * 1000)} min")
                             sessionMap[workoutSession.sessionId] = SessionWorkoutWithMuscles(
                                 sessionId = workoutSession.sessionId,
                                 workoutId = workoutSession.workoutId,

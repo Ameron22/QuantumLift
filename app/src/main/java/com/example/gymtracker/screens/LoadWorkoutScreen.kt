@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
 import androidx.navigation.NavController
 import androidx.compose.ui.platform.LocalContext
 import com.example.gymtracker.data.AppDatabase
@@ -33,10 +34,16 @@ import com.example.gymtracker.navigation.Screen
 import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.withContext
 import com.example.gymtracker.components.LoadingSpinner
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.gymtracker.viewmodels.GeneralViewModel
+import com.example.gymtracker.components.WorkoutIndicator
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LoadWorkoutScreen(navController: NavController) {
+fun LoadWorkoutScreen(
+    navController: NavController,
+    generalViewModel: GeneralViewModel
+) {
     val context = LocalContext.current
     val workouts = remember { mutableStateOf(listOf<WorkoutWithExercises>()) }
     val filteredWorkouts = remember { mutableStateOf(listOf<WorkoutWithExercises>()) }
@@ -153,6 +160,9 @@ fun LoadWorkoutScreen(navController: NavController) {
             Column {
                 TopAppBar(
                     title = { Text("Workouts") },
+                    actions = {
+                        WorkoutIndicator(generalViewModel = generalViewModel, navController = navController)
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
                     )
@@ -201,7 +211,6 @@ fun LoadWorkoutScreen(navController: NavController) {
                         )
                     }
                 }
-
             }
         },
         bottomBar = { BottomNavBar(navController) },
@@ -282,6 +291,9 @@ fun LoadWorkoutScreen(navController: NavController) {
 
             // Existing workout cards
             items(filteredWorkouts.value) { workoutWithExercises ->
+                val currentWorkout by generalViewModel.currentWorkout.collectAsState()
+                val isActive = currentWorkout?.workoutId == workoutWithExercises.workout.id && currentWorkout?.isActive == true
+                
                 WorkoutCard(
                     workout = workoutWithExercises.workout,
                     muscleGroups = workoutWithExercises.exercises.map { it.muscle }.distinct(),
@@ -292,7 +304,8 @@ fun LoadWorkoutScreen(navController: NavController) {
                             )
                         )
                     },
-                    onDelete = { showDeleteConfirmation(workoutWithExercises.workout) }
+                    onDelete = { showDeleteConfirmation(workoutWithExercises.workout) },
+                    isActive = isActive
                 )
             }
         }
