@@ -19,9 +19,9 @@ class AuthRepository(private val context: Context) {
     private fun createApiService(): ApiService {
         // Use production URL for release builds, local IP for debug builds
         val baseUrl = if (BuildConfig.DEBUG) {
-            "http://192.168.0.76:3000/" // Development
+            "https://quantum-lift-git-main-marcels-projects-57570624.vercel.app/" // Development
         } else {
-            "https://quantum-lift-git-split-classes-marcels-projects-57570624.vercel.app/" // Production
+            "https://quantum-lift-git-main-marcels-projects-57570624.vercel.app/" // Production
         }
         
         val okHttpClient = okhttp3.OkHttpClient.Builder()
@@ -41,7 +41,7 @@ class AuthRepository(private val context: Context) {
     
     suspend fun login(username: String, password: String): Result<AuthResponse> {
         Log.d("AUTH_REPO", "Attempting login for username: $username")
-        Log.d("AUTH_REPO", "Server URL: http://192.168.0.76:3000/")
+        Log.d("AUTH_REPO", "Server URL: https://quantum-lift-git-main-marcels-projects-57570624.vercel.app/")
         return try {
             val response = apiService.login(LoginRequest(username, password))
             Log.d("AUTH_REPO", "Login response code: ${response.code()}")
