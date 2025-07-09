@@ -1,5 +1,7 @@
 require('dotenv').config();
 console.log('Loaded env:', process.env.DB_USER, process.env.DB_PASSWORD);
+console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
+console.log('NODE_ENV:', process.env.NODE_ENV);
 
 const express = require('express');
 const cors = require('cors');
@@ -66,4 +68,6 @@ app.listen(PORT, () => {
   console.log(`🚀 GymTracker Server running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🌐 API Base URL: http://localhost:${PORT}/api`);
+  console.log(`🔧 Environment: ${process.env.NODE_ENV}`);
+  console.log(`🗄️ Database URL: ${process.env.DATABASE_URL ? 'Set' : 'Not set'}`);
 }); 
