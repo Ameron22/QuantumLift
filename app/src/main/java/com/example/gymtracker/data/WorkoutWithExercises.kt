@@ -1,16 +1,19 @@
 package com.example.gymtracker.data
-import androidx.room.*
+
+import androidx.room.Embedded
+import androidx.room.Junction
+import androidx.room.Relation
 
 data class WorkoutWithExercises(
-    @Embedded val workout: WorkoutEntity,
+    @Embedded val workout: EntityWorkout,
     @Relation(
         parentColumn = "id",
         entityColumn = "id",
         associateBy = Junction(
-            WorkoutExerciseCrossRef::class,
+            value = WorkoutExercise::class,
             parentColumn = "workoutId",
             entityColumn = "exerciseId"
         )
     )
-    val exercises: List<ExerciseEntity>
+    val exercises: List<EntityExercise>
 )

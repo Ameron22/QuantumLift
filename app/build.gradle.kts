@@ -1,10 +1,9 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
-    id("kotlin-kapt")
-    //alias(libs.plugins.ksp)
-    //id("com.google.devtools.ksp") version "2.0.0-1.0.17"
+    //id("kotlin-kapt") we tried this but it didn't work
+    alias(libs.plugins.ksp)
+    id("kotlin-parcelize")
 }
 
 android {
@@ -31,14 +30,17 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
     buildFeatures {
         compose = true
+    }
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.8"
     }
 }
 
@@ -67,10 +69,30 @@ dependencies {
     implementation(libs.androidx.room.runtime)
 
     // Room dependencies
-
-    kapt(libs.room.compiler) // Use kapt for the Room compiler
+    ksp(libs.room.compiler) // Use ksp for the Room compiler
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.accompanist.pager)
     //implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.core.splashscreen) // Latest stable version
 
+    implementation("com.google.code.gson:gson:2.10.1")
+    implementation("androidx.core:core-ktx:1.12.0")
+    
+    // Retrofit for API calls
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    
+    // JWT token handling
+    implementation("com.auth0.android:jwtdecode:2.0.1")
+    
+    // DataStore for secure token storage
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
 
-    //ksp(libs.androidx.room.compiler) // Use ksp for Kotlin Symbol Processing
+    implementation(libs.coil)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.gif)
+    implementation(libs.android.gif.drawable)
+    implementation(libs.material.icons.extended)
 }
