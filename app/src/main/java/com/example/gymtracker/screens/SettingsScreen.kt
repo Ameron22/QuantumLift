@@ -30,13 +30,16 @@ import com.example.gymtracker.navigation.Screen
 import com.example.gymtracker.data.AchievementManager
 import com.example.gymtracker.viewmodels.AuthViewModel
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     navController: NavController,
-    generalViewModel: GeneralViewModel
+    generalViewModel: GeneralViewModel,
+    authViewModel: AuthViewModel // <-- Add this parameter
 ) {
     val context = LocalContext.current
     val prefs = remember { UserSettingsPreferences(context) }
@@ -135,6 +138,21 @@ fun SettingsScreen(
                 title = { Text("Settings") },
                 actions = {
                     WorkoutIndicator(generalViewModel = generalViewModel, navController = navController)
+                    // Use the shared AuthViewModel for logout, no rounding/clipping
+                    IconButton(onClick = {
+                        authViewModel.logout()
+                        navController.navigate(Screen.Login.route) {
+                            popUpTo(0) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.logout_icon),
+                            contentDescription = "Logout",
+                            tint = Color.Red,
+                            modifier = Modifier // No .clip or .size that would round/cut
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
@@ -205,11 +223,15 @@ fun SettingsScreen(
             }
         }
     ) { paddingValues ->
-        Column(modifier = Modifier
-            .fillMaxSize()
-            .padding(paddingValues)
-            .padding(16.dp)
-            .padding(top = 32.dp)) {
+        // Make the content scrollable
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(paddingValues)
+                .padding(16.dp)
+                .padding(top = 32.dp)
+        ) {
         Text(
             "Settings", 
             style = MaterialTheme.typography.headlineSmall,
@@ -446,74 +468,8 @@ fun SettingsScreen(
         
         Spacer(modifier = Modifier.height(16.dp))
         
-        // Test Achievement Notification Button
-        Button(
-            onClick = { 
-                val achievementManager = AchievementManager.getInstance()
-                achievementManager.showMultipleAchievementsNotification()
-            },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.secondary,
-                contentColor = MaterialTheme.colorScheme.onSecondary
-            )
-        ) {
-            Text("Test Achievement Notification")
-        }
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        // Test Single Achievement Notification Button
-        Button(
-            onClick = { 
-                val achievementManager = AchievementManager.getInstance()
-                achievementManager.notificationService.showAchievementNotification("first_workout")
-            },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.tertiary,
-                contentColor = MaterialTheme.colorScheme.onTertiary
-            )
-        ) {
-            Text("Test Single Achievement")
-        }
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        // Test Achievement Unlock Button
-        Button(
-            onClick = { 
-                val achievementManager = AchievementManager.getInstance()
-                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                    achievementManager.testAchievementUnlock("workout_warrior")
-                }
-            },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.error,
-                contentColor = MaterialTheme.colorScheme.onError
-            )
-        ) {
-            Text("Test Achievement Unlock")
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
         // Logout Button
-        Button(
-            onClick = { 
-                // Create AuthViewModel and logout
-                val authViewModel = AuthViewModel(context)
-                authViewModel.logout()
-                navController.navigate(Screen.Login.route) {
-                    popUpTo(0) { inclusive = true }
-                }
-            },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color.Red,
-                contentColor = Color.White
-            ),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Logout")
-        }
+        
         
         // Work Time Picker Dialog
         if (showWorkTimePicker) {

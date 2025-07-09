@@ -46,11 +46,13 @@ fun LoginScreen(
         }
     }
     
-    LaunchedEffect(authState.error) {
-        if (authState.error != null) {
-            authViewModel.clearError()
-        }
-    }
+    // Remove this block:
+    // LaunchedEffect(authState.error) {
+    //     if (authState.error != null) {
+    //         authViewModel.clearError()
+    //     }
+    // }
+    // The error will now persist until the user changes input or triggers login/register.
     
     Box(
         modifier = Modifier
@@ -181,6 +183,7 @@ fun LoginScreen(
                     
                     // Error Message
                     if (authState.error != null) {
+                        val isAuthError = authState.error!!.contains("401")
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -204,7 +207,10 @@ fun LoginScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Username or password is incorrect. Please check your credentials or register if you don't have an account.",
+                                    text = if (isAuthError)
+                                        "Username or password is incorrect. Please check your credentials or register if you don't have an account."
+                                    else
+                                        authState.error!!,
                                     color = Color.Red,
                                     fontSize = 14.sp,
                                     lineHeight = 18.sp
@@ -254,7 +260,10 @@ fun LoginScreen(
                             fontSize = 14.sp
                         )
                         TextButton(
-                            onClick = { navController.navigate(Screen.Register.route) }
+                            onClick = { 
+                                authViewModel.clearError()
+                                navController.navigate(Screen.Register.route) 
+                            }
                         ) {
                             Text(
                                 text = "Register",

@@ -17,12 +17,8 @@ class AuthRepository(private val context: Context) {
     private val apiService = createApiService()
     
     private fun createApiService(): ApiService {
-        // Use production URL for release builds, local IP for debug builds
-        val baseUrl = if (BuildConfig.DEBUG) {
-            "https://quantum-lift-git-main-marcels-projects-57570624.vercel.app/" // Development
-        } else {
-            "https://quantum-lift-git-main-marcels-projects-57570624.vercel.app/" // Production
-        }
+        // Use the new Vercel backend URL for all environments
+        val baseUrl = "https://quantum-lift.vercel.app/"
         
         val okHttpClient = okhttp3.OkHttpClient.Builder()
             .addInterceptor(okhttp3.logging.HttpLoggingInterceptor().apply {

@@ -1,5 +1,6 @@
 package com.example.gymtracker.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.gymtracker.navigation.Screen
 import com.example.gymtracker.viewmodels.AuthViewModel
+import androidx.compose.material.icons.filled.Error
 
 @Composable
 fun RegisterScreen(
@@ -35,6 +37,20 @@ fun RegisterScreen(
     var confirmPassword by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
     var showConfirmPassword by remember { mutableStateOf(false) }
+    var passwordError by remember { mutableStateOf<String?>(null) }
+    var emailError by remember { mutableStateOf<String?>(null) }
+    var passwordStrengthError by remember { mutableStateOf<String?>(null) }
+
+    // Email validation function
+    fun isValidEmail(email: String): Boolean {
+        val emailRegex = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$".toRegex()
+        return emailRegex.matches(email)
+    }
+    
+    fun isValidPassword(password: String): Boolean {
+        val passwordRegex = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$".toRegex()
+        return passwordRegex.matches(password)
+    }
     
     val authState by authViewModel.authState.collectAsState()
     
@@ -43,12 +59,6 @@ fun RegisterScreen(
             navController.navigate(Screen.Home.route) {
                 popUpTo(Screen.Register.route) { inclusive = true }
             }
-        }
-    }
-    
-    LaunchedEffect(authState.error) {
-        if (authState.error != null) {
-            authViewModel.clearError()
         }
     }
     
@@ -122,7 +132,7 @@ fun RegisterScreen(
                         label = { Text("Username", color = Color.Black) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 16.dp),
+                            .padding(bottom = 4.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color(0xFF3B82F6),
@@ -137,15 +147,19 @@ fun RegisterScreen(
                             imeAction = ImeAction.Next
                         )
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
                     
                     // Email Field
                     OutlinedTextField(
                         value = email,
-                        onValueChange = { email = it },
+                        onValueChange = {
+                            email = it
+                            emailError = if (email.isNotBlank() && !isValidEmail(email)) "Insert a valid email" else null
+                        },
                         label = { Text("Email", color = Color.Black) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 16.dp),
+                            .padding(bottom = 4.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color(0xFF3B82F6),
@@ -159,17 +173,33 @@ fun RegisterScreen(
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Email,
                             imeAction = ImeAction.Next
-                        )
+                        ),
+                        isError = emailError != null
                     )
+                    if (emailError != null) {
+                        Text(
+                            text = emailError!!,
+                            color = Color.Red,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
                     
                     // Password Field
                     OutlinedTextField(
                         value = password,
-                        onValueChange = { password = it },
+                        onValueChange = {
+                            password = it
+                            passwordStrengthError = if (password.isNotBlank() && !isValidPassword(password))
+                                "Password must be at least 8 characters, include upper and lower case letters, and a digit."
+                            else null
+                        },
                         label = { Text("Password", color = Color.Black) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 16.dp),
+                            .padding(bottom = 4.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color(0xFF3B82F6),
@@ -200,17 +230,31 @@ fun RegisterScreen(
                                     contentDescription = if (showPassword) "Hide password" else "Show password"
                                 )
                             }
-                        }
+                        },
+                        isError = passwordStrengthError != null
                     )
+                    if (passwordStrengthError != null) {
+                        Text(
+                            text = passwordStrengthError!!,
+                            color = Color.Red,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
                     
                     // Confirm Password Field
                     OutlinedTextField(
                         value = confirmPassword,
-                        onValueChange = { confirmPassword = it },
+                        onValueChange = {
+                            confirmPassword = it
+                            passwordError = if (confirmPassword.isNotBlank() && confirmPassword != password) "Passwords do not match" else null
+                        },
                         label = { Text("Confirm Password", color = Color.Black) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 24.dp),
+                            .padding(bottom = 4.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color(0xFF3B82F6),
@@ -241,24 +285,63 @@ fun RegisterScreen(
                                     contentDescription = if (showConfirmPassword) "Hide password" else "Show password"
                                 )
                             }
-                        }
+                        },
+                        isError = passwordError != null
                     )
-                    
-                    // Error Message
-                    if (authState.error != null) {
+                    if (passwordError != null) {
                         Text(
-                            text = authState.error!!,
+                            text = passwordError!!,
                             color = Color.Red,
-                            fontSize = 14.sp,
-                            modifier = Modifier.padding(bottom = 16.dp)
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(bottom = 12.dp)
                         )
+                    } else {
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                    
+                    // Error Message (visible above the Register button)
+                    if (authState.error != null && (authState.error!!.contains("409") || authState.error!!.contains("already taken", ignoreCase = true))) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color.Red.copy(alpha = 0.1f)
+                            ),
+                            border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.3f))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Error,
+                                    contentDescription = "Error",
+                                    tint = Color.Red,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Username or email already exists. Please choose another.",
+                                    color = Color.Red,
+                                    fontSize = 14.sp,
+                                    lineHeight = 18.sp
+                                )
+                            }
+                        }
                     }
                     
                     // Register Button
                     Button(
                         onClick = {
-                            if (username.isNotBlank() && email.isNotBlank() && 
-                                password.isNotBlank() && password == confirmPassword) {
+                            emailError = if (email.isNotBlank() && !isValidEmail(email)) "Insert a valid email" else null
+                            passwordError = if (confirmPassword.isNotBlank() && confirmPassword != password) "Passwords do not match" else null
+                            passwordStrengthError = if (password.isNotBlank() && !isValidPassword(password))
+                                "Password must be at least 8 characters, include upper and lower case letters, and a digit."
+                            else null
+                            if (username.isNotBlank() && email.isNotBlank() && password.isNotBlank() && password == confirmPassword && emailError == null && passwordStrengthError == null) {
                                 authViewModel.register(username, email, password)
                             }
                         },
@@ -269,11 +352,13 @@ fun RegisterScreen(
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF3B82F6)
                         ),
-                        enabled = !authState.isLoading && 
-                                username.isNotBlank() && 
-                                email.isNotBlank() && 
-                                password.isNotBlank() && 
-                                password == confirmPassword
+                        enabled = !authState.isLoading &&
+                                username.isNotBlank() &&
+                                email.isNotBlank() &&
+                                password.isNotBlank() &&
+                                password == confirmPassword &&
+                                emailError == null &&
+                                passwordStrengthError == null
                     ) {
                         if (authState.isLoading) {
                             CircularProgressIndicator(
@@ -300,7 +385,10 @@ fun RegisterScreen(
                             fontSize = 14.sp
                         )
                         TextButton(
-                            onClick = { navController.navigate(Screen.Login.route) }
+                            onClick = { 
+                                authViewModel.clearError()
+                                navController.navigate(Screen.Login.route) 
+                            }
                         ) {
                             Text(
                                 text = "Login",
