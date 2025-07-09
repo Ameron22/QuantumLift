@@ -25,9 +25,21 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
     private val _workoutSessions = MutableStateFlow<List<SessionWorkoutWithMuscles>>(emptyList())
     val workoutSessions: StateFlow<List<SessionWorkoutWithMuscles>> get() = _workoutSessions
 
+    // Add a StateFlow for exercise sessions to access muscle parts data
+    private val _exerciseSessions = MutableStateFlow<List<SessionEntityExercise>>(emptyList())
+    val exerciseSessions: StateFlow<List<SessionEntityExercise>> get() = _exerciseSessions
+
     // Add a StateFlow for muscle soreness
     private val _muscleSoreness = MutableStateFlow<Map<String, MuscleSorenessData>>(emptyMap())
     val muscleSoreness: StateFlow<Map<String, MuscleSorenessData>> get() = _muscleSoreness
+
+    // Add a StateFlow for weight progression
+    private val _weightProgression = MutableStateFlow<Map<String, List<WeightProgressionData>>>(emptyMap())
+    val weightProgression: StateFlow<Map<String, List<WeightProgressionData>>> get() = _weightProgression
+
+    // Add a StateFlow for volume progression
+    private val _volumeProgression = MutableStateFlow<Map<String, List<VolumeProgressionData>>>(emptyMap())
+    val volumeProgression: StateFlow<Map<String, List<VolumeProgressionData>>> get() = _volumeProgression
 
     init {
         loadWorkoutSessions()
@@ -64,6 +76,9 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
                         dao.getAllExerciseSessions().collect { exerciseSessions ->
                             Log.d("HistoryViewModel", "Processing ${exerciseSessions.size} exercise sessions")
                             
+                            // Store exercise sessions for muscle parts analysis
+                            _exerciseSessions.value = exerciseSessions
+                            
                             for (session in exerciseSessions) {
                                 val sessionId = session.sessionId
                                 
@@ -96,7 +111,17 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
                             // Calculate and update muscle soreness
                             _muscleSoreness.value = calculateMuscleSoreness(muscleDataMap)
 
-                            Log.d("HistoryViewModel", "Updated workout sessions and muscle soreness")
+                            // Calculate and update weight progression
+                            _weightProgression.value = withContext(Dispatchers.IO) {
+                                calculateWeightProgression(exerciseSessions)
+                            }
+
+                            // Calculate and update volume progression
+                            _volumeProgression.value = withContext(Dispatchers.IO) {
+                                calculateVolumeProgression(exerciseSessions)
+                            }
+
+                            Log.d("HistoryViewModel", "Updated workout sessions, muscle soreness, and weight progression")
 
                             // Start a parallel coroutine for the minimum display time
                             launch {
@@ -257,6 +282,99 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
         }
     }
 
+    /**
+     * Calculates weight progression for each exercise
+     */
+    private suspend fun calculateWeightProgression(exerciseSessions: List<SessionEntityExercise>): Map<String, List<WeightProgressionData>> {
+        val progressionMap = mutableMapOf<String, MutableList<WeightProgressionData>>()
+        
+        // Group exercises by exercise ID first, then get names
+        val exercisesById = exerciseSessions.groupBy { it.exerciseId }
+        
+        for ((exerciseId, sessions) in exercisesById) {
+            // Get exercise name from DAO
+            val exercise = dao.getExerciseById(exerciseId.toInt())
+            val exerciseName = exercise?.name ?: "Unknown Exercise"
+            
+            val progressionList = mutableListOf<WeightProgressionData>()
+            
+            for (session in sessions.sortedBy { it.sessionId }) {
+                val weights = session.weight.filterNotNull()
+                if (weights.isNotEmpty()) {
+                    val maxWeight = weights.maxOrNull()?.toFloat() ?: 0f
+                    val avgWeight = weights.average().toFloat()
+                    val totalVolume = session.repsOrTime.filterNotNull().sum()
+                    
+                    progressionList.add(
+                        WeightProgressionData(
+                            exerciseName = exerciseName,
+                            date = session.sessionId,
+                            maxWeight = maxWeight,
+                            avgWeight = avgWeight,
+                            totalVolume = totalVolume,
+                            sessionId = session.sessionId
+                        )
+                    )
+                }
+            }
+            
+            if (progressionList.isNotEmpty()) {
+                progressionMap[exerciseName] = progressionList
+            }
+        }
+        
+        return progressionMap
+    }
+
+    /**
+     * Calculates volume progression for each exercise
+     */
+    private suspend fun calculateVolumeProgression(exerciseSessions: List<SessionEntityExercise>): Map<String, List<VolumeProgressionData>> {
+        val progressionMap = mutableMapOf<String, MutableList<VolumeProgressionData>>()
+        
+        // Group exercises by exercise ID first, then get names
+        val exercisesById = exerciseSessions.groupBy { it.exerciseId }
+        
+        for ((exerciseId, sessions) in exercisesById) {
+            // Get exercise name and useTime from DAO
+            val exercise = dao.getExerciseById(exerciseId.toInt())
+            val exerciseName = exercise?.name ?: "Unknown Exercise"
+            
+            // Skip time-based exercises (like running) as volume calculation doesn't apply
+            if (exercise?.useTime == true) {
+                continue
+            }
+            
+            val progressionList = mutableListOf<VolumeProgressionData>()
+            
+            for (session in sessions.sortedBy { it.sessionId }) {
+                val reps = session.repsOrTime.filterNotNull()
+                val weights = session.weight.filterNotNull()
+                
+                // Calculate total volume: sum of (reps × weight) for each set
+                val totalVolume = reps.zip(weights) { rep, weight ->
+                    rep * weight
+                }.sum()
+                
+                progressionList.add(
+                    VolumeProgressionData(
+                        exerciseName = exerciseName,
+                        muscleGroup = session.muscleGroup,
+                        date = session.sessionId,
+                        totalVolume = totalVolume,
+                        sessionId = session.sessionId
+                    )
+                )
+            }
+            
+            if (progressionList.isNotEmpty()) {
+                progressionMap[exerciseName] = progressionList
+            }
+        }
+        
+        return progressionMap
+    }
+
     /** Do tomorow: It's probably something wrong in the logic, track What Exercise is
     fun generateProgressData(): ProgressData {
         val sessions = _workoutSessions.value
@@ -309,4 +427,27 @@ data class MuscleSorenessData(
     val averageRPE: Int,
     val averageSubjectiveSoreness: Int,
     val recentExercises: List<SessionEntityExercise>
+)
+
+/**
+ * Data class to store weight progression data for exercises
+ */
+data class WeightProgressionData(
+    val exerciseName: String,
+    val date: Long,
+    val maxWeight: Float,
+    val avgWeight: Float,
+    val totalVolume: Int,
+    val sessionId: Long
+)
+
+/**
+ * Data class to store volume progression data for exercises
+ */
+data class VolumeProgressionData(
+    val exerciseName: String,
+    val muscleGroup: String,
+    val date: Long,
+    val totalVolume: Int,
+    val sessionId: Long
 )

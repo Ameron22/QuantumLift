@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.NavType
@@ -21,11 +22,14 @@ import com.example.gymtracker.ui.theme.QuantumLiftTheme
 import com.example.gymtracker.ui.theme.GradientBackground
 import com.example.gymtracker.screens.*
 import com.example.gymtracker.navigation.Screen
+import com.example.gymtracker.screens.LoginScreen
+import com.example.gymtracker.screens.RegisterScreen
 import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.data.AchievementManager
 import com.example.gymtracker.utils.ExerciseDataImporter
 import com.example.gymtracker.viewmodels.WorkoutDetailsViewModel
 import com.example.gymtracker.viewmodels.GeneralViewModel
+import com.example.gymtracker.viewmodels.AuthViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -113,7 +117,7 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
         FloatingTimerManager.hideDeleteZone(this)
     }
     
-    override fun onNewIntent(intent: Intent?) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleNavigationIntent(intent)
     }
@@ -123,6 +127,12 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
             if (intentData.getBooleanExtra("from_floating_timer", false)) {
                 Log.d("MainActivity", "App brought to foreground from floating timer")
                 // Just bring the app to foreground, no specific navigation needed
+            }
+            
+            // Handle achievement notification intent
+            if (intentData.getBooleanExtra("open_achievements", false)) {
+                Log.d("MainActivity", "Opening achievements screen from notification")
+                // This will be handled in the Compose UI to navigate to achievements
             }
         }
     }
@@ -164,16 +174,44 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                     // Create shared ViewModel instances
                     val workoutDetailsViewModel = viewModel<WorkoutDetailsViewModel>()
                     val generalViewModel = viewModel<GeneralViewModel>()
+                    val authViewModel: AuthViewModel = viewModel(factory = object : ViewModelProvider.Factory {
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            if (modelClass.isAssignableFrom(AuthViewModel::class.java)) {
+                                @Suppress("UNCHECKED_CAST")
+                                return AuthViewModel(applicationContext) as T
+                            }
+                            throw IllegalArgumentException("Unknown ViewModel class")
+                        }
+                    })
 
-                    // Handle navigation from floating timer (simplified - just bring app to foreground)
+                    // Handle navigation from floating timer and achievement notifications
                     LaunchedEffect(Unit) {
-                        // No specific navigation needed, just bring app to foreground
+                        // Check if we should open achievements from notification
+                        if (intent?.getBooleanExtra("open_achievements", false) == true) {
+                            navController.navigate(Screen.Achievements.route)
+                        }
+                    }
+
+                    // Check authentication state and navigate accordingly
+                    val authState by authViewModel.authState.collectAsState()
+                    LaunchedEffect(authState.isLoggedIn) {
+                        if (!authState.isLoggedIn) {
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        }
                     }
 
                     NavHost(
                         navController = navController,
-                        startDestination = Screen.Home.route
+                        startDestination = if (authState.isLoggedIn) Screen.Home.route else Screen.Login.route
                     ) {
+                        composable(Screen.Login.route) {
+                            LoginScreen(navController, authViewModel)
+                        }
+                        composable(Screen.Register.route) {
+                            RegisterScreen(navController, authViewModel)
+                        }
                         composable(Screen.Home.route) {
                             HomeScreen(navController, generalViewModel)
                         }

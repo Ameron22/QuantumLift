@@ -77,6 +77,7 @@ import androidx.navigation.NavController
 import com.example.gymtracker.R
 import com.example.gymtracker.classes.NumberPicker
 import com.example.gymtracker.data.AppDatabase
+import com.example.gymtracker.data.Converter
 import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.SessionEntityExercise
 import com.example.gymtracker.data.WorkoutExercise
@@ -106,6 +107,12 @@ import android.content.Intent
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.BoxWithConstraints
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -349,7 +356,7 @@ fun ExerciseScreen(
             repsOrTime = repsOrTimeList,
             weight = weightList,
             muscleGroup = exercise.muscle,
-            muscleParts = exercise.parts.joinToString(", "),
+            muscleParts = Converter().fromString(exercise.parts).joinToString(", "),
             completedSets = completedSet,
             notes = "",
             eccentricFactor = eccentricFactor,
@@ -811,19 +818,17 @@ fun ExerciseScreen(
                 Column(modifier = Modifier.fillMaxWidth()) {
                 if (isTimerRunning) {
                     // Timer progress bar
-                        LinearProgressIndicator(
-                            progress = {
-                                if (isBreakRunning) {
-                                    remainingTime.toFloat() / breakTime
-                                } else {
-                                    remainingTime.toFloat() / exerciseTime
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(4.dp),
-                        color = if (isBreakRunning) Color.Red else Color.Green
-                        )
+                    ProgressBarWithBall(
+                        progress = if (isBreakRunning) {
+                            remainingTime.toFloat() / breakTime
+                        } else {
+                            remainingTime.toFloat() / exerciseTime
+                        },
+                        isBreak = isBreakRunning,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 0.dp)
+                    )
 
                     // Timer display
                     BottomAppBar(
@@ -941,7 +946,7 @@ fun ExerciseScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(top = paddingValues.calculateTopPadding())
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -975,7 +980,7 @@ fun ExerciseScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         DetailItem("Muscle Group", ex.exercise.muscle)
-                        DetailItem("Muscles", ex.exercise.parts.toString())
+                        DetailItem("Muscles", Converter().fromString(ex.exercise.parts).joinToString(", "))
                         DetailItem("Difficulty", ex.exercise.difficulty)
                     }
                 }
@@ -1089,7 +1094,9 @@ fun ExerciseScreen(
                                                     value = setWeights[set] ?: we.weight,
                                                     range = 0..200,
                                                     onValueChange = { weight ->
-                                                        setWeights[set] = weight
+                                                        for (i in set..we.sets) {
+                                                            setWeights[i] = weight
+                                                        }
                                                     },
                                                     unit = "Kg"
                                                 )
@@ -1150,7 +1157,9 @@ fun ExerciseScreen(
                                                     value = setReps[set] ?: we.reps,
                                                     range = 0..50,
                                                     onValueChange = { reps ->
-                                                        setReps[set] = reps
+                                                        for (i in set..we.sets) {
+                                                            setReps[i] = reps
+                                                        }
                                                     },
                                                     unit = "reps"
                                                 )
@@ -1212,8 +1221,9 @@ fun ExerciseScreen(
                                                     range = 0..59,
                                                     onValueChange = { newMinutes ->
                                                         minutes = newMinutes
-                                                            setReps[set] =
-                                                                (newMinutes * 60 + seconds) + 1000
+                                                        for (i in set..we.sets) {
+                                                            setReps[i] = (newMinutes * 60 + seconds) + 1000
+                                                        }
                                                     },
                                                     unit = ""
                                                 )
@@ -1222,8 +1232,9 @@ fun ExerciseScreen(
                                                     range = 0..59,
                                                     onValueChange = { newSeconds ->
                                                         seconds = newSeconds
-                                                            setReps[set] =
-                                                                (minutes * 60 + newSeconds) + 1000
+                                                        for (i in set..we.sets) {
+                                                            setReps[i] = (minutes * 60 + newSeconds) + 1000
+                                                        }
                                                     },
                                                     unit = ""
                                                 )
@@ -1869,6 +1880,50 @@ private fun DetailItem(label: String, value: String) {
             text = value,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+@Composable
+fun ProgressBarWithBall(progress: Float, isBreak: Boolean, modifier: Modifier = Modifier) {
+    val barColor = if (isBreak) Color.Red else Color.Green
+    val ballColor = barColor
+    val ballDiameter = 18.dp
+    val density = LocalDensity.current
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(16.dp)
+    ) {
+        val maxWidthPx = with(density) { maxWidth.toPx() }
+        val ballDiameterPx = with(density) { ballDiameter.toPx() }
+        val offsetPx = ((maxWidthPx - ballDiameterPx) * progress).coerceIn(0f, maxWidthPx - ballDiameterPx)
+
+        // Progress bar
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .align(Alignment.CenterStart),
+            color = barColor
+        )
+        // Ball
+        Box(
+            modifier = Modifier
+                .graphicsLayer { translationX = offsetPx }
+                .size(ballDiameter)
+                .align(Alignment.CenterStart)
+                .shadow(8.dp, shape = CircleShape, ambientColor = ballColor, spotColor = ballColor)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(ballColor, ballColor.copy(alpha = 0.7f), Color.Transparent),
+                        center = Offset(ballDiameterPx / 2, ballDiameterPx / 2),
+                        radius = ballDiameterPx * 0.7f
+                    ),
+                    shape = CircleShape
+                )
         )
     }
 }

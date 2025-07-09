@@ -9,6 +9,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.gymtracker.components.ExerciseGif
 import com.example.gymtracker.data.AppDatabase
+import com.example.gymtracker.data.Converter
 import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.WorkoutExercise
 import com.example.gymtracker.data.WorkoutExerciseWithDetails
@@ -35,6 +37,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.example.gymtracker.viewmodels.WorkoutDetailsViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.height
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,8 +62,9 @@ fun AddExerciseToWorkoutScreen(
     var minutes by remember { mutableStateOf(1) }
     var seconds by remember { mutableStateOf(0) }
     var showFilterDialog by remember { mutableStateOf(false) }
-    var selectedMuscleGroup by remember { mutableStateOf<String?>(null) }
-    var selectedDifficulty by remember { mutableStateOf<String?>(null) }
+    var selectedMuscleGroups by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selectedDifficulties by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selectedMuscleParts by remember { mutableStateOf<List<String>>(emptyList()) }
 
     // Create a single interaction source for all cards
     val interactionSource = remember { MutableInteractionSource() }
@@ -85,13 +90,40 @@ fun AddExerciseToWorkoutScreen(
     // Get unique muscle groups and difficulties
     val muscleGroups = exercises.map { it.muscle }.distinct().sorted()
     val difficulties = listOf("Beginner", "Intermediate", "Advanced")
+    
+    // Filter muscle parts based on selected muscle groups
+    val availableMuscleParts = if (selectedMuscleGroups.isEmpty()) {
+        exercises.flatMap { Converter().fromString(it.parts) }.distinct().sorted()
+    } else {
+        exercises.filter { it.muscle in selectedMuscleGroups }
+            .flatMap { Converter().fromString(it.parts) }
+            .distinct()
+            .sorted()
+    }
+    
+    // Clear muscle parts when muscle groups change
+    LaunchedEffect(selectedMuscleGroups) {
+        if (selectedMuscleGroups.isNotEmpty()) {
+            val validMuscleParts = exercises.filter { it.muscle in selectedMuscleGroups }
+                .flatMap { Converter().fromString(it.parts) }
+                .distinct()
+            selectedMuscleParts = selectedMuscleParts.filter { it in validMuscleParts }
+        }
+    }
 
     // Filter exercises based on search query and filters
     val filteredExercises = exercises.filter { exercise ->
-        val matchesSearch = exercise.name.contains(searchQuery, ignoreCase = true)
-        val matchesMuscle = selectedMuscleGroup == null || exercise.muscle == selectedMuscleGroup
-        val matchesDifficulty = selectedDifficulty == null || exercise.difficulty == selectedDifficulty
-        matchesSearch && matchesMuscle && matchesDifficulty
+        val searchTerms = searchQuery.lowercase().split(" ").filter { it.isNotEmpty() }
+        val matchesSearch = if (searchTerms.isEmpty()) {
+            true
+        } else {
+            val exerciseNameLower = exercise.name.lowercase()
+            searchTerms.all { term -> exerciseNameLower.contains(term) }
+        }
+        val matchesMuscle = selectedMuscleGroups.isEmpty() || selectedMuscleGroups.contains(exercise.muscle)
+        val matchesDifficulty = selectedDifficulties.isEmpty() || selectedDifficulties.contains(exercise.difficulty)
+        val matchesMusclePart = selectedMuscleParts.isEmpty() || Converter().fromString(exercise.parts).any { it in selectedMuscleParts }
+        matchesSearch && matchesMuscle && matchesDifficulty && matchesMusclePart
     }
 
     // Add LaunchedEffect to check returnTo state
@@ -155,26 +187,38 @@ fun AddExerciseToWorkoutScreen(
                 ) { }
                 
                 // Active filters in top bar
-                if (selectedMuscleGroup != null || selectedDifficulty != null) {
-                    Row(
+                if (selectedMuscleGroups.isNotEmpty() || selectedDifficulties.isNotEmpty() || selectedMuscleParts.isNotEmpty()) {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        if (selectedMuscleGroup != null) {
-                            FilterChip(
-                                selected = true,
-                                onClick = { selectedMuscleGroup = null },
-                                label = { Text(selectedMuscleGroup!!) }
-                            )
-                        }
-                        if (selectedDifficulty != null) {
-                            FilterChip(
-                                selected = true,
-                                onClick = { selectedDifficulty = null },
-                                label = { Text(selectedDifficulty!!) }
-                            )
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(vertical = 4.dp)
+                        ) {
+                            items(selectedMuscleGroups) { muscleGroup ->
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { selectedMuscleGroups = selectedMuscleGroups.filter { it != muscleGroup } },
+                                    label = { Text(muscleGroup) }
+                                )
+                            }
+                            items(selectedDifficulties) { difficulty ->
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { selectedDifficulties = selectedDifficulties.filter { it != difficulty } },
+                                    label = { Text(difficulty) }
+                                )
+                            }
+                            items(selectedMuscleParts) { musclePart ->
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { selectedMuscleParts = selectedMuscleParts.filter { it != musclePart } },
+                                    label = { Text(musclePart) }
+                                )
+                            }
                         }
                     }
                 }
@@ -454,22 +498,64 @@ fun AddExerciseToWorkoutScreen(
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(vertical = 4.dp)
                     ) {
-                        FilterChip(
-                            selected = selectedMuscleGroup == null,
-                            onClick = { selectedMuscleGroup = null },
-                            label = { Text("All") }
-                        )
-                        muscleGroups.forEach { muscle ->
+                        item {
                             FilterChip(
-                                selected = selectedMuscleGroup == muscle,
-                                onClick = { selectedMuscleGroup = muscle },
+                                selected = selectedMuscleGroups.isEmpty(),
+                                onClick = { selectedMuscleGroups = emptyList() },
+                                label = { Text("All") }
+                            )
+                        }
+                        items(muscleGroups) { muscle ->
+                            FilterChip(
+                                selected = selectedMuscleGroups.contains(muscle),
+                                onClick = {
+                                    if (selectedMuscleGroups.contains(muscle)) {
+                                        selectedMuscleGroups = selectedMuscleGroups.filter { it != muscle }
+                                    } else {
+                                        selectedMuscleGroups = selectedMuscleGroups + muscle
+                                    }
+                                },
                                 label = { Text(muscle) }
+                            )
+                        }
+                    }
+
+                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    // Muscle Part Filter
+                    Text(
+                        text = "Muscle Part",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(vertical = 4.dp)
+                    ) {
+                        item {
+                            FilterChip(
+                                selected = selectedMuscleParts.isEmpty(),
+                                onClick = { selectedMuscleParts = emptyList() },
+                                label = { Text("All") }
+                            )
+                        }
+                        items(availableMuscleParts) { musclePart ->
+                            FilterChip(
+                                selected = selectedMuscleParts.contains(musclePart),
+                                onClick = {
+                                    if (selectedMuscleParts.contains(musclePart)) {
+                                        selectedMuscleParts = selectedMuscleParts.filter { it != musclePart }
+                                    } else {
+                                        selectedMuscleParts = selectedMuscleParts + musclePart
+                                    }
+                                },
+                                label = { Text(musclePart) }
                             )
                         }
                     }
@@ -483,20 +569,24 @@ fun AddExerciseToWorkoutScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         FilterChip(
-                            selected = selectedDifficulty == null,
-                            onClick = { selectedDifficulty = null },
+                            selected = selectedDifficulties.isEmpty(),
+                            onClick = { selectedDifficulties = emptyList() },
                             label = { Text("All") }
                         )
                         difficulties.forEach { difficulty ->
                             FilterChip(
-                                selected = selectedDifficulty == difficulty,
-                                onClick = { selectedDifficulty = difficulty },
+                                selected = selectedDifficulties.contains(difficulty),
+                                onClick = {
+                                    if (selectedDifficulties.contains(difficulty)) {
+                                        selectedDifficulties = selectedDifficulties.filter { it != difficulty }
+                                    } else {
+                                        selectedDifficulties = selectedDifficulties + difficulty
+                                    }
+                                },
                                 label = { 
                                     Text(
                                         text = difficulty,

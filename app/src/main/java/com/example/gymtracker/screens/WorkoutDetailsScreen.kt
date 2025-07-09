@@ -117,12 +117,46 @@ fun WorkoutDetailsScreen(
     var reorderedExercises by remember { mutableStateOf<List<WorkoutExerciseWithDetails>>(emptyList()) }
     var dragStartY by remember { mutableStateOf(0f) }
     var hasStartedDragging by remember { mutableStateOf(false) }
+    var hasLoadedInitialData by remember { mutableStateOf(false) }
     
     // Initialize reorderedExercises when exercisesList changes
     LaunchedEffect(exercisesList) {
-        reorderedExercises = exercisesList
+        // Only update reorderedExercises if we're not currently dragging
+        // and if this is the initial load (reorderedExercises is empty and we haven't loaded data yet)
+        if (!isDragging && reorderedExercises.isEmpty() && !hasLoadedInitialData) {
+            reorderedExercises = exercisesList
+        }
     }
     
+    // Function to update database with new exercise order
+    fun updateDatabaseOrder(fromIndex: Int, toIndex: Int) {
+        coroutineScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val dao = AppDatabase.getDatabase(context).exerciseDao()
+                    
+                    // Only update exercises that actually changed position
+                    val minIndex = minOf(fromIndex, toIndex)
+                    val maxIndex = maxOf(fromIndex, toIndex)
+                    
+                    for (i in minIndex..maxIndex) {
+                        val exerciseWithDetails = reorderedExercises[i]
+                        // Update only the order field in the database - much more efficient
+                        dao.updateWorkoutExerciseOrder(exerciseWithDetails.workoutExercise.id, i)
+                    }
+                    
+                    // Update ViewModel with the reordered data
+                    withContext(Dispatchers.Main) {
+                        viewModel.updateExercisesOrder(reorderedExercises)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("WorkoutDetailsScreen", "Error updating database order: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+    }
+
     // Function to handle real-time reordering during drag
     fun handleDragMove(dragAmount: Offset) {
         val fromIndex = draggedItemIndex ?: return
@@ -154,6 +188,9 @@ fun WorkoutDetailsScreen(
                 reorderedExercises = newList
                 draggedItemIndex = newIndex
                 
+                // Update the database with the new order
+                updateDatabaseOrder(fromIndex, newIndex)
+                
                 // Reset drag offset to prevent immediate jumping to next position
                 dragOffset = Offset.Zero
             }
@@ -173,6 +210,10 @@ fun WorkoutDetailsScreen(
     LaunchedEffect(workoutId) {
         try {
             Log.d("WorkoutDetailsScreen", "Loading workout data for ID: $workoutId")
+            
+            // Reset flags for new workout
+            hasLoadedInitialData = false
+            reorderedExercises = emptyList()
             
             // Clear ViewModel state at the beginning to ensure clean state for each workout
             viewModel.clearExercises()
@@ -221,6 +262,9 @@ fun WorkoutDetailsScreen(
                         val workoutExerciseWithDetails = exercisesData.map { 
                             WorkoutExerciseWithDetails(it.workoutExercise, it.exercise) 
                         }
+                        // Initialize reorderedExercises with the fetched data
+                        reorderedExercises = workoutExerciseWithDetails
+                        hasLoadedInitialData = true
                         workoutExerciseWithDetails.forEach { exerciseWithDetails ->
                             viewModel.addExercise(exerciseWithDetails)
                         }
@@ -283,14 +327,12 @@ fun WorkoutDetailsScreen(
                         withContext(Dispatchers.IO) {
                             val updatedExercisesData = dao.getExercisesWithWorkoutData(workoutId)
                             withContext(Dispatchers.Main) {
-                                // Update ViewModel
+                                // Update ViewModel and reorderedExercises
                                 val workoutExerciseWithDetails = updatedExercisesData.map { 
                                     WorkoutExerciseWithDetails(it.workoutExercise, it.exercise) 
                                 }
-                                viewModel.clearExercises()
-                                workoutExerciseWithDetails.forEach { exerciseWithDetails ->
-                                    viewModel.addExercise(exerciseWithDetails)
-                                }
+                                reorderedExercises = workoutExerciseWithDetails
+                                viewModel.updateExercisesOrder(workoutExerciseWithDetails)
                             }
                         }
                     }
@@ -358,28 +400,25 @@ fun WorkoutDetailsScreen(
             newList.add(toIndex, itemToMove)
             reorderedExercises = newList
             
-            // Update database in background
+            // Update database in background - only update the order field for affected exercises
             coroutineScope.launch {
                 try {
                     withContext(Dispatchers.IO) {
                         val dao = AppDatabase.getDatabase(context).exerciseDao()
                         
-                        // Update the order in the database
-                        reorderedExercises.forEachIndexed { index, exerciseWithDetails ->
-                            val updatedWorkoutExercise = exerciseWithDetails.workoutExercise.copy(
-                                order = index
-                            )
-                            dao.updateWorkoutExercise(updatedWorkoutExercise)
+                        // Only update exercises that actually changed position
+                        val minIndex = minOf(fromIndex, toIndex)
+                        val maxIndex = maxOf(fromIndex, toIndex)
+                        
+                        for (i in minIndex..maxIndex) {
+                            val exerciseWithDetails = reorderedExercises[i]
+                            // Update only the order field in the database - much more efficient
+                            dao.updateWorkoutExerciseOrder(exerciseWithDetails.workoutExercise.id, i)
                         }
                         
-                        // Update ViewModel
+                        // Update ViewModel with the reordered data
                         withContext(Dispatchers.Main) {
-                            val updatedData = dao.getExercisesWithWorkoutData(workoutId)
-                                .map { WorkoutExerciseWithDetails(it.workoutExercise, it.exercise) }
-                            viewModel.clearExercises()
-                            updatedData.forEach { exerciseWithDetails ->
-                                viewModel.addExercise(exerciseWithDetails)
-                            }
+                            viewModel.updateExercisesOrder(reorderedExercises)
                         }
                     }
                 } catch (e: Exception) {
@@ -916,15 +955,13 @@ fun WorkoutDetailsScreen(
                             coroutineScope.launch {
                                 // Remove the exercise from the workout
                                 dao.deleteWorkoutExercise(exerciseWithDetails.workoutExercise)
-                                // Update ViewModel by refreshing from database
-                                val updatedData = withContext(Dispatchers.IO) {
-                                    dao.getExercisesWithWorkoutData(workoutId)
-                                        .map { WorkoutExerciseWithDetails(it.workoutExercise, it.exercise) }
+                                // Update reorderedExercises by removing the deleted item
+                                val updatedReorderedExercises = reorderedExercises.filter { 
+                                    it.workoutExercise.id != exerciseWithDetails.workoutExercise.id 
                                 }
-                                viewModel.clearExercises()
-                                updatedData.forEach { exerciseWithDetails ->
-                                    viewModel.addExercise(exerciseWithDetails)
-                                }
+                                reorderedExercises = updatedReorderedExercises
+                                // Update ViewModel efficiently
+                                viewModel.updateExercisesOrder(updatedReorderedExercises)
                             }
                         },
                         onDragStart = { _, _ ->
@@ -936,36 +973,11 @@ fun WorkoutDetailsScreen(
                             // Reset dragging state
                             hasStartedDragging = false
                             
-                            // Save the final order to database when drag ends
+                            // Save any final changes to the database
                             draggedItemIndex?.let { finalIndex ->
-                                coroutineScope.launch {
-                                    try {
-                                        withContext(Dispatchers.IO) {
-                                            val dao = AppDatabase.getDatabase(context).exerciseDao()
-                                            
-                                            // Update the order in the database
-                                            reorderedExercises.forEachIndexed { index, exerciseWithDetails ->
-                                                val updatedWorkoutExercise = exerciseWithDetails.workoutExercise.copy(
-                                                    order = index
-                                                )
-                                                dao.updateWorkoutExercise(updatedWorkoutExercise)
-                                            }
-                                            
-                                            // Update ViewModel
-                                            withContext(Dispatchers.Main) {
-                                                val updatedData = dao.getExercisesWithWorkoutData(workoutId)
-                                                .map { WorkoutExerciseWithDetails(it.workoutExercise, it.exercise) }
-                                                viewModel.clearExercises()
-                                                updatedData.forEach { exerciseWithDetails ->
-                                                    viewModel.addExercise(exerciseWithDetails)
-                                                }
-                                            }
-                                        }
-                                    } catch (e: Exception) {
-                                        Log.e("WorkoutDetailsScreen", "Error saving reordered exercises: ${e.message}")
-                                        e.printStackTrace()
-                                    }
-                                }
+                                // The database updates are already handled in handleDragMove
+                                // but we can add a final save here if needed
+                                Log.d("WorkoutDetailsScreen", "Drag ended at index: $finalIndex")
                             }
                         },
                         onDragMove = { offset ->

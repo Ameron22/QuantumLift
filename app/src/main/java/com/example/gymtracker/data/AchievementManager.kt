@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.mutableStateOf
 import com.example.gymtracker.R
+import com.example.gymtracker.services.AchievementNotificationService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,6 +17,7 @@ class AchievementManager private constructor(context: Context) {
     private val db = AppDatabase.getDatabase(context)
     private val achievementDao = db.achievementDao()
     private val scope = CoroutineScope(Dispatchers.Main)
+    val notificationService = AchievementNotificationService(context)
 
     private val _achievements = MutableStateFlow<List<Achievement>>(emptyList())
     val achievements: StateFlow<List<Achievement>> = _achievements.asStateFlow()
@@ -156,6 +158,8 @@ class AchievementManager private constructor(context: Context) {
                         )
                     )
                     _newlyUnlockedAchievements.value += "first_workout"
+                    // Show notification for first workout achievement
+                    notificationService.showAchievementNotification("first_workout")
                 }
             }
 
@@ -197,6 +201,8 @@ class AchievementManager private constructor(context: Context) {
             )
             if (newStatus == AchievementStatus.UNLOCKED && achievement?.status != AchievementStatus.UNLOCKED) {
                 _newlyUnlockedAchievements.value += id
+                // Show notification for newly unlocked achievement
+                notificationService.showAchievementNotification(id)
             }
         }
     }
@@ -227,12 +233,21 @@ class AchievementManager private constructor(context: Context) {
     suspend fun updateStrengthProgress(exerciseName: String, weight: Float) {
         withContext(Dispatchers.IO) {
             Log.d("AchievementManager", "Updating strength progress for $exerciseName with weight: $weight")
-            if (exerciseName.equals("Bench Press", ignoreCase = true) || exerciseName == "bench_press_100") {
+            
+            // Check if exercise name contains both "bench" and "press" (case insensitive)
+            val exerciseNameLower = exerciseName.lowercase()
+            val containsBench = exerciseNameLower.contains("bench")
+            val containsPress = exerciseNameLower.contains("press")
+            
+            if (containsBench && containsPress && weight >= 100f) {
+                Log.d("AchievementManager", "Bench press exercise detected: $exerciseName with weight: $weight")
                 val wasUnlocked = achievementDao.updateBenchPressProgress(weight)
                 Log.d("AchievementManager", "Updated bench press progress with weight: $weight")
                 if (wasUnlocked) {
                     _newlyUnlockedAchievements.value += "bench_press_100"
                     Log.d("AchievementManager", "Bench press achievement unlocked!")
+                    // Show notification for bench press achievement
+                    notificationService.showAchievementNotification("bench_press_100")
                 }
             }
         }
@@ -250,7 +265,85 @@ class AchievementManager private constructor(context: Context) {
                     )
                 )
                 _newlyUnlockedAchievements.value += challengeId
+                // Show notification for special challenge achievement
+                notificationService.showAchievementNotification(challengeId)
             }
+        }
+    }
+
+    fun clearNewlyUnlockedAchievements() {
+        _newlyUnlockedAchievements.value = emptySet()
+    }
+
+    fun clearSpecificNewlyUnlockedAchievement(achievementId: String) {
+        _newlyUnlockedAchievements.value = _newlyUnlockedAchievements.value - achievementId
+    }
+    
+    // Method to show notification for multiple achievements at once
+    fun showMultipleAchievementsNotification() {
+        val newlyUnlocked = _newlyUnlockedAchievements.value
+        if (newlyUnlocked.isNotEmpty()) {
+            notificationService.showMultipleAchievementsNotification(newlyUnlocked)
+        }
+    }
+    
+    // Method to test achievement unlocking and notification
+    suspend fun testAchievementUnlock(achievementId: String) {
+        withContext(Dispatchers.IO) {
+            val achievement = achievementDao.getAchievement(achievementId)
+            if (achievement?.status != AchievementStatus.UNLOCKED) {
+                achievementDao.insertOrUpdateAchievement(
+                    AchievementEntity(
+                        id = achievementId,
+                        status = AchievementStatus.UNLOCKED,
+                        currentProgress = 1
+                    )
+                )
+                _newlyUnlockedAchievements.value += achievementId
+                notificationService.showAchievementNotification(achievementId)
+            }
+        }
+    }
+
+    suspend fun resetAllAchievements() {
+        withContext(Dispatchers.IO) {
+            // Reset all achievements to locked state
+            val allAchievements = listOf(
+                "first_workout",
+                "workout_warrior", 
+                "workout_master",
+                "bench_press_100",
+                "consistency_week",
+                "consistency_month",
+                "night_owl"
+            )
+
+            allAchievements.forEach { id ->
+                achievementDao.insertOrUpdateAchievement(
+                    AchievementEntity(
+                        id = id,
+                        status = AchievementStatus.LOCKED,
+                        currentProgress = 0,
+                        maxValue = when (id) {
+                            "bench_press_100" -> 0f
+                            else -> 0f
+                        },
+                        targetValue = when (id) {
+                            "bench_press_100" -> 100f
+                            else -> when (id) {
+                                "workout_warrior" -> 10f
+                                "workout_master" -> 50f
+                                "consistency_week" -> 7f
+                                "consistency_month" -> 30f
+                                else -> 0f
+                            }
+                        }
+                    )
+                )
+            }
+            
+            // Clear newly unlocked achievements
+            _newlyUnlockedAchievements.value = emptySet()
         }
     }
 

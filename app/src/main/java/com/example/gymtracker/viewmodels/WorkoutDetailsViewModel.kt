@@ -165,4 +165,9 @@ class WorkoutDetailsViewModel : ViewModel() {
         Log.d("WorkoutDetailsViewModel", "Clearing exercises")
         _exercisesList.value = emptyList()
     }
+
+    fun updateExercisesOrder(exercises: List<WorkoutExerciseWithDetails>) {
+        Log.d("WorkoutDetailsViewModel", "Updating exercises order with ${exercises.size} exercises")
+        _exercisesList.value = exercises
+    }
 } 

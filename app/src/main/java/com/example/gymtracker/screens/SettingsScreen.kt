@@ -27,6 +27,9 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.ui.res.painterResource
 import com.example.gymtracker.R
 import com.example.gymtracker.navigation.Screen
+import com.example.gymtracker.data.AchievementManager
+import com.example.gymtracker.viewmodels.AuthViewModel
+import kotlinx.coroutines.launch
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,6 +79,53 @@ fun SettingsScreen(
             originalSoundEnabled = it.soundEnabled
             originalVibrationEnabled = it.vibrationEnabled
             originalSoundVolume = it.soundVolume
+        }
+    }
+
+    // Function to check if there are any changes
+    fun hasChanges(): Boolean {
+        return workTime != originalWorkTime || 
+               breakTime != originalBreakTime || 
+               soundEnabled != originalSoundEnabled || 
+               vibrationEnabled != originalVibrationEnabled ||
+               soundVolume != originalSoundVolume
+    }
+
+    // Function to save settings
+    fun saveSettings() {
+        prefs.updateWorkTime(workTime)
+        prefs.updateBreakTime(breakTime)
+        prefs.updateSoundEnabled(soundEnabled)
+        prefs.updateVibrationEnabled(vibrationEnabled)
+        prefs.updateSoundVolume(soundVolume)
+        
+        // Update original values after saving
+        originalWorkTime = workTime
+        originalBreakTime = breakTime
+        originalSoundEnabled = soundEnabled
+        originalVibrationEnabled = vibrationEnabled
+        originalSoundVolume = soundVolume
+        
+        showSavedMessage = true
+        
+        // Verify the save by reading back the values
+        val currentSettings = prefs.getCurrentSettings()
+        Log.d("SettingsScreen", "Settings after save - Work: ${currentSettings.defaultWorkTime}, Break: ${currentSettings.defaultBreakTime}, Sound: ${currentSettings.soundEnabled}, Vibration: ${currentSettings.vibrationEnabled}, Volume: ${currentSettings.soundVolume}")
+    }
+
+    // Function to handle navigation with change detection
+    fun handleNavigation(route: String) {
+        if (hasChanges()) {
+            pendingNavigationRoute = route
+            showBackConfirmationDialog = true
+        } else {
+            navController.navigate(route) {
+                popUpTo(navController.graph.startDestinationId) {
+                    saveState = true
+                }
+                launchSingleTop = true
+                restoreState = true
+            }
         }
     }
 
@@ -147,19 +197,7 @@ fun SettingsScreen(
                         selected = currentRoute == screen.route,
                         onClick = {
                             if (currentRoute != screen.route) {
-                                val hasChanges = workTime != originalWorkTime || breakTime != originalBreakTime
-                                if (hasChanges) {
-                                    pendingNavigationRoute = screen.route
-                                    showBackConfirmationDialog = true
-                                } else {
-                                    navController.navigate(screen.route) {
-                                        popUpTo(navController.graph.startDestinationId) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
+                                handleNavigation(screen.route)
                             }
                         }
                     )
@@ -393,30 +431,10 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         // Check if changes have been made
-        val hasChanges = workTime != originalWorkTime || breakTime != originalBreakTime || 
-                        soundEnabled != originalSoundEnabled || vibrationEnabled != originalVibrationEnabled ||
-                        soundVolume != originalSoundVolume
+        val hasChanges = hasChanges()
         
         Button(
-            onClick = {
-                prefs.updateWorkTime(workTime)
-                prefs.updateBreakTime(breakTime)
-                prefs.updateSoundEnabled(soundEnabled)
-                prefs.updateVibrationEnabled(vibrationEnabled)
-                prefs.updateSoundVolume(soundVolume)
-                showSavedMessage = true
-                
-                // Update original values after saving
-                originalWorkTime = workTime
-                originalBreakTime = breakTime
-                originalSoundEnabled = soundEnabled
-                originalVibrationEnabled = vibrationEnabled
-                originalSoundVolume = soundVolume
-                
-                // Verify the save by reading back the values
-                val currentSettings = prefs.getCurrentSettings()
-                Log.d("SettingsScreen", "Settings after save - Work: ${currentSettings.defaultWorkTime}, Break: ${currentSettings.defaultBreakTime}, Sound: ${currentSettings.soundEnabled}, Vibration: ${currentSettings.vibrationEnabled}, Volume: ${currentSettings.soundVolume}")
-            },
+            onClick = { saveSettings() },
             enabled = hasChanges,
             colors = ButtonDefaults.buttonColors(
                 containerColor = if (hasChanges) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
@@ -424,6 +442,77 @@ fun SettingsScreen(
             )
         ) {
             Text("Save")
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Test Achievement Notification Button
+        Button(
+            onClick = { 
+                val achievementManager = AchievementManager.getInstance()
+                achievementManager.showMultipleAchievementsNotification()
+            },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondary,
+                contentColor = MaterialTheme.colorScheme.onSecondary
+            )
+        ) {
+            Text("Test Achievement Notification")
+        }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // Test Single Achievement Notification Button
+        Button(
+            onClick = { 
+                val achievementManager = AchievementManager.getInstance()
+                achievementManager.notificationService.showAchievementNotification("first_workout")
+            },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.tertiary,
+                contentColor = MaterialTheme.colorScheme.onTertiary
+            )
+        ) {
+            Text("Test Single Achievement")
+        }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // Test Achievement Unlock Button
+        Button(
+            onClick = { 
+                val achievementManager = AchievementManager.getInstance()
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    achievementManager.testAchievementUnlock("workout_warrior")
+                }
+            },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError
+            )
+        ) {
+            Text("Test Achievement Unlock")
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Logout Button
+        Button(
+            onClick = { 
+                // Create AuthViewModel and logout
+                val authViewModel = AuthViewModel(context)
+                authViewModel.logout()
+                navController.navigate(Screen.Login.route) {
+                    popUpTo(0) { inclusive = true }
+                }
+            },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color.Red,
+                contentColor = Color.White
+            ),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Logout")
         }
         
         // Work Time Picker Dialog
@@ -521,10 +610,7 @@ fun SettingsScreen(
     
     // Handle back navigation
     BackHandler {
-        val hasChanges = workTime != originalWorkTime || breakTime != originalBreakTime ||
-                        soundEnabled != originalSoundEnabled || vibrationEnabled != originalVibrationEnabled ||
-                        soundVolume != originalSoundVolume
-        if (hasChanges) {
+        if (hasChanges()) {
             showBackConfirmationDialog = true
         } else {
             navController.popBackStack()
@@ -543,11 +629,7 @@ fun SettingsScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        prefs.updateWorkTime(workTime)
-                        prefs.updateBreakTime(breakTime)
-                        prefs.updateSoundEnabled(soundEnabled)
-                        prefs.updateVibrationEnabled(vibrationEnabled)
-                        prefs.updateSoundVolume(soundVolume)
+                        saveSettings()
                         showBackConfirmationDialog = false
                         
                         // Navigate based on pending route or go back

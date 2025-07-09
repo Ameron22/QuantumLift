@@ -38,7 +38,8 @@ import com.example.gymtracker.R
 fun AchievementCard(
     achievement: Achievement,
     modifier: Modifier = Modifier,
-    isNewlyUnlocked: Boolean = false
+    isNewlyUnlocked: Boolean = false,
+    onAchievementClicked: (() -> Unit)? = null
 ) {
     var wasUnlocked by remember { mutableStateOf(false) }
     var startAnimation by remember { mutableStateOf(false) }
@@ -137,16 +138,16 @@ fun AchievementCard(
         if (!isDragging) {
             val currentTime = System.currentTimeMillis()
             // Only start momentum if we were dragging recently
-            if (currentTime - lastDragTime < 100) {  // 100ms threshold
+            if (currentTime - lastDragTime < 200) {  // 200ms threshold for more responsiveness
                 isMomentumActive = true
-                while (isMomentumActive && (kotlin.math.abs(rotationVelocityX) > 0.1f || kotlin.math.abs(rotationVelocityY) > 0.1f || kotlin.math.abs(rotationX) > 0.1f)) {
+                while (isMomentumActive && (kotlin.math.abs(rotationVelocityX) > 0.1f || kotlin.math.abs(rotationVelocityY) > 0.01f || kotlin.math.abs(rotationX) > 0.1f)) {
                     // Calculate dynamic friction based on velocity
                     val speedX = kotlin.math.abs(rotationVelocityX)
                     val speedY = kotlin.math.abs(rotationVelocityY)
                     
-                    // Friction is much lower at high speeds (0.98 at high speed, 0.999 at low speed)
-                    val frictionX = 0.98f + (0.019f * (1f - (speedX / 30f).coerceIn(0f, 1f)))
-                    val frictionY = 0.98f + (0.019f * (1f - (speedY / 30f).coerceIn(0f, 1f)))
+                    // Friction is much lower at high speeds (0.99 at high speed, 0.999 at low speed) - reduced friction
+                    val frictionX = 0.99f + (0.009f * (1f - (speedX / 30f).coerceIn(0f, 1f)))
+                    val frictionY = 0.85f + (0.149f * (1f - (speedY / 30f).coerceIn(0f, 1f))) // Much lighter friction for Y axis
                     
                     // Apply rotation with dynamic friction
                     rotationX += rotationVelocityX
@@ -154,15 +155,19 @@ fun AchievementCard(
                     
                     // Apply friction
                     rotationVelocityX *= frictionX
-                    rotationVelocityY *= frictionY
+                    // rotationVelocityY *= frictionY  // Commented out friction for Y-axis
                     
-                    // Add spring force to return X rotation to 0
-                    val springForce = -rotationX * 0.02f  // Adjust this value to control return speed
+                    // Add spring force to return X rotation to 0 - reduced force
+                    val springForce = -rotationX * 0.005f  // Reduced force for more freedom
                     rotationVelocityX += springForce
                     
-                    // Stop if velocity is very small
-                    if (kotlin.math.abs(rotationVelocityX) < 0.2f) rotationVelocityX = 0f
-                    if (kotlin.math.abs(rotationVelocityY) < 0.2f) rotationVelocityY = 0f
+
+                    
+
+                    
+                    // Stop if velocity is very small - lower threshold for more responsiveness
+                    if (kotlin.math.abs(rotationVelocityX) < 0.1f) rotationVelocityX = 0f
+                    if (kotlin.math.abs(rotationVelocityY) < 0.01f) rotationVelocityY = 0f // Much lower threshold for Y
                     
                     delay(16) // Approximately 60 FPS
                 }
@@ -185,9 +190,9 @@ fun AchievementCard(
     
     val smoothRotationY by animateFloatAsState(
         targetValue = rotationY,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessLow
+        animationSpec = tween(
+            durationMillis = 16, // Very fast animation for responsive rotation
+            easing = LinearEasing
         ),
         label = "smoothRotationY"
     )
@@ -272,6 +277,9 @@ fun AchievementCard(
             delay(100)
             animationPhase = 1
             wasUnlocked = true
+            // Clear the newly unlocked state after animation completes
+            delay(3000) // Wait for animation to complete
+            onAchievementClicked?.invoke()
         }
     }
 
@@ -332,16 +340,16 @@ fun AchievementCard(
                                 Log.d("AchievementCard", "  Drag Amount X: ${dragAmount.x}")
                                 Log.d("AchievementCard", "  Drag Amount Y: ${dragAmount.y}")
 
-                                // Update X rotation (tilt)
-                                rotationX = (rotationX - dragAmount.y * 0.3f).coerceIn(-90f, 90f)
+                                // Update X rotation (tilt) - more sensitive
+                                rotationX = (rotationX - dragAmount.y * 0.8f).coerceIn(-45f, 45f)
 
-                                // Update Y rotation (flip)
-                                rotationY += dragAmount.x * 0.8f
+                                // Update Y rotation (flip) - reduced sensitivity now that animation is fixed
+                                rotationY += dragAmount.x * 2.0f
 
-                                // Update velocities with reduced multipliers and max limits
-                                val maxVelocity = 10f
-                                rotationVelocityX = (-dragAmount.y * 0.1f).coerceIn(-maxVelocity, maxVelocity)
-                                rotationVelocityY = (dragAmount.x * 0.2f).coerceIn(-maxVelocity, maxVelocity)
+                                // Update velocities with reduced multipliers
+                                val maxVelocity = 50f  // Increased max velocity for faster rotation
+                                rotationVelocityX = (-dragAmount.y * 0.3f).coerceIn(-maxVelocity, maxVelocity)
+                                rotationVelocityY = (dragAmount.x * 1.5f).coerceIn(-maxVelocity, maxVelocity)
 
                                 // Log updated values
                                 Log.d("AchievementCard", "  New Rotation X: $rotationX")
@@ -730,6 +738,7 @@ fun AchievementCard(
             .clickable {
                 if (isNewlyUnlocked && !wasUnlocked) {
                     startAnimation = true
+                    onAchievementClicked?.invoke()
                 } else if (visuallyUnlocked) {
                     isExpanded = true
                 }

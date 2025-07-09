@@ -121,6 +121,9 @@ interface ExerciseDao {
     @Query("SELECT MAX(`order`) FROM workout_exercises WHERE workoutId = :workoutId")
     suspend fun getMaxExerciseOrder(workoutId: Int): Int?
 
+    @Query("UPDATE workout_exercises SET `order` = :newOrder WHERE id = :workoutExerciseId")
+    suspend fun updateWorkoutExerciseOrder(workoutExerciseId: Int, newOrder: Int)
+
     // New method to get exercises with their workout-specific data
     @Transaction
     suspend fun getExercisesWithWorkoutData(workoutId: Int): List<ExerciseWithWorkoutData> {

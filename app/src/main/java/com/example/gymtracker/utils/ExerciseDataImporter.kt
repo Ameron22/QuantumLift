@@ -5,6 +5,7 @@ import android.util.Log
 import com.example.gymtracker.data.CsvExercise
 import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.ExerciseDao
+import com.example.gymtracker.data.Converter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
@@ -202,7 +203,7 @@ class ExerciseDataImporter(private val context: Context, private val dao: Exerci
                     val exercise = EntityExercise(
                         name = csvExercise.title,
                         muscle = csvExercise.muscleGroup,
-                        parts = csvExercise.muscles,
+                        parts = Converter().fromList(csvExercise.muscles),
                         gifUrl = csvExercise.gifUrl,
                         difficulty = convertedDifficulty,
                         useTime = csvExercise.useTime

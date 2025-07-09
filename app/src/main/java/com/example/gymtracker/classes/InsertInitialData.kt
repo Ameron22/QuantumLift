@@ -3,6 +3,7 @@ package com.example.gymtracker.classes
 import com.example.gymtracker.data.ExerciseDao
 import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.EntityWorkout
+import com.example.gymtracker.data.Converter
 import com.example.gymtracker.data.WorkoutExercise
 import com.example.gymtracker.data.SessionWorkoutEntity
 import com.example.gymtracker.data.SessionEntityExercise
@@ -27,31 +28,25 @@ class InsertInitialData {
                 val benchPressId = dao.insertExercise(
                     EntityExercise(
                         name = "Bench Press",
-                        sets = 4,
-                        reps = 8,
-                        weight = 60,
                         muscle = "Chest",
-                        part = listOf("Upper Chest", "Middle Chest", "Front Deltoids")
+                        parts = Converter().fromList(listOf("Upper Chest", "Middle Chest", "Front Deltoids")),
+                        difficulty = "Intermediate"
                     )
                 )
                 val shoulderPressId = dao.insertExercise(
                     EntityExercise(
                         name = "Shoulder Press",
-                        sets = 3,
-                        reps = 10,
-                        weight = 40,
                         muscle = "Shoulders",
-                        part = listOf("Front Deltoids", "Middle Deltoids")
+                        parts = Converter().fromList(listOf("Front Deltoids", "Middle Deltoids")),
+                        difficulty = "Intermediate"
                     )
                 )
                 val tricepExtensionId = dao.insertExercise(
                     EntityExercise(
                         name = "Tricep Extension",
-                        sets = 3,
-                        reps = 12,
-                        weight = 25,
                         muscle = "Arms",
-                        part = listOf("Triceps")
+                        parts = Converter().fromList(listOf("Triceps")),
+                        difficulty = "Intermediate"
                     )
                 )
 
@@ -59,21 +54,17 @@ class InsertInitialData {
                 val latPulldownId = dao.insertExercise(
                     EntityExercise(
                         name = "Lat Pulldown",
-                        sets = 4,
-                        reps = 10,
-                        weight = 50,
                         muscle = "Back",
-                        part = listOf("Lats", "Upper Back")
+                        parts = Converter().fromList(listOf("Lats", "Upper Back")),
+                        difficulty = "Intermediate"
                     )
                 )
                 val bicepCurlId = dao.insertExercise(
                     EntityExercise(
                         name = "Bicep Curl",
-                        sets = 3,
-                        reps = 12,
-                        weight = 15,
                         muscle = "Arms",
-                        part = listOf("Biceps")
+                        parts = Converter().fromList(listOf("Biceps")),
+                        difficulty = "Intermediate"
                     )
                 )
 
@@ -81,11 +72,9 @@ class InsertInitialData {
                 val squatId = dao.insertExercise(
                     EntityExercise(
                         name = "Barbell Squat",
-                        sets = 4,
-                        reps = 8,
-                        weight = 80,
                         muscle = "Legs",
-                        part = listOf("Quadriceps", "Glutes", "Hamstrings")
+                        parts = Converter().fromList(listOf("Quadriceps", "Glutes", "Hamstrings")),
+                        difficulty = "Intermediate"
                     )
                 )
 
@@ -93,21 +82,19 @@ class InsertInitialData {
                 val plankId = dao.insertExercise(
                     EntityExercise(
                         name = "Plank",
-                        sets = 3,
-                        reps = 1060, // 1 minute = 1060 (60 seconds + 1000 to indicate time)
-                        weight = 0,
                         muscle = "Core",
-                        part = listOf("Abs", "Lower Back")
+                        parts = Converter().fromList(listOf("Abs", "Lower Back")),
+                        difficulty = "Beginner",
+                        useTime = true
                     )
                 )
                 val hiitId = dao.insertExercise(
                     EntityExercise(
                         name = "HIIT Running",
-                        sets = 1,
-                        reps = 1900, // 15 minutes = 1900 (900 seconds + 1000 to indicate time)
-                        weight = 0,
                         muscle = "Cardio",
-                        part = listOf("Full Body")
+                        parts = Converter().fromList(listOf("Full Body")),
+                        difficulty = "Advanced",
+                        useTime = true
                     )
                 )
 

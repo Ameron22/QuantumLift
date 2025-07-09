@@ -11,7 +11,7 @@ data class EntityExercise(
     val name: String,
     val description: String = "",
     val muscle: String, // Primary muscle group
-    val parts: List<String>, // Specific parts of the muscle
+    val parts: String, // JSON string of specific parts of the muscle
     val difficulty: String = "Intermediate", // Difficulty level
     val gifUrl: String = "",
     val useTime: Boolean = false // True if exercise is time-based, false if rep-based

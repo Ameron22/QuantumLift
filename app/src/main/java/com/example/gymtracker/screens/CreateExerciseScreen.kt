@@ -25,8 +25,10 @@ import com.example.gymtracker.classes.NumberPicker
 import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.Exercise
+import com.example.gymtracker.data.Converter
 import com.example.gymtracker.utils.GifUtils
 import com.example.gymtracker.components.ExerciseGif
+import com.example.gymtracker.data.AchievementManager
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -94,7 +96,7 @@ fun CreateExerciseScreen(navController: NavController) {
 
     val musclePartsMap = mapOf(
         "Chest" to listOf("Upper Chest", "Middle Chest", "Lower Chest"),
-        "Shoulders" to listOf("Front Shoulders", "Side Shoulders", "Rear Shoulders"),
+        "Shoulder" to listOf("Front Shoulders", "Side Shoulders", "Rear Shoulders"),
         "Back" to listOf("Upper Back", "Lats", "Lower Back"),
         "Arms" to listOf("Biceps", "Triceps", "Forearms"),
         "Legs" to listOf("Quadriceps", "Hamstrings", "Glutes", "Calves"),
@@ -520,12 +522,16 @@ fun CreateExerciseScreen(navController: NavController) {
                                 name = currentExercise,
                                 description = currentDescription,
                                 muscle = currentMuscle,
-                                parts = selectedParts,
+                                parts = Converter().fromList(selectedParts),
                                 difficulty = currentDifficulty,
                                 gifUrl = gifPath ?: "",
                                 useTime = useTime
                             )
                             dao.insertExercise(exercise)
+
+                            // Show success notification
+                            val achievementManager = AchievementManager.getInstance()
+                            achievementManager.notificationService.showAchievementNotification("exercise_created")
 
                             // Check if we should return to workout creation
                             val returnTo = navController.currentBackStackEntry?.savedStateHandle?.get<String>("returnTo")
