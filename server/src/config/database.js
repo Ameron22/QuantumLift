@@ -28,16 +28,7 @@ pool.on('error', (err) => {
   console.error('❌ Database connection error:', err);
 });
 
-// Test connection on startup
-testConnection().then(success => {
-  if (success) {
-    console.log('✅ Database connection test successful on startup');
-  } else {
-    console.error('❌ Database connection test failed on startup');
-  }
-}).catch(err => {
-  console.error('❌ Database startup error:', err);
-});
+// Test connection on startup (moved to after function definition)
 
 // Helper function to test database connection
 const testConnection = async () => {
@@ -70,4 +61,15 @@ module.exports = {
   pool,
   query,
   testConnection
-}; 
+};
+
+// Test connection on startup
+testConnection().then(success => {
+  if (success) {
+    console.log('✅ Database connection test successful on startup');
+  } else {
+    console.error('❌ Database connection test failed on startup');
+  }
+}).catch(err => {
+  console.error('❌ Database startup error:', err);
+}); 

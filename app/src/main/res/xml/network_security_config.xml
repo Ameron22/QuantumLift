@@ -7,5 +7,6 @@
         <domain includeSubdomains="true">127.0.0.1</domain>
         <domain includeSubdomains="true">*.ngrok.io</domain>
         <domain includeSubdomains="true">*.ngrok-free.app</domain>
+        <domain includeSubdomains="true">quantum-lift-git-split-classes-marcels-projects-57570624.vercel.app</domain>
     </domain-config>
 </network-security-config> 

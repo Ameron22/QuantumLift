@@ -1,4 +1,4 @@
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const { query } = require('./src/config/database');
 
 const createTestUser = async () => {
