@@ -228,7 +228,7 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                             CreateExerciseScreen(navController)
                         }
                         composable(Screen.Settings.route) {
-                            SettingsScreen(navController, generalViewModel)
+                            SettingsScreen(navController, generalViewModel, authViewModel)
                         }
                         composable(
                             Screen.Routes.WORKOUT_DETAILS,
