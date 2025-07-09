@@ -2,6 +2,7 @@ package com.example.gymtracker.services
 
 import android.content.Context
 import android.util.Log
+import com.auth0.android.jwt.BuildConfig
 import kotlinx.coroutines.flow.Flow
 import retrofit2.Response
 import com.example.gymtracker.data.LoginRequest
@@ -20,7 +21,7 @@ class AuthRepository(private val context: Context) {
         val baseUrl = if (BuildConfig.DEBUG) {
             "http://192.168.0.76:3000/" // Development
         } else {
-            "https://gymtracker-production.up.railway.app/" // Production (will be updated after deployment)
+            "https://quantum-lift-git-split-classes-marcels-projects-57570624.vercel.app/" // Production
         }
         
         val okHttpClient = okhttp3.OkHttpClient.Builder()
