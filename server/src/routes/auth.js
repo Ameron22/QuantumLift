@@ -7,23 +7,39 @@ const router = express.Router();
 
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
+  console.log('[AUTH_MIDDLEWARE] 🔐 authenticateToken middleware called');
+  console.log('[AUTH_MIDDLEWARE] 📝 Request headers:', req.headers);
+  
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
+    console.log('[AUTH_MIDDLEWARE] ❌ No token provided');
     return res.status(401).json({ 
       error: 'Access denied',
       message: 'No token provided' 
     });
   }
 
+  console.log('[AUTH_MIDDLEWARE] 🔍 Token found, verifying...');
+
   jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
     if (err) {
+      console.log('[AUTH_MIDDLEWARE] ❌ Token verification failed:', err.message);
       return res.status(403).json({ 
         error: 'Invalid token',
         message: 'Token is not valid' 
       });
     }
+    
+    console.log('[AUTH_MIDDLEWARE] ✅ Token verified successfully');
+    console.log('[AUTH_MIDDLEWARE] 👤 User payload:', user);
+    
+    // Handle both Supabase-style (sub) and custom-style (userId) JWT payloads
+    if (user.sub && !user.userId) {
+      user.userId = user.sub;
+    }
+    
     req.user = user;
     next();
   });
@@ -74,9 +90,13 @@ router.post('/register', async (req, res) => {
 
     const user = result.rows[0];
 
-    // Generate JWT token
+    // Generate JWT token (compatible with Supabase)
     const token = jwt.sign(
-      { userId: user.id, username: user.username },
+      { 
+        sub: user.id, // Supabase uses 'sub' for user ID
+        userId: user.id, // Keep for backward compatibility
+        username: user.username 
+      },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
@@ -138,9 +158,13 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Generate JWT token
+    // Generate JWT token (compatible with Supabase)
     const token = jwt.sign(
-      { userId: user.id, username: user.username },
+      { 
+        sub: user.id, // Supabase uses 'sub' for user ID
+        userId: user.id, // Keep for backward compatibility
+        username: user.username 
+      },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
