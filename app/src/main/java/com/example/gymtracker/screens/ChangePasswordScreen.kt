@@ -30,12 +30,28 @@ fun ChangePasswordScreen(
     var showCurrentPassword by remember { mutableStateOf(false) }
     var showNewPassword by remember { mutableStateOf(false) }
     var showConfirmPassword by remember { mutableStateOf(false) }
+    var passwordStrengthError by remember { mutableStateOf<String?>(null) }
+    var passwordError by remember { mutableStateOf<String?>(null) }
+    
+    // Password validation function (same as RegisterScreen)
+    fun isValidPassword(password: String): Boolean {
+        val passwordRegex = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$".toRegex()
+        return passwordRegex.matches(password)
+    }
     
     val authState by authViewModel.authState.collectAsState()
+    
+    // Clear any existing success/error messages when entering the screen
+    LaunchedEffect(Unit) {
+        authViewModel.clearSuccess()
+        authViewModel.clearError()
+    }
     
     LaunchedEffect(authState.success) {
         authState.success?.let { success ->
             if (success.contains("Password changed successfully")) {
+                // Clear the success state before navigating back
+                authViewModel.clearSuccess()
                 navController.popBackStack()
             }
         }
@@ -131,7 +147,12 @@ fun ChangePasswordScreen(
             // New Password
             OutlinedTextField(
                 value = newPassword,
-                onValueChange = { newPassword = it },
+                onValueChange = {
+                    newPassword = it
+                    passwordStrengthError = if (newPassword.isNotBlank() && !isValidPassword(newPassword))
+                        "Password must be at least 8 characters, include upper and lower case letters, and a digit."
+                    else null
+                },
                 label = { Text("New Password") },
                 leadingIcon = {
                     Icon(
@@ -149,15 +170,28 @@ fun ChangePasswordScreen(
                 },
                 visualTransformation = if (showNewPassword) VisualTransformation.None else PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                isError = passwordStrengthError != null
             )
+            
+            if (passwordStrengthError != null) {
+                Text(
+                    text = passwordStrengthError!!,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 16.dp)
+                )
+            }
             
             Spacer(modifier = Modifier.height(16.dp))
             
             // Confirm New Password
             OutlinedTextField(
                 value = confirmPassword,
-                onValueChange = { confirmPassword = it },
+                onValueChange = {
+                    confirmPassword = it
+                    passwordError = if (confirmPassword.isNotBlank() && confirmPassword != newPassword) "Passwords do not match" else null
+                },
                 label = { Text("Confirm New Password") },
                 leadingIcon = {
                     Icon(
@@ -176,13 +210,13 @@ fun ChangePasswordScreen(
                 visualTransformation = if (showConfirmPassword) VisualTransformation.None else PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                isError = newPassword.isNotEmpty() && confirmPassword.isNotEmpty() && newPassword != confirmPassword
+                isError = passwordError != null
             )
             
             // Password mismatch error
-            if (newPassword.isNotEmpty() && confirmPassword.isNotEmpty() && newPassword != confirmPassword) {
+            if (passwordError != null) {
                 Text(
-                    text = "Passwords do not match",
+                    text = passwordError!!,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(start = 16.dp)
@@ -208,9 +242,19 @@ fun ChangePasswordScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "• At least 6 characters long",
+                            text = "• At least 8 characters long",
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (newPassword.length >= 6) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (newPassword.length >= 8) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "• Include uppercase and lowercase letters",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (newPassword.any { it.isUpperCase() } && newPassword.any { it.isLowerCase() }) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "• Include at least one digit",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (newPassword.any { it.isDigit() }) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -227,7 +271,13 @@ fun ChangePasswordScreen(
                     )
                 ) {
                     Text(
-                        text = error,
+                        text = when {
+                            error.contains("401") -> "Incorrect current password. Please try again."
+                            error.contains("Invalid current password", ignoreCase = true) -> "Incorrect current password. Please try again."
+                            error.contains("Current password is incorrect", ignoreCase = true) -> "Incorrect current password. Please try again."
+                            error.contains("Password change failed", ignoreCase = true) -> "Password change failed. Please check your current password and try again."
+                            else -> error
+                        },
                         color = MaterialTheme.colorScheme.onErrorContainer,
                         modifier = Modifier.padding(16.dp)
                     )
@@ -257,7 +307,7 @@ fun ChangePasswordScreen(
             // Change Password Button
             Button(
                 onClick = {
-                    if (newPassword == confirmPassword && newPassword.length >= 6 && currentPassword.isNotEmpty()) {
+                    if (newPassword == confirmPassword && isValidPassword(newPassword) && currentPassword.isNotEmpty()) {
                         authViewModel.changePassword(currentPassword, newPassword)
                     }
                 },
@@ -265,7 +315,9 @@ fun ChangePasswordScreen(
                          newPassword.isNotEmpty() && 
                          confirmPassword.isNotEmpty() && 
                          newPassword == confirmPassword && 
-                         newPassword.length >= 6 &&
+                         isValidPassword(newPassword) &&
+                         passwordError == null &&
+                         passwordStrengthError == null &&
                          !authState.isLoading,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(

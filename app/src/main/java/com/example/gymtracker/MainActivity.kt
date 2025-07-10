@@ -242,7 +242,7 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                             RegisterScreen(navController, authViewModel)
                         }
                         composable(Screen.Home.route) {
-                            HomeScreen(navController, generalViewModel)
+                            HomeScreen(navController, generalViewModel, authViewModel)
                         }
                         composable(Screen.LoadWorkout.route) {
                             LoadWorkoutScreen(navController, generalViewModel)
@@ -258,6 +258,9 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                         }
                         composable(Screen.Settings.route) {
                             SettingsScreen(navController, generalViewModel, authViewModel)
+                        }
+                        composable(Screen.ChangePassword.route) {
+                            ChangePasswordScreen(navController, authViewModel)
                         }
                         composable(
                             Screen.Routes.WORKOUT_DETAILS,

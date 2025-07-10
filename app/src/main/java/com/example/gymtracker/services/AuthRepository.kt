@@ -156,4 +156,132 @@ class AuthRepository(private val context: Context) {
     suspend fun isLoggedIn(): Boolean {
         return tokenManager.getStoredToken() != null
     }
+    
+    suspend fun sendFriendInvitation(recipientEmail: String): Result<FriendInvitationResponse> {
+        Log.d("AUTH_REPO", "Attempting to send friend invitation to: $recipientEmail")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.sendFriendInvitation(
+                SendFriendInvitationRequest(recipientEmail),
+                "Bearer $token"
+            )
+            Log.d("AUTH_REPO", "Send friend invitation response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { invitationResponse ->
+                    Log.d("AUTH_REPO", "Friend invitation sent successfully")
+                    Result.success(invitationResponse)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Send friend invitation failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to send friend invitation: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Send friend invitation exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun getFriendsList(): Result<List<Friend>> {
+        Log.d("AUTH_REPO", "Attempting to get friends list")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.getFriendsList("Bearer $token")
+            Log.d("AUTH_REPO", "Get friends list response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { friendsResponse ->
+                    Log.d("AUTH_REPO", "Friends list retrieved successfully, count: ${friendsResponse.friends.size}")
+                    Result.success(friendsResponse.friends)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Get friends list failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to get friends list: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Get friends list exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun getPendingInvitations(): Result<List<com.example.gymtracker.data.FriendInvitation>> {
+        Log.d("AUTH_REPO", "Attempting to get pending invitations")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.getPendingInvitations("Bearer $token")
+            Log.d("AUTH_REPO", "Get pending invitations response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { invitationsResponse ->
+                    Log.d("AUTH_REPO", "Pending invitations retrieved successfully, count: ${invitationsResponse.invitations.size}")
+                    Result.success(invitationsResponse.invitations)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Get pending invitations failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to get pending invitations: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Get pending invitations exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun acceptFriendInvitation(invitationCode: String): Result<InvitationActionResponse> {
+        Log.d("AUTH_REPO", "Attempting to accept friend invitation: $invitationCode")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.acceptFriendInvitation(invitationCode, "Bearer $token")
+            Log.d("AUTH_REPO", "Accept friend invitation response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { actionResponse ->
+                    Log.d("AUTH_REPO", "Friend invitation accepted successfully")
+                    Result.success(actionResponse)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Accept friend invitation failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to accept friend invitation: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Accept friend invitation exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun declineFriendInvitation(invitationCode: String): Result<InvitationActionResponse> {
+        Log.d("AUTH_REPO", "Attempting to decline friend invitation: $invitationCode")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.declineFriendInvitation(invitationCode, "Bearer $token")
+            Log.d("AUTH_REPO", "Decline friend invitation response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { actionResponse ->
+                    Log.d("AUTH_REPO", "Friend invitation declined successfully")
+                    Result.success(actionResponse)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Decline friend invitation failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to decline friend invitation: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Decline friend invitation exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
 } 

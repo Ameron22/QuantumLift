@@ -20,6 +20,7 @@ app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 
 // Import routes
 const authRoutes = require('./src/routes/auth');
+const friendRoutes = require('./src/routes/friends');
 
 // Basic health check endpoint
 app.get('/health', (req, res) => {
@@ -32,6 +33,7 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/friends', friendRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {

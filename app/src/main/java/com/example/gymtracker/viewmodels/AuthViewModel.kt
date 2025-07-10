@@ -7,6 +7,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.gymtracker.services.AuthRepository
 import com.example.gymtracker.data.AuthResponse
 import com.example.gymtracker.data.User
+import com.example.gymtracker.data.Friend
+import com.example.gymtracker.data.FriendInvitationResponse
+import com.example.gymtracker.data.FriendInvitation
+import com.example.gymtracker.data.InvitationActionResponse
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,7 +21,9 @@ data class AuthState(
     val isLoggedIn: Boolean = false,
     val error: String? = null,
     val success: String? = null,
-    val user: com.example.gymtracker.data.User? = null
+    val user: com.example.gymtracker.data.User? = null,
+    val friends: List<Friend> = emptyList(),
+    val pendingInvitations: List<FriendInvitation> = emptyList()
 )
 
 class AuthViewModel(private val context: Context) : ViewModel() {
@@ -166,5 +172,153 @@ class AuthViewModel(private val context: Context) : ViewModel() {
     
     fun clearSuccess() {
         _authState.value = _authState.value.copy(success = null)
+    }
+    
+    fun sendFriendInvitation(recipientEmail: String) {
+        Log.d("AUTH_LOG", "Sending friend invitation to: $recipientEmail")
+        viewModelScope.launch {
+            _authState.value = _authState.value.copy(
+                isLoading = true,
+                error = null,
+                success = null
+            )
+            
+            val result = authRepository.sendFriendInvitation(recipientEmail)
+            result.fold(
+                onSuccess = { response ->
+                    Log.d("AUTH_LOG", "Friend invitation sent successfully")
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        success = response.message,
+                        error = null
+                    )
+                },
+                onFailure = { exception ->
+                    Log.e("AUTH_LOG", "Send friend invitation failed: ${exception.message}", exception)
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        error = exception.message ?: "Failed to send friend invitation",
+                        success = null
+                    )
+                }
+            )
+        }
+    }
+    
+    fun loadFriendsList() {
+        Log.d("AUTH_LOG", "Loading friends list")
+        viewModelScope.launch {
+            _authState.value = _authState.value.copy(isLoading = true)
+            
+            val result = authRepository.getFriendsList()
+            result.fold(
+                onSuccess = { friends ->
+                    Log.d("AUTH_LOG", "Friends list loaded successfully, count: ${friends.size}")
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        friends = friends
+                    )
+                },
+                onFailure = { exception ->
+                    Log.e("AUTH_LOG", "Failed to load friends list: ${exception.message}", exception)
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        error = exception.message ?: "Failed to load friends list"
+                    )
+                }
+            )
+        }
+    }
+    
+    fun loadPendingInvitations() {
+        Log.d("AUTH_LOG", "Loading pending invitations")
+        viewModelScope.launch {
+            _authState.value = _authState.value.copy(isLoading = true)
+            
+            val result = authRepository.getPendingInvitations()
+            result.fold(
+                onSuccess = { invitations ->
+                    Log.d("AUTH_LOG", "Pending invitations loaded successfully, count: ${invitations.size}")
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        pendingInvitations = invitations
+                    )
+                },
+                onFailure = { exception ->
+                    Log.e("AUTH_LOG", "Failed to load pending invitations: ${exception.message}", exception)
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        error = exception.message ?: "Failed to load pending invitations"
+                    )
+                }
+            )
+        }
+    }
+    
+    fun acceptFriendInvitation(invitationCode: String) {
+        Log.d("AUTH_LOG", "Accepting friend invitation: $invitationCode")
+        viewModelScope.launch {
+            _authState.value = _authState.value.copy(
+                isLoading = true,
+                error = null,
+                success = null
+            )
+            
+            val result = authRepository.acceptFriendInvitation(invitationCode)
+            result.fold(
+                onSuccess = { response ->
+                    Log.d("AUTH_LOG", "Friend invitation accepted successfully")
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        success = response.message,
+                        error = null
+                    )
+                    // Reload friends list and invitations
+                    loadFriendsList()
+                    loadPendingInvitations()
+                },
+                onFailure = { exception ->
+                    Log.e("AUTH_LOG", "Accept friend invitation failed: ${exception.message}", exception)
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        error = exception.message ?: "Failed to accept friend invitation",
+                        success = null
+                    )
+                }
+            )
+        }
+    }
+    
+    fun declineFriendInvitation(invitationCode: String) {
+        Log.d("AUTH_LOG", "Declining friend invitation: $invitationCode")
+        viewModelScope.launch {
+            _authState.value = _authState.value.copy(
+                isLoading = true,
+                error = null,
+                success = null
+            )
+            
+            val result = authRepository.declineFriendInvitation(invitationCode)
+            result.fold(
+                onSuccess = { response ->
+                    Log.d("AUTH_LOG", "Friend invitation declined successfully")
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        success = response.message,
+                        error = null
+                    )
+                    // Reload invitations
+                    loadPendingInvitations()
+                },
+                onFailure = { exception ->
+                    Log.e("AUTH_LOG", "Decline friend invitation failed: ${exception.message}", exception)
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        error = exception.message ?: "Failed to decline friend invitation",
+                        success = null
+                    )
+                }
+            )
+        }
     }
 } 
