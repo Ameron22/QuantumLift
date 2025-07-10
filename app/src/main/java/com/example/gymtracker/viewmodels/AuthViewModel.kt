@@ -11,6 +11,12 @@ import com.example.gymtracker.data.Friend
 import com.example.gymtracker.data.FriendInvitationResponse
 import com.example.gymtracker.data.FriendInvitation
 import com.example.gymtracker.data.InvitationActionResponse
+import com.example.gymtracker.data.FeedPost
+import com.example.gymtracker.data.FeedComment
+import com.example.gymtracker.data.CreatePostRequest
+import com.example.gymtracker.data.PostActionResponse
+import com.example.gymtracker.data.PrivacySettings
+import com.example.gymtracker.data.UpdatePrivacySettingsRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,7 +29,9 @@ data class AuthState(
     val success: String? = null,
     val user: com.example.gymtracker.data.User? = null,
     val friends: List<Friend> = emptyList(),
-    val pendingInvitations: List<FriendInvitation> = emptyList()
+    val pendingInvitations: List<FriendInvitation> = emptyList(),
+    val feedPosts: List<FeedPost> = emptyList(),
+    val privacySettings: PrivacySettings? = null
 )
 
 class AuthViewModel(private val context: Context) : ViewModel() {
@@ -315,6 +323,196 @@ class AuthViewModel(private val context: Context) : ViewModel() {
                     _authState.value = _authState.value.copy(
                         isLoading = false,
                         error = exception.message ?: "Failed to decline friend invitation",
+                        success = null
+                    )
+                }
+            )
+        }
+    }
+    
+    // Feed methods
+    
+    fun loadFeedPosts(page: Int = 1) {
+        Log.d("AUTH_LOG", "Loading feed posts, page: $page")
+        viewModelScope.launch {
+            _authState.value = _authState.value.copy(isLoading = true)
+            
+            val result = authRepository.getFeedPosts(page)
+            result.fold(
+                onSuccess = { posts ->
+                    Log.d("AUTH_LOG", "Feed posts loaded successfully, count: ${posts.size}")
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        feedPosts = if (page == 1) posts else _authState.value.feedPosts + posts
+                    )
+                },
+                onFailure = { exception ->
+                    Log.e("AUTH_LOG", "Failed to load feed posts: ${exception.message}", exception)
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        error = exception.message ?: "Failed to load feed posts"
+                    )
+                }
+            )
+        }
+    }
+    
+    fun createPost(request: CreatePostRequest) {
+        Log.d("AUTH_LOG", "Creating post: ${request.postType}")
+        viewModelScope.launch {
+            _authState.value = _authState.value.copy(
+                isLoading = true,
+                error = null,
+                success = null
+            )
+            
+            val result = authRepository.createPost(request)
+            result.fold(
+                onSuccess = { response ->
+                    Log.d("AUTH_LOG", "Post created successfully")
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        success = response.message,
+                        error = null
+                    )
+                    // Reload feed posts
+                    loadFeedPosts()
+                },
+                onFailure = { exception ->
+                    Log.e("AUTH_LOG", "Create post failed: ${exception.message}", exception)
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        error = exception.message ?: "Failed to create post",
+                        success = null
+                    )
+                }
+            )
+        }
+    }
+    
+    fun likePost(postId: Int) {
+        Log.d("AUTH_LOG", "Liking/unliking post: $postId")
+        viewModelScope.launch {
+            val result = authRepository.likePost(postId)
+            result.fold(
+                onSuccess = { response ->
+                    Log.d("AUTH_LOG", "Post like/unlike successful")
+                    // Update the post in the feed
+                    val updatedPosts = _authState.value.feedPosts.map { post ->
+                        if (post.id == postId) {
+                            post.copy(
+                                likesCount = if (response.liked == true) post.likesCount + 1 else post.likesCount - 1,
+                                isLikedByUser = response.liked ?: post.isLikedByUser
+                            )
+                        } else {
+                            post
+                        }
+                    }
+                    _authState.value = _authState.value.copy(feedPosts = updatedPosts)
+                },
+                onFailure = { exception ->
+                    Log.e("AUTH_LOG", "Like post failed: ${exception.message}", exception)
+                    _authState.value = _authState.value.copy(
+                        error = exception.message ?: "Failed to like post"
+                    )
+                }
+            )
+        }
+    }
+    
+    fun addComment(postId: Int, content: String) {
+        Log.d("AUTH_LOG", "Adding comment to post: $postId")
+        viewModelScope.launch {
+            val result = authRepository.addComment(postId, content)
+            result.fold(
+                onSuccess = { response ->
+                    Log.d("AUTH_LOG", "Comment added successfully")
+                    // Update the post comment count
+                    val updatedPosts = _authState.value.feedPosts.map { post ->
+                        if (post.id == postId) {
+                            post.copy(commentsCount = post.commentsCount + 1)
+                        } else {
+                            post
+                        }
+                    }
+                    _authState.value = _authState.value.copy(feedPosts = updatedPosts)
+                },
+                onFailure = { exception ->
+                    Log.e("AUTH_LOG", "Add comment failed: ${exception.message}", exception)
+                    _authState.value = _authState.value.copy(
+                        error = exception.message ?: "Failed to add comment"
+                    )
+                }
+            )
+        }
+    }
+    
+    fun deletePost(postId: Int) {
+        Log.d("AUTH_LOG", "Deleting post: $postId")
+        viewModelScope.launch {
+            val result = authRepository.deletePost(postId)
+            result.fold(
+                onSuccess = { response ->
+                    Log.d("AUTH_LOG", "Post deleted successfully")
+                    // Remove the post from the feed
+                    val updatedPosts = _authState.value.feedPosts.filter { it.id != postId }
+                    _authState.value = _authState.value.copy(feedPosts = updatedPosts)
+                },
+                onFailure = { exception ->
+                    Log.e("AUTH_LOG", "Delete post failed: ${exception.message}", exception)
+                    _authState.value = _authState.value.copy(
+                        error = exception.message ?: "Failed to delete post"
+                    )
+                }
+            )
+        }
+    }
+    
+    fun loadPrivacySettings() {
+        Log.d("AUTH_LOG", "Loading privacy settings")
+        viewModelScope.launch {
+            val result = authRepository.getPrivacySettings()
+            result.fold(
+                onSuccess = { settings ->
+                    Log.d("AUTH_LOG", "Privacy settings loaded successfully")
+                    _authState.value = _authState.value.copy(privacySettings = settings)
+                },
+                onFailure = { exception ->
+                    Log.e("AUTH_LOG", "Failed to load privacy settings: ${exception.message}", exception)
+                    _authState.value = _authState.value.copy(
+                        error = exception.message ?: "Failed to load privacy settings"
+                    )
+                }
+            )
+        }
+    }
+    
+    fun updatePrivacySettings(request: UpdatePrivacySettingsRequest) {
+        Log.d("AUTH_LOG", "Updating privacy settings")
+        viewModelScope.launch {
+            _authState.value = _authState.value.copy(
+                isLoading = true,
+                error = null,
+                success = null
+            )
+            
+            val result = authRepository.updatePrivacySettings(request)
+            result.fold(
+                onSuccess = { response ->
+                    Log.d("AUTH_LOG", "Privacy settings updated successfully")
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        success = response.message,
+                        error = null
+                    )
+                    // Reload privacy settings
+                    loadPrivacySettings()
+                },
+                onFailure = { exception ->
+                    Log.e("AUTH_LOG", "Update privacy settings failed: ${exception.message}", exception)
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        error = exception.message ?: "Failed to update privacy settings",
                         success = null
                     )
                 }

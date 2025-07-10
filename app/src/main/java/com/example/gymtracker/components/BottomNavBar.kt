@@ -16,11 +16,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.People
 
 @Composable
 fun BottomNavBar(navController: NavController) {
     val items = listOf(
         Screen.Home,
+        Screen.Feed,
         Screen.LoadWorkout,
         Screen.LoadHistory,
         Screen.Achievements,
@@ -56,6 +58,11 @@ fun BottomNavBar(navController: NavController) {
                             painter = painterResource(id = R.drawable.trophy),
                             contentDescription = "Achievements",
                             modifier = Modifier.size(40.dp) // Standard icon size
+                        )
+                        Screen.Feed -> Icon(
+                            imageVector = Icons.Default.People,
+                            contentDescription = "Feed",
+                            modifier = Modifier.size(28.dp)
                         )
                         Screen.Settings -> Icon(
                             painter = painterResource(id = R.drawable.settings_svgrepo_com),
