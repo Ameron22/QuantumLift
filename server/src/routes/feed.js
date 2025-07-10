@@ -3,14 +3,22 @@ const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const { query } = require('../config/database');
 
+// Helper: Validate UUID format
+function isValidUUID(uuid) {
+  return /^[0-9a-fA-F-]{36}$/.test(uuid);
+}
+
 // Get feed posts for current user (friends + public posts)
 router.get('/posts', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.userId; // Should be a UUID string
+    if (!isValidUUID(userId)) {
+      return res.status(400).json({ error: 'Invalid userId format', userId });
+    }
     const { page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
 
-    // Get posts from friends and public posts
+    // All user_id comparisons are now UUID
     const result = await query(`
       SELECT 
         fp.id,
@@ -84,7 +92,10 @@ router.get('/posts', authenticateToken, async (req, res) => {
 // Create a new post
 router.post('/posts', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.userId; // UUID string
+    if (!isValidUUID(userId)) {
+      return res.status(400).json({ error: 'Invalid userId format', userId });
+    }
     const { 
       postType, 
       content, 
@@ -148,7 +159,10 @@ router.post('/posts', authenticateToken, async (req, res) => {
 // Like/unlike a post
 router.post('/posts/:postId/like', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.userId; // UUID string
+    if (!isValidUUID(userId)) {
+      return res.status(400).json({ error: 'Invalid userId format', userId });
+    }
     const { postId } = req.params;
 
     // Check if post exists and user can see it
@@ -199,21 +213,18 @@ router.post('/posts/:postId/like', authenticateToken, async (req, res) => {
     } else {
       // Like the post
       await query(
-        'INSERT INTO post_likes (post_id, user_id) VALUES ($1, $2)',
+        'INSERT INTO post_likes (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
         [postId, userId]
       );
-      
       await query(
         'UPDATE feed_posts SET likes_count = likes_count + 1 WHERE id = $1',
         [postId]
       );
-
       res.json({
         message: 'Post liked successfully',
         liked: true
       });
     }
-
   } catch (error) {
     console.error('Like/unlike post error:', error);
     res.status(500).json({ 
@@ -226,7 +237,10 @@ router.post('/posts/:postId/like', authenticateToken, async (req, res) => {
 // Get comments for a post
 router.get('/posts/:postId/comments', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.userId; // UUID string
+    if (!isValidUUID(userId)) {
+      return res.status(400).json({ error: 'Invalid userId format', userId });
+    }
     const { postId } = req.params;
     const { page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
@@ -301,7 +315,10 @@ router.get('/posts/:postId/comments', authenticateToken, async (req, res) => {
 // Add a comment to a post
 router.post('/posts/:postId/comments', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.userId; // UUID string
+    if (!isValidUUID(userId)) {
+      return res.status(400).json({ error: 'Invalid userId format', userId });
+    }
     const { postId } = req.params;
     const { content } = req.body;
 
@@ -370,7 +387,10 @@ router.post('/posts/:postId/comments', authenticateToken, async (req, res) => {
 // Get user's privacy settings
 router.get('/privacy-settings', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.userId; // UUID string
+    if (!isValidUUID(userId)) {
+      return res.status(400).json({ error: 'Invalid userId format', userId });
+    }
 
     const result = await query(`
       SELECT auto_share_workouts, auto_share_achievements, default_post_privacy
@@ -411,7 +431,10 @@ router.get('/privacy-settings', authenticateToken, async (req, res) => {
 // Update user's privacy settings
 router.put('/privacy-settings', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.userId; // UUID string
+    if (!isValidUUID(userId)) {
+      return res.status(400).json({ error: 'Invalid userId format', userId });
+    }
     const { autoShareWorkouts, autoShareAchievements, defaultPostPrivacy } = req.body;
 
     // Validate privacy level
@@ -450,7 +473,10 @@ router.put('/privacy-settings', authenticateToken, async (req, res) => {
 // Delete a post (only by the post author)
 router.delete('/posts/:postId', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.userId; // UUID string
+    if (!isValidUUID(userId)) {
+      return res.status(400).json({ error: 'Invalid userId format', userId });
+    }
     const { postId } = req.params;
 
     // Check if post exists and belongs to user
