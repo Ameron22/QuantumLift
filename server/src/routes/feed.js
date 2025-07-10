@@ -10,13 +10,24 @@ function isValidUUID(uuid) {
 
 // Get feed posts for current user (friends + public posts)
 router.get('/posts', authenticateToken, async (req, res) => {
+  console.log('[FEED_ROUTE] 📖 Get feed posts request received');
+  console.log('[FEED_ROUTE] 👤 User ID from token:', req.user.userId);
+  console.log('[FEED_ROUTE] 📄 Query params:', req.query);
+  
   try {
     const userId = req.user.userId; // Should be a UUID string
+    console.log('[FEED_ROUTE] 🔍 Validating UUID format for userId:', userId);
+    
     if (!isValidUUID(userId)) {
+      console.log('[FEED_ROUTE] ❌ Invalid UUID format:', userId);
       return res.status(400).json({ error: 'Invalid userId format', userId });
     }
+    
+    console.log('[FEED_ROUTE] ✅ UUID validation passed');
+    
     const { page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
+    console.log('[FEED_ROUTE] 📊 Pagination params:', { page, limit, offset });
 
     // All user_id comparisons are now UUID
     const result = await query(`
@@ -91,11 +102,21 @@ router.get('/posts', authenticateToken, async (req, res) => {
 
 // Create a new post
 router.post('/posts', authenticateToken, async (req, res) => {
+  console.log('[FEED_ROUTE] 🚀 Create post request received');
+  console.log('[FEED_ROUTE] 👤 User ID from token:', req.user.userId);
+  console.log('[FEED_ROUTE] 📝 Request body:', req.body);
+  
   try {
     const userId = req.user.userId; // UUID string
+    console.log('[FEED_ROUTE] 🔍 Validating UUID format for userId:', userId);
+    
     if (!isValidUUID(userId)) {
+      console.log('[FEED_ROUTE] ❌ Invalid UUID format:', userId);
       return res.status(400).json({ error: 'Invalid userId format', userId });
     }
+    
+    console.log('[FEED_ROUTE] ✅ UUID validation passed');
+    
     const { 
       postType, 
       content, 
@@ -105,32 +126,45 @@ router.post('/posts', authenticateToken, async (req, res) => {
       privacyLevel = 'FRIENDS' 
     } = req.body;
 
+    console.log('[FEED_ROUTE] 🔍 Validating post type:', postType);
     // Validate post type
     const validPostTypes = ['WORKOUT_COMPLETED', 'ACHIEVEMENT', 'CHALLENGE', 'TEXT_POST'];
     if (!validPostTypes.includes(postType)) {
+      console.log('[FEED_ROUTE] ❌ Invalid post type:', postType);
       return res.status(400).json({
         error: 'Invalid post type',
         message: 'Post type must be one of: WORKOUT_COMPLETED, ACHIEVEMENT, CHALLENGE, TEXT_POST'
       });
     }
+    console.log('[FEED_ROUTE] ✅ Post type validation passed');
 
+    console.log('[FEED_ROUTE] 🔍 Validating privacy level:', privacyLevel);
     // Validate privacy level
     const validPrivacyLevels = ['PUBLIC', 'FRIENDS', 'PRIVATE'];
     if (!validPrivacyLevels.includes(privacyLevel)) {
+      console.log('[FEED_ROUTE] ❌ Invalid privacy level:', privacyLevel);
       return res.status(400).json({
         error: 'Invalid privacy level',
         message: 'Privacy level must be one of: PUBLIC, FRIENDS, PRIVATE'
       });
     }
+    console.log('[FEED_ROUTE] ✅ Privacy level validation passed');
 
+    console.log('[FEED_ROUTE] 🔍 Validating content:', content);
     // Validate content
     if (!content || content.trim().length === 0) {
+      console.log('[FEED_ROUTE] ❌ Empty content');
       return res.status(400).json({
         error: 'Content required',
         message: 'Post content cannot be empty'
       });
     }
+    console.log('[FEED_ROUTE] ✅ Content validation passed');
 
+    console.log('[FEED_ROUTE] 🗄️ Executing database insert with params:', {
+      userId, postType, content, workoutData, achievementData, challengeData, privacyLevel
+    });
+    
     const result = await query(`
       INSERT INTO feed_posts (user_id, post_type, content, workout_data, achievement_data, challenge_data, privacy_level)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -138,6 +172,7 @@ router.post('/posts', authenticateToken, async (req, res) => {
     `, [userId, postType, content, workoutData, achievementData, challengeData, privacyLevel]);
 
     const post = result.rows[0];
+    console.log('[FEED_ROUTE] ✅ Post created successfully with ID:', post.id);
 
     res.status(201).json({
       message: 'Post created successfully',
@@ -148,7 +183,12 @@ router.post('/posts', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Create post error:', error);
+    console.error('[FEED_ROUTE] ❌ Create post error:', error);
+    console.error('[FEED_ROUTE] ❌ Error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code
+    });
     res.status(500).json({ 
       error: 'Failed to create post',
       message: 'Internal server error' 
