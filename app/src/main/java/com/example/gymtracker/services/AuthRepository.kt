@@ -2,14 +2,13 @@ package com.example.gymtracker.services
 
 import android.content.Context
 import android.util.Log
-import com.auth0.android.jwt.BuildConfig
-import kotlinx.coroutines.flow.Flow
-import retrofit2.Response
-import com.example.gymtracker.data.LoginRequest
-import com.example.gymtracker.data.RegisterRequest
-import com.example.gymtracker.data.AuthResponse
+import com.example.gymtracker.data.*
 import com.example.gymtracker.network.ApiService
-import com.example.gymtracker.services.TokenManager
+import kotlinx.coroutines.flow.Flow
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
 
 class AuthRepository(private val context: Context) {
     
@@ -20,16 +19,16 @@ class AuthRepository(private val context: Context) {
         // Use the new Vercel backend URL for all environments
         val baseUrl = "https://quantum-lift.vercel.app/"
         
-        val okHttpClient = okhttp3.OkHttpClient.Builder()
-            .addInterceptor(okhttp3.logging.HttpLoggingInterceptor().apply {
-                level = okhttp3.logging.HttpLoggingInterceptor.Level.BODY
+        val okHttpClient = OkHttpClient.Builder()
+            .addInterceptor(HttpLoggingInterceptor().apply {
+                level = HttpLoggingInterceptor.Level.BODY
             })
             .build()
         
-        val retrofit = retrofit2.Retrofit.Builder()
+        val retrofit = Retrofit.Builder()
             .baseUrl(baseUrl)
             .client(okHttpClient)
-            .addConverterFactory(retrofit2.converter.gson.GsonConverterFactory.create())
+            .addConverterFactory(GsonConverterFactory.create())
             .build()
         
         return retrofit.create(ApiService::class.java)
@@ -37,7 +36,6 @@ class AuthRepository(private val context: Context) {
     
     suspend fun login(username: String, password: String): Result<AuthResponse> {
         Log.d("AUTH_REPO", "Attempting login for username: $username")
-        Log.d("AUTH_REPO", "Server URL: https://quantum-lift-git-main-marcels-projects-57570624.vercel.app/")
         return try {
             val response = apiService.login(LoginRequest(username, password))
             Log.d("AUTH_REPO", "Login response code: ${response.code()}")
@@ -59,7 +57,6 @@ class AuthRepository(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.e("AUTH_REPO", "Login exception: ${e.message}", e)
-            Log.e("AUTH_REPO", "Exception type: ${e.javaClass.simpleName}")
             Result.failure(e)
         }
     }
@@ -87,6 +84,61 @@ class AuthRepository(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.e("AUTH_REPO", "Registration exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun changePassword(currentPassword: String, newPassword: String): Result<AuthResponse> {
+        Log.d("AUTH_REPO", "Attempting password change")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.changePassword(
+                ChangePasswordRequest(currentPassword, newPassword),
+                "Bearer $token"
+            )
+            Log.d("AUTH_REPO", "Change password response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { authResponse ->
+                    Log.d("AUTH_REPO", "Password change successful")
+                    Result.success(authResponse)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Password change failed with code: ${response.code()}")
+                Result.failure(Exception("Password change failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Password change exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun getProfile(): Result<User> {
+        Log.d("AUTH_REPO", "Attempting to get user profile")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.getProfile("Bearer $token")
+            Log.d("AUTH_REPO", "Get profile response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { profileResponse ->
+                    profileResponse.user?.let { user ->
+                        Log.d("AUTH_REPO", "Profile retrieved successfully for user: ${user.username}")
+                        Result.success(user)
+                    } ?: Result.failure(Exception("No user data in response"))
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Get profile failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to get profile: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Get profile exception: ${e.message}", e)
             Result.failure(e)
         }
     }

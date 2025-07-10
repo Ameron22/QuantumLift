@@ -32,6 +32,12 @@ import com.example.gymtracker.viewmodels.AuthViewModel
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material3.Icon
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,11 +45,12 @@ import androidx.compose.foundation.verticalScroll
 fun SettingsScreen(
     navController: NavController,
     generalViewModel: GeneralViewModel,
-    authViewModel: AuthViewModel // <-- Add this parameter
+    authViewModel: AuthViewModel
 ) {
     val context = LocalContext.current
     val prefs = remember { UserSettingsPreferences(context) }
     val settings by prefs.settingsFlow.collectAsState(initial = null)
+    val authState by authViewModel.authState.collectAsState()
 
     var workTime by remember { mutableStateOf(settings?.defaultWorkTime ?: 30) }
     var breakTime by remember { mutableStateOf(settings?.defaultBreakTime ?: 60) }
@@ -69,6 +76,9 @@ fun SettingsScreen(
     
     // State for collapsible timer settings
     var showTimerSettings by remember { mutableStateOf(true) }
+    
+    // State for collapsible user settings
+    var showUserSettings by remember { mutableStateOf(true) }
 
     LaunchedEffect(settings) {
         settings?.let {
@@ -138,21 +148,6 @@ fun SettingsScreen(
                 title = { Text("Settings") },
                 actions = {
                     WorkoutIndicator(generalViewModel = generalViewModel, navController = navController)
-                    // Use the shared AuthViewModel for logout, no rounding/clipping
-                    IconButton(onClick = {
-                        authViewModel.logout()
-                        navController.navigate(Screen.Login.route) {
-                            popUpTo(0) { inclusive = true }
-                            launchSingleTop = true
-                        }
-                    }) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.logout_icon),
-                            contentDescription = "Logout",
-                            tint = Color.Red,
-                            modifier = Modifier // No .clip or .size that would round/cut
-                        )
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
@@ -232,13 +227,203 @@ fun SettingsScreen(
                 .padding(16.dp)
                 .padding(top = 32.dp)
         ) {
-        Text(
-            "Settings", 
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-
+        
+        // User Settings Container
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                // Header with title and toggle button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "User Settings",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold
+                    )
+                    TextButton(
+                        onClick = { showUserSettings = !showUserSettings }
+                    ) {
+                        Icon(
+                            painter = painterResource(
+                                id = if (showUserSettings) R.drawable.minus_icon else R.drawable.plus_icon
+                            ),
+                            contentDescription = if (showUserSettings) "Show Less" else "Show More",
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                
+                // User settings content (collapsible)
+                if (showUserSettings) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Username
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .padding(12.dp)
+                                .fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = "Username",
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    text = "Username",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = authState.user?.username ?: "Loading...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                    
+                    // Email
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .padding(12.dp)
+                                .fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Email,
+                                contentDescription = "Email",
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    text = "Email",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = authState.user?.email ?: "Loading...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                    
+                    // Change Password
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                            .clickable { 
+                                navController.navigate(Screen.ChangePassword.route)
+                            },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .padding(12.dp)
+                                .fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = "Change Password",
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    text = "Change Password",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Update your account password",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Logout Button
+                    Button(
+                        onClick = {
+                            authViewModel.logout()
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(0) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.Red
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Logout,
+                            contentDescription = "Logout",
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Logout")
+                    }
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
         // Timer Settings Container
         Card(
             modifier = Modifier
@@ -467,9 +652,6 @@ fun SettingsScreen(
         }
         
         Spacer(modifier = Modifier.height(16.dp))
-        
-        // Logout Button
-        
         
         // Work Time Picker Dialog
         if (showWorkTimePicker) {

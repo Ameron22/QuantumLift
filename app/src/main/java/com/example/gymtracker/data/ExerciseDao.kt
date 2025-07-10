@@ -135,4 +135,7 @@ interface ExerciseDao {
             exercise?.let { ExerciseWithWorkoutData(it, we) }
         }
     }
+
+    @Query("DELETE FROM workout_sessions WHERE sessionId = :sessionId")
+    suspend fun deleteWorkoutSessionById(sessionId: Long)
 }

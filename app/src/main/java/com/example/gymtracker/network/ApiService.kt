@@ -3,9 +3,13 @@ package com.example.gymtracker.network
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.POST
+import retrofit2.http.GET
+import retrofit2.http.Header
 import com.example.gymtracker.data.LoginRequest
 import com.example.gymtracker.data.RegisterRequest
 import com.example.gymtracker.data.AuthResponse
+import com.example.gymtracker.data.ChangePasswordRequest
+import com.example.gymtracker.data.ProfileResponse
 import kotlin.jvm.JvmSuppressWildcards
 
 /**
@@ -29,4 +33,26 @@ interface ApiService {
      */
     @POST("api/auth/register")
     suspend fun register(@Body registerRequest: RegisterRequest): Response<AuthResponse>
+    
+    /**
+     * Change password endpoint
+     * @param changePasswordRequest The password change data
+     * @param authorization Bearer token for authentication
+     * @return Response containing success/error message
+     */
+    @POST("api/auth/change-password")
+    suspend fun changePassword(
+        @Body changePasswordRequest: ChangePasswordRequest,
+        @Header("Authorization") authorization: String
+    ): Response<AuthResponse>
+    
+    /**
+     * Get user profile endpoint
+     * @param authorization Bearer token for authentication
+     * @return Response containing user profile data
+     */
+    @GET("api/auth/profile")
+    suspend fun getProfile(
+        @Header("Authorization") authorization: String
+    ): Response<ProfileResponse>
 } 
