@@ -11,6 +11,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -62,6 +63,7 @@ import com.example.gymtracker.navigation.Screen
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
@@ -76,6 +78,15 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import android.widget.Toast
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -108,6 +119,7 @@ fun WorkoutDetailsScreen(
     // State for workout rename dialog
     var showRenameDialog by remember { mutableStateOf(false) }
     var newWorkoutName by remember { mutableStateOf("") }
+    var showExitDialog by remember { mutableStateOf(false) }
 
     // Drag and drop state
     var isDragging by remember { mutableStateOf(false) }
@@ -197,12 +209,120 @@ fun WorkoutDetailsScreen(
         }
     }
 
+    // Scrolling text composable for long titles
+    @Composable
+    fun ScrollingText(
+        text: String,
+        modifier: Modifier = Modifier,
+        style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.titleLarge,
+        color: Color = MaterialTheme.colorScheme.primary,
+        maxWidth: androidx.compose.ui.unit.Dp = 200.dp
+    ) {
+        val textMeasurer = rememberTextMeasurer()
+        val density = LocalDensity.current
+        var textWidth by remember { mutableStateOf(0f) }
+        
+        // Measure text width with safety checks
+        LaunchedEffect(text, style) {
+            if (text.isNotEmpty()) {
+                try {
+                    val textLayoutResult = textMeasurer.measure(
+                        text = text,
+                        style = style,
+                        constraints = Constraints()
+                    )
+                    textWidth = textLayoutResult.size.width.toFloat().coerceAtLeast(1f)
+                } catch (e: Exception) {
+                    textWidth = 100f // Fallback value
+                }
+            } else {
+                textWidth = 1f // Avoid zero width
+            }
+        }
+        
+        // Convert maxWidth to pixels with safety check
+        val maxWidthPx = with(density) { maxWidth.toPx() }.coerceAtLeast(1f)
+        
+        // Only animate if text is longer than container
+        val shouldScroll = textWidth > maxWidthPx && textWidth > 1f
+        
+        if (shouldScroll) {
+            // Circular scrolling animation
+            val infiniteTransition = rememberInfiniteTransition(label = "scrolling_text")
+            val spacing = 50f // Space between text instances
+            
+            // For seamless loop, we need to scroll exactly the width of one text + spacing
+            // so when the first text disappears, the second text is perfectly positioned
+            val scrollDistance = textWidth + spacing
+            
+            val translateX by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = -scrollDistance,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(
+                        durationMillis = ((scrollDistance / 30f) * 1000).toInt()
+                            .coerceAtLeast(3000) // Minimum 3 seconds
+                            .coerceAtMost(8000), // Maximum 8 seconds
+                        easing = LinearEasing
+                    ),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "text_scroll"
+            )
+            
+            Box(
+                modifier = modifier
+                    .width(maxWidth)
+                    .clipToBounds()
+                    .height(with(LocalDensity.current) { style.fontSize.toDp() * 1.5f }) // Ensure proper height
+            ) {
+                // First text instance
+                Text(
+                    text = text,
+                    style = style,
+                    color = color,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Visible,
+                    softWrap = false,
+                    modifier = Modifier
+                        .graphicsLayer {
+                            translationX = translateX
+                        }
+                )
+                
+                // Second text instance positioned to create seamless loop
+                Text(
+                    text = text,
+                    style = style,
+                    color = color,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Visible,
+                    softWrap = false,
+                    modifier = Modifier
+                        .graphicsLayer {
+                            translationX = translateX + scrollDistance
+                        }
+                )
+            }
+        } else {
+            // Static text when no scrolling is needed
+            Box(
+                modifier = modifier.width(maxWidth)
+            ) {
+                Text(
+                    text = text,
+                    style = style,
+                    color = color,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+
     // Add LaunchedEffect to sync workoutStarted with CurrentWorkoutViewModel state
     LaunchedEffect(currentWorkout) {
         workoutStarted = currentWorkout?.isActive ?: false
-        if (currentWorkout?.isActive == true && currentWorkout?.startTime != 0L) {
-            startTimeWorkout = currentWorkout?.startTime ?: System.currentTimeMillis()
-        }
+        startTimeWorkout = currentWorkout?.startTime ?: 0L
         Log.d("WorkoutDetailsScreen", "Synced workoutStarted state: $workoutStarted, currentWorkout isActive: ${currentWorkout?.isActive}, startTime: ${currentWorkout?.startTime}")
     }
 
@@ -340,29 +460,6 @@ fun WorkoutDetailsScreen(
                     navController.currentBackStackEntry?.savedStateHandle?.set("newExerciseId", null)
                 }
             }
-    }
-
-    // Function to start the workout session
-    fun startWorkoutSession(exId: Int) {
-        val currentTime = System.currentTimeMillis()
-        Log.d("WorkoutDetailsScreen", "Starting workout session at time: $currentTime")
-        viewModel.startWorkoutSession(currentTime)
-        startTimeWorkout = currentTime
-        workoutStarted = true  // Explicitly set workoutStarted to true
-        
-        // Activate the workout in GeneralViewModel
-        generalViewModel.activateWorkout()
-        
-        val sessionId = generalViewModel.getCurrentSessionId()
-        if (sessionId > 0) {
-            Log.d(
-                "WorkoutDetailsScreen",
-                "Navigating to exercise with sessionId: $sessionId, isStarted: $workoutStarted"
-            )
-            navController.navigate(Screen.Exercise.createRoute(exId, sessionId, workoutId))
-        } else {
-            Log.e("WorkoutDetailsScreen", "Failed to start workout session: session is null")
-        }
     }
 
     // Function to rename the workout
@@ -706,11 +803,9 @@ fun WorkoutDetailsScreen(
                         // Show toast message and block navigation
                         Toast.makeText(context, "Please finish your active workout first", Toast.LENGTH_SHORT).show()
                     } else {
-                        if (workoutSession == null) {
-                            startWorkoutSession(exercise.id)
-                        } else {
-                            navController.navigate(Screen.Exercise.createRoute(exercise.id, workoutSession!!.sessionId.toLong(), workoutId))
-                        }
+                        // Navigate to exercise screen - workout session will be started when timer starts
+                        val sessionId = workoutSession?.sessionId?.toLong() ?: currentWorkout?.sessionId ?: System.currentTimeMillis()
+                        navController.navigate(Screen.Exercise.createRoute(exercise.id, sessionId, workoutId))
                     }
                 },
             shape = RoundedCornerShape(12.dp),
@@ -846,11 +941,29 @@ fun WorkoutDetailsScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = workoutName,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ScrollingText(
+                            text = workoutName,
+                            maxWidth = 200.dp,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        IconButton(
+                            onClick = {
+                                newWorkoutName = workoutName
+                                showRenameDialog = true
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Rename Workout",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
@@ -862,17 +975,29 @@ fun WorkoutDetailsScreen(
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = {
-                            newWorkoutName = workoutName
-                            showRenameDialog = true
+                    val isActiveWorkout = currentWorkout?.workoutId == workoutId && currentWorkout?.isActive == true
+                    if (workoutStarted && isActiveWorkout) {
+                        Button(
+                            onClick = { endWorkoutSession() },
+                            modifier = Modifier.padding(start = 4.dp, end = 0.dp, top = 2.dp, bottom = 2.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ),
+                            enabled = !showSaveNotification,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("Save", style = MaterialTheme.typography.labelMedium)
                         }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Rename Workout",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                        Button(
+                            onClick = { showExitDialog = true },
+                            modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.Red
+                            ),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("Exit", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -881,35 +1006,7 @@ fun WorkoutDetailsScreen(
             )
         },
         bottomBar = {
-            // Only show Finish Workout button if we're viewing the active workout
-            val isActiveWorkout = currentWorkout?.workoutId == workoutId && currentWorkout?.isActive == true
-            if (workoutStarted && isActiveWorkout) {
-                BottomAppBar(
-                    modifier = Modifier.fillMaxWidth(),
-                    containerColor = MaterialTheme.colorScheme.surface
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Button(
-                            onClick = { endWorkoutSession() },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
-                            ),
-                            enabled = !showSaveNotification // Disable button while showing notification
-                        ) {
-                            Text("Finish Workout")
-                        }
-                    }
-                }
-            }
+            // Remove Finish Workout button from bottom bar
         }
     ) { paddingValues ->
         if (isLoading) {
@@ -1027,7 +1124,6 @@ fun WorkoutDetailsScreen(
                 }
 
                 // Recovery Factors Section
-                Spacer(modifier = Modifier.height(24.dp))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1237,6 +1333,40 @@ fun WorkoutDetailsScreen(
                         newWorkoutName = ""
                     }
                 ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Exit Workout confirmation dialog
+    if (showExitDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitDialog = false },
+            title = { Text("Exit Workout") },
+            text = { Text("Are you sure you want to exit and delete this workout session? This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showExitDialog = false
+                    coroutineScope.launch {
+                        // Remove session from DB
+                        val sessionId = currentWorkout?.sessionId
+                        if (sessionId != null && sessionId > 0) {
+                            withContext(Dispatchers.IO) {
+                                dao.deleteWorkoutSessionById(sessionId)
+                            }
+                        }
+                        // Reset view models
+                        viewModel.stopWorkoutSession()
+                        generalViewModel.endWorkout()
+                        navController.popBackStack()
+                    }
+                }) {
+                    Text("Exit", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitDialog = false }) {
                     Text("Cancel")
                 }
             }

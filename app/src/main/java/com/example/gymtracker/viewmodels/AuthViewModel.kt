@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gymtracker.services.AuthRepository
 import com.example.gymtracker.data.AuthResponse
+import com.example.gymtracker.data.User
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,7 +34,25 @@ class AuthViewModel(private val context: Context) : ViewModel() {
     private fun checkLoginStatus() {
         viewModelScope.launch {
             val isLoggedIn = authRepository.isLoggedIn()
+            if (isLoggedIn) {
+                // Load user profile if logged in
+                loadUserProfile()
+            }
             _authState.value = _authState.value.copy(isLoggedIn = isLoggedIn)
+        }
+    }
+    
+    private fun loadUserProfile() {
+        viewModelScope.launch {
+            val result = authRepository.getProfile()
+            result.fold(
+                onSuccess = { user ->
+                    _authState.value = _authState.value.copy(user = user)
+                },
+                onFailure = { exception ->
+                    Log.e("AUTH_LOG", "Failed to load user profile: ${exception.message}")
+                }
+            )
         }
     }
     
@@ -96,6 +115,37 @@ class AuthViewModel(private val context: Context) : ViewModel() {
                     _authState.value = _authState.value.copy(
                         isLoading = false,
                         error = exception.message ?: "Registration failed",
+                        success = null
+                    )
+                }
+            )
+        }
+    }
+    
+    fun changePassword(currentPassword: String, newPassword: String) {
+        Log.d("AUTH_LOG", "Password change attempt")
+        viewModelScope.launch {
+            _authState.value = _authState.value.copy(
+                isLoading = true,
+                error = null,
+                success = null
+            )
+            
+            val result = authRepository.changePassword(currentPassword, newPassword)
+            result.fold(
+                onSuccess = { response ->
+                    Log.d("AUTH_LOG", "Password change successful")
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        success = response.message,
+                        error = null
+                    )
+                },
+                onFailure = { exception ->
+                    Log.e("AUTH_LOG", "Password change failed: ${exception.message}", exception)
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        error = exception.message ?: "Password change failed",
                         success = null
                     )
                 }

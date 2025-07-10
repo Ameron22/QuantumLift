@@ -38,7 +38,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleObserver
 import androidx.lifecycle.OnLifecycleEvent
-import com.example.gymtracker.utils.FloatingTimerManager
+import com.example.gymtracker.services.TimerService
+
+data class NotificationNavigation(
+    val exerciseId: Int,
+    val sessionId: Long,
+    val workoutId: Int
+)
 
 class MainActivity : ComponentActivity(), LifecycleObserver {
     private val viewModel: HistoryViewModel by viewModels {
@@ -53,11 +59,8 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
         }
     }
     
-    // Navigation state for floating timer
-    private var navigationExerciseId = 0
-    private var navigationSessionId = 0L
-    private var navigationWorkoutId = 0
-    private var shouldNavigateToExercise = false
+    // Navigation state for notification
+    private var navigationFromNotification: NotificationNavigation? = null
 
     private fun checkAchievements(dao: ExerciseDao) {
         val achievementManager = AchievementManager.getInstance()
@@ -105,16 +108,23 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
         return streak
     }
     
+    private fun hideDeleteZone() {
+        val intent = Intent(this, TimerService::class.java).apply {
+            action = "HIDE_DELETE_ZONE"
+        }
+        startService(intent)
+    }
+
     @OnLifecycleEvent(Lifecycle.Event.ON_PAUSE)
     fun onAppPause() {
         Log.d("MainActivity", "App paused - hiding delete zone")
-        FloatingTimerManager.hideDeleteZone(this)
+        hideDeleteZone()
     }
     
     @OnLifecycleEvent(Lifecycle.Event.ON_STOP)
     fun onAppStop() {
         Log.d("MainActivity", "App stopped - hiding delete zone")
-        FloatingTimerManager.hideDeleteZone(this)
+        hideDeleteZone()
     }
     
     override fun onNewIntent(intent: Intent) {
@@ -127,6 +137,16 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
             if (intentData.getBooleanExtra("from_floating_timer", false)) {
                 Log.d("MainActivity", "App brought to foreground from floating timer")
                 // Just bring the app to foreground, no specific navigation needed
+            }
+            
+            // Handle timer notification intent
+            if (intentData.getBooleanExtra("from_notification", false)) {
+                Log.d("MainActivity", "App opened from timer notification")
+                navigationFromNotification = NotificationNavigation(
+                    exerciseId = intentData.getIntExtra("exercise_id", 0),
+                    sessionId = intentData.getLongExtra("session_id", 0L),
+                    workoutId = intentData.getIntExtra("workout_id", 0)
+                )
             }
             
             // Handle achievement notification intent
@@ -189,6 +209,15 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                         // Check if we should open achievements from notification
                         if (intent?.getBooleanExtra("open_achievements", false) == true) {
                             navController.navigate(Screen.Achievements.route)
+                        }
+                        
+                        // Check if we should navigate to exercise from timer notification
+                        navigationFromNotification?.let { navData ->
+                            Log.d("MainActivity", "Navigating to exercise from notification: exerciseId=${navData.exerciseId}, sessionId=${navData.sessionId}, workoutId=${navData.workoutId}")
+                            navController.navigate("exercise/${navData.exerciseId}/${navData.sessionId}/${navData.workoutId}") {
+                                popUpTo(Screen.Home.route) { inclusive = false }
+                            }
+                            navigationFromNotification = null // Clear after navigation
                         }
                     }
 
