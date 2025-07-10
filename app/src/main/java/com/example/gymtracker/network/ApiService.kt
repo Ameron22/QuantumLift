@@ -15,6 +15,16 @@ import com.example.gymtracker.data.FriendInvitationResponse
 import com.example.gymtracker.data.FriendsListResponse
 import com.example.gymtracker.data.InvitationsListResponse
 import com.example.gymtracker.data.InvitationActionResponse
+import com.example.gymtracker.data.FeedPostsResponse
+import com.example.gymtracker.data.CommentsResponse
+import com.example.gymtracker.data.CreatePostRequest
+import com.example.gymtracker.data.AddCommentRequest
+import com.example.gymtracker.data.PostActionResponse
+import com.example.gymtracker.data.PrivacySettings
+import com.example.gymtracker.data.UpdatePrivacySettingsRequest
+import retrofit2.http.DELETE
+import retrofit2.http.PUT
+import retrofit2.http.Query
 import kotlin.jvm.JvmSuppressWildcards
 
 /**
@@ -116,4 +126,108 @@ interface ApiService {
         @retrofit2.http.Path("invitationCode") invitationCode: String,
         @Header("Authorization") authorization: String
     ): Response<InvitationActionResponse>
+    
+    // Feed API endpoints
+    
+    /**
+     * Get feed posts endpoint
+     * @param page Page number for pagination
+     * @param limit Number of posts per page
+     * @param authorization Bearer token for authentication
+     * @return Response containing feed posts
+     */
+    @GET("api/feed/posts")
+    suspend fun getFeedPosts(
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 20,
+        @Header("Authorization") authorization: String
+    ): Response<FeedPostsResponse>
+    
+    /**
+     * Create a new post endpoint
+     * @param request Post creation request
+     * @param authorization Bearer token for authentication
+     * @return Response containing success/error message
+     */
+    @POST("api/feed/posts")
+    suspend fun createPost(
+        @Body request: CreatePostRequest,
+        @Header("Authorization") authorization: String
+    ): Response<PostActionResponse>
+    
+    /**
+     * Like/unlike a post endpoint
+     * @param postId The post ID to like/unlike
+     * @param authorization Bearer token for authentication
+     * @return Response containing success/error message
+     */
+    @POST("api/feed/posts/{postId}/like")
+    suspend fun likePost(
+        @retrofit2.http.Path("postId") postId: Int,
+        @Header("Authorization") authorization: String
+    ): Response<PostActionResponse>
+    
+    /**
+     * Get comments for a post endpoint
+     * @param postId The post ID to get comments for
+     * @param page Page number for pagination
+     * @param limit Number of comments per page
+     * @param authorization Bearer token for authentication
+     * @return Response containing comments
+     */
+    @GET("api/feed/posts/{postId}/comments")
+    suspend fun getComments(
+        @retrofit2.http.Path("postId") postId: Int,
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 20,
+        @Header("Authorization") authorization: String
+    ): Response<CommentsResponse>
+    
+    /**
+     * Add a comment to a post endpoint
+     * @param postId The post ID to comment on
+     * @param request Comment request
+     * @param authorization Bearer token for authentication
+     * @return Response containing success/error message
+     */
+    @POST("api/feed/posts/{postId}/comments")
+    suspend fun addComment(
+        @retrofit2.http.Path("postId") postId: Int,
+        @Body request: AddCommentRequest,
+        @Header("Authorization") authorization: String
+    ): Response<PostActionResponse>
+    
+    /**
+     * Delete a post endpoint
+     * @param postId The post ID to delete
+     * @param authorization Bearer token for authentication
+     * @return Response containing success/error message
+     */
+    @DELETE("api/feed/posts/{postId}")
+    suspend fun deletePost(
+        @retrofit2.http.Path("postId") postId: Int,
+        @Header("Authorization") authorization: String
+    ): Response<PostActionResponse>
+    
+    /**
+     * Get user privacy settings endpoint
+     * @param authorization Bearer token for authentication
+     * @return Response containing privacy settings
+     */
+    @GET("api/feed/privacy-settings")
+    suspend fun getPrivacySettings(
+        @Header("Authorization") authorization: String
+    ): Response<PrivacySettings>
+    
+    /**
+     * Update user privacy settings endpoint
+     * @param request Privacy settings update request
+     * @param authorization Bearer token for authentication
+     * @return Response containing success/error message
+     */
+    @PUT("api/feed/privacy-settings")
+    suspend fun updatePrivacySettings(
+        @Body request: UpdatePrivacySettingsRequest,
+        @Header("Authorization") authorization: String
+    ): Response<PostActionResponse>
 } 

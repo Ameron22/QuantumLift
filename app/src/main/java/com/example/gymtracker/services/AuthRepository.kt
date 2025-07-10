@@ -284,4 +284,206 @@ class AuthRepository(private val context: Context) {
             Result.failure(e)
         }
     }
+    
+    // Feed methods
+    
+    suspend fun getFeedPosts(page: Int = 1, limit: Int = 20): Result<List<FeedPost>> {
+        Log.d("AUTH_REPO", "Attempting to get feed posts, page: $page")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.getFeedPosts(page, limit, "Bearer $token")
+            Log.d("AUTH_REPO", "Get feed posts response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { feedResponse ->
+                    Log.d("AUTH_REPO", "Feed posts retrieved successfully, count: ${feedResponse.posts.size}")
+                    Result.success(feedResponse.posts)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Get feed posts failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to get feed posts: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Get feed posts exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun createPost(request: CreatePostRequest): Result<PostActionResponse> {
+        Log.d("AUTH_REPO", "Attempting to create post: ${request.postType}")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.createPost(request, "Bearer $token")
+            Log.d("AUTH_REPO", "Create post response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { actionResponse ->
+                    Log.d("AUTH_REPO", "Post created successfully")
+                    Result.success(actionResponse)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Create post failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to create post: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Create post exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun likePost(postId: Int): Result<PostActionResponse> {
+        Log.d("AUTH_REPO", "Attempting to like/unlike post: $postId")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.likePost(postId, "Bearer $token")
+            Log.d("AUTH_REPO", "Like post response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { actionResponse ->
+                    Log.d("AUTH_REPO", "Post like/unlike successful")
+                    Result.success(actionResponse)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Like post failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to like post: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Like post exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun getComments(postId: Int, page: Int = 1, limit: Int = 20): Result<List<FeedComment>> {
+        Log.d("AUTH_REPO", "Attempting to get comments for post: $postId")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.getComments(postId, page, limit, "Bearer $token")
+            Log.d("AUTH_REPO", "Get comments response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { commentsResponse ->
+                    Log.d("AUTH_REPO", "Comments retrieved successfully, count: ${commentsResponse.comments.size}")
+                    Result.success(commentsResponse.comments)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Get comments failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to get comments: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Get comments exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun addComment(postId: Int, content: String): Result<PostActionResponse> {
+        Log.d("AUTH_REPO", "Attempting to add comment to post: $postId")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.addComment(postId, AddCommentRequest(content), "Bearer $token")
+            Log.d("AUTH_REPO", "Add comment response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { actionResponse ->
+                    Log.d("AUTH_REPO", "Comment added successfully")
+                    Result.success(actionResponse)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Add comment failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to add comment: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Add comment exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun deletePost(postId: Int): Result<PostActionResponse> {
+        Log.d("AUTH_REPO", "Attempting to delete post: $postId")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.deletePost(postId, "Bearer $token")
+            Log.d("AUTH_REPO", "Delete post response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { actionResponse ->
+                    Log.d("AUTH_REPO", "Post deleted successfully")
+                    Result.success(actionResponse)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Delete post failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to delete post: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Delete post exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun getPrivacySettings(): Result<PrivacySettings> {
+        Log.d("AUTH_REPO", "Attempting to get privacy settings")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.getPrivacySettings("Bearer $token")
+            Log.d("AUTH_REPO", "Get privacy settings response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { settings ->
+                    Log.d("AUTH_REPO", "Privacy settings retrieved successfully")
+                    Result.success(settings)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Get privacy settings failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to get privacy settings: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Get privacy settings exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun updatePrivacySettings(request: UpdatePrivacySettingsRequest): Result<PostActionResponse> {
+        Log.d("AUTH_REPO", "Attempting to update privacy settings")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.updatePrivacySettings(request, "Bearer $token")
+            Log.d("AUTH_REPO", "Update privacy settings response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { actionResponse ->
+                    Log.d("AUTH_REPO", "Privacy settings updated successfully")
+                    Result.success(actionResponse)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Update privacy settings failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to update privacy settings: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Update privacy settings exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
 } 

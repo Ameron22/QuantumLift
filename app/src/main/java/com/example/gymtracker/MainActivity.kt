@@ -262,6 +262,9 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                         composable(Screen.ChangePassword.route) {
                             ChangePasswordScreen(navController, authViewModel)
                         }
+                        composable(Screen.Feed.route) {
+                            FeedScreen(navController, authViewModel)
+                        }
                         composable(
                             Screen.Routes.WORKOUT_DETAILS,
                             arguments = listOf(navArgument("workoutId") { type = NavType.IntType })
