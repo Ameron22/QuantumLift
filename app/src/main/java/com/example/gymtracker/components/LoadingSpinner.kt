@@ -19,6 +19,7 @@ import kotlin.math.sin
 @Composable
 fun LoadingSpinner(
     modifier: Modifier = Modifier,
+    scale: Float = 1f,
     proton: Color = MaterialTheme.colorScheme.primary,
     neutron: Color = Color(0xFFC20044),
     electronColor: Color = Color(0xFF00FFFF) // Cyan/glowing color for electron
@@ -56,14 +57,14 @@ fun LoadingSpinner(
     ) {
         // Nucleus with 3 nucleons in triangular formation
         Box(
-            modifier = Modifier.size(60.dp),
+            modifier = Modifier.size((60 * scale).dp),
             contentAlignment = Alignment.Center
         ) {
             // Proton (top center)
             Box(
                 modifier = Modifier
-                    .size(25.dp)
-                    .offset(y = (-12).dp)
+                    .size((25 * scale).dp)
+                    .offset(y = (-12 * scale).dp)
                     .background(
                         color = proton.copy(alpha = 0.8f),
                         shape = CircleShape
@@ -73,8 +74,8 @@ fun LoadingSpinner(
             // First neutron (bottom left)
             Box(
                 modifier = Modifier
-                    .size(25.dp)
-                    .offset(x = (-10).dp, y = 8.dp)
+                    .size((25 * scale).dp)
+                    .offset(x = (-10 * scale).dp, y = (8 * scale).dp)
                     .background(
                         color = neutron.copy(alpha = 0.8f),
                         shape = CircleShape
@@ -84,8 +85,8 @@ fun LoadingSpinner(
             // Second neutron (bottom right)
             Box(
                 modifier = Modifier
-                    .size(25.dp)
-                    .offset(x = 10.dp, y = 8.dp)
+                    .size((25 * scale).dp)
+                    .offset(x = (10 * scale).dp, y = (8 * scale).dp)
                     .background(
                         color = neutron.copy(alpha = 0.8f),
                         shape = CircleShape
@@ -101,10 +102,10 @@ fun LoadingSpinner(
             Box(
                 modifier = Modifier
                     .offset(
-                        x = (120 * cos(Math.toRadians((rotation + offset).toDouble()))).toFloat().dp,
-                        y = (120 * sin(Math.toRadians((rotation + offset).toDouble()))).toFloat().dp
+                        x = (120 * scale * cos(Math.toRadians((rotation + offset).toDouble()))).toFloat().dp,
+                        y = (120 * scale * sin(Math.toRadians((rotation + offset).toDouble()))).toFloat().dp
                     )
-                    .size(8.dp)
+                    .size((8 * scale).dp)
                     .scale(trailScale)
                     .background(
                         color = electronColor.copy(alpha = trailAlpha), // Cyan with fading alpha
@@ -117,10 +118,10 @@ fun LoadingSpinner(
         Box(
             modifier = Modifier
                 .offset(
-                    x = (120 * cos(Math.toRadians(rotation.toDouble()))).toFloat().dp,
-                    y = (120 * sin(Math.toRadians(rotation.toDouble()))).toFloat().dp
+                    x = (120 * scale * cos(Math.toRadians(rotation.toDouble()))).toFloat().dp,
+                    y = (120 * scale * sin(Math.toRadians(rotation.toDouble()))).toFloat().dp
                 )
-                .size(8.dp)
+                .size((8 * scale).dp)
                 .scale(electronScale)
                 .background(
                     color = electronColor, // Cyan color for electron

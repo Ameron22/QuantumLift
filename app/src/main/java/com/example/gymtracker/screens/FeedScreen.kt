@@ -13,14 +13,26 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+
 import androidx.navigation.NavController
 import com.example.gymtracker.data.*
 import com.example.gymtracker.viewmodels.AuthViewModel
+import com.example.gymtracker.components.LoadingSpinner
 import java.text.SimpleDateFormat
+import java.time.Instant
 import java.util.*
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,9 +45,87 @@ fun FeedScreen(
     var showCreatePostDialog by remember { mutableStateOf(false) }
     var selectedPostForComments by remember { mutableStateOf<FeedPost?>(null) }
     
+    // Hidden space management - scroll to hide the 200dp spacer initially
+    val density = LocalDensity.current
+    val spacerHeightPx = with(density) { 200.dp.toPx() }.toInt()
+    var hasScrolledToHideSpace by remember { mutableStateOf(false) }
+    var isShowingRefreshAnimation by remember { mutableStateOf(false) }
+    var isInRefreshSequence by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    
+    // Simple function to scroll back and hide the empty space
+    fun scrollBackToHideSpace() {
+        scope.launch {
+            android.util.Log.d("FeedScreen", "Scrolling back to hide space, offset: $spacerHeightPx")
+            // Simply scroll back to the position that hides the 200dp spacer
+            listState.animateScrollToItem(index = 0, scrollOffset = spacerHeightPx)
+            android.util.Log.d("FeedScreen", "Scroll animation completed")
+        }
+    }
+    
     // Load feed posts when screen is first displayed
     LaunchedEffect(Unit) {
         authViewModel.loadFeedPosts()
+    }
+    
+    // Hide the spacer after the list is composed and has items
+    LaunchedEffect(authState.feedPosts.size, listState.layoutInfo.totalItemsCount) {
+        if (authState.feedPosts.isNotEmpty() && !hasScrolledToHideSpace && listState.layoutInfo.totalItemsCount > 0) {
+            // Add a small delay to ensure the LazyColumn is fully laid out
+            kotlinx.coroutines.delay(100)
+            // Scroll down to hide the 200dp spacer, so first card appears at top
+            listState.scrollToItem(0, spacerHeightPx)
+            hasScrolledToHideSpace = true
+        }
+    }
+    
+    // Monitor scroll position and snap back when user releases after pulling down
+    LaunchedEffect(listState.isScrollInProgress) {
+        // Only trigger refresh logic if we've already done the initial setup scroll and not in refresh sequence
+        if (hasScrolledToHideSpace && !isInRefreshSequence && !listState.isScrollInProgress && listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < spacerHeightPx) {
+            // Check if fully pulled down (hidden space fully revealed)
+            if (listState.firstVisibleItemScrollOffset <= 10) {
+                // Fully pulled down - scroll to 100dp, wait 5 seconds with animation, then back to 200dp
+                val hundredDpPx = with(density) { 100.dp.toPx() }.toInt()
+                
+                // Launch refresh animation in separate coroutine to avoid recomposition issues
+                scope.launch {
+                    // Set flag to prevent other LaunchedEffect from interfering
+                    isInRefreshSequence = true
+                    android.util.Log.d("FeedScreen", "Starting refresh sequence - set isInRefreshSequence = true")
+                    
+                    // First scroll to 100dp position
+                    android.util.Log.d("FeedScreen", "Scrolling to 100dp position")
+                    listState.animateScrollToItem(index = 0, scrollOffset = hundredDpPx)
+                    
+                    // Show spinner and refresh feed from server
+                    android.util.Log.d("FeedScreen", "Setting spinner visible = true")
+                    isShowingRefreshAnimation = true
+                    android.util.Log.d("FeedScreen", "Refreshing feed from server")
+                    authViewModel.loadFeedPosts() // Refresh feed from server
+                    
+                    // Wait for the loading to complete by monitoring authState.isLoading
+                    while (authState.isLoading) {
+                        kotlinx.coroutines.delay(100) // Check every 100ms
+                    }
+                    
+                    android.util.Log.d("FeedScreen", "Server refresh completed, setting spinner visible = false")
+                    isShowingRefreshAnimation = false
+                    
+                    // Finally scroll back to 200dp (hidden position)
+                    android.util.Log.d("FeedScreen", "Scrolling back to 200dp (hidden position)")
+                    listState.animateScrollToItem(index = 0, scrollOffset = spacerHeightPx)
+                    
+                    // Clear flag to allow normal scroll behavior again
+                    isInRefreshSequence = false
+                    android.util.Log.d("FeedScreen", "Refresh sequence completed - set isInRefreshSequence = false")
+                }
+            } else {
+                // Partially pulled down - just snap back normally
+                scrollBackToHideSpace()
+            }
+        }
     }
     
     Scaffold(
@@ -63,153 +153,191 @@ fun FeedScreen(
             )
         }
     ) { paddingValues ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues),
-            state = listState,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(paddingValues)
+
         ) {
-            // Error message
-            authState.error?.let { error ->
-                item {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Error,
-                                contentDescription = "Error",
-                                tint = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = error,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-                    }
-                }
-            }
-            
-            // Success message
-            authState.success?.let { success ->
-                item {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = "Success",
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = success,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-                    }
-                }
-            }
-            
-            // Loading indicator
+            // Initial loading indicator - centered on screen
             if (authState.isLoading && authState.feedPosts.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    LoadingSpinner(
+                        modifier = Modifier.size(80.dp)
+                    )
                 }
-            }
-            
-            // Empty state
-            if (!authState.isLoading && authState.feedPosts.isEmpty()) {
-                item {
-                    Card(
+            } else {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LazyColumn(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp)
+                            .fillMaxSize(),
+                        state = listState,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.People,
-                                contentDescription = "No posts",
-                                modifier = Modifier.size(64.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "No posts yet",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Be the first to share your workout achievements!",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Button(
-                                onClick = { showCreatePostDialog = true }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = null
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Create Post")
+                        // Hidden expandable space at the top
+                        item {
+                            Spacer(modifier = Modifier.height(200.dp))
+                        }
+                        // Error message
+                        authState.error?.let { error ->
+                            item {
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.errorContainer
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Error,
+                                            contentDescription = "Error",
+                                            tint = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = error,
+                                            color = MaterialTheme.colorScheme.onErrorContainer,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                }
                             }
                         }
+                        
+                        // Success message
+                        authState.success?.let { success ->
+                            item {
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = "Success",
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = success,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Empty state
+                        if (!authState.isLoading && authState.feedPosts.isEmpty()) {
+                            item {
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(32.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.People,
+                                            contentDescription = "No posts",
+                                            modifier = Modifier.size(64.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text(
+                                            text = "No posts yet",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "Be the first to share your workout achievements!",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            textAlign = TextAlign.Center
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Button(
+                                            onClick = { showCreatePostDialog = true }
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Add,
+                                                contentDescription = null
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Create Post")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Feed posts
+                        items(authState.feedPosts) { post ->
+                            FeedPostCard(
+                                post = post,
+                                onLike = { authViewModel.likePost(post.id) },
+                                onComment = { selectedPostForComments = post },
+                                onDelete = { authViewModel.deletePost(post.id) },
+                                isOwnPost = post.user.id == authState.user?.id
+                            )
+                        }
                     }
+                    
+                    // Loading spinner overlay - shown during refresh animation
+                    if (isShowingRefreshAnimation) {
+                        android.util.Log.d("FeedScreen", "Rendering spinner overlay - isShowingRefreshAnimation = true")
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 24.dp),
+                            contentAlignment = Alignment.TopCenter
+                        ) {
+                            LoadingSpinner(
+                                modifier = Modifier.size(40.dp),
+                                scale = 0.3f //Don't change this
+                            )
+                        }
+                    }
+                    
+                    // Loading spinner overlay - only shown while refreshing
+//                   if (isRefreshing) {
+//                        Box(
+//                            modifier = Modifier
+//                                .fillMaxWidth()
+//                                .padding(top = 24.dp),
+//                            contentAlignment = Alignment.TopCenter
+//                        ) {
+//                            LoadingSpinner(
+//                                modifier = Modifier.size(40.dp)
+//                            )
+//                        }
+//                   }
                 }
-            }
-            
-            // Feed posts
-            items(authState.feedPosts) { post ->
-                FeedPostCard(
-                    post = post,
-                    onLike = { authViewModel.likePost(post.id) },
-                    onComment = { selectedPostForComments = post },
-                    onDelete = { authViewModel.deletePost(post.id) },
-                    isOwnPost = post.user.id == authState.user?.id
-                )
             }
         }
     }
@@ -372,30 +500,33 @@ fun FeedPostCard(
                         
                         Spacer(modifier = Modifier.height(8.dp))
                         
-                        workoutData.duration?.let { duration ->
-                            Text(
-                                text = "Duration: ${duration} minutes",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-                        
                         workoutData.exercises?.let { exercises ->
                             if (exercises.isNotEmpty()) {
                                 Text(
-                                    text = "Exercises: ${exercises.take(3).joinToString(", ")}${if (exercises.size > 3) "..." else ""}",
+                                    text = "Exercises:",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    fontWeight = FontWeight.Medium
                                 )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Column {
+                                    exercises.take(5).forEach { exercise ->
+                                        Text(
+                                            text = "• $exercise",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
+                                    if (exercises.size > 5) {
+                                        Text(
+                                            text = "• ... and ${exercises.size - 5} more",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                        )
+                                    }
+                                }
                             }
-                        }
-                        
-                        workoutData.totalSets?.let { sets ->
-                            Text(
-                                text = "Total Sets: $sets",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
                         }
                     }
                 }
@@ -638,6 +769,7 @@ fun CommentsDialog(
     var commentText by remember { mutableStateOf("") }
     var comments by remember { mutableStateOf<List<FeedComment>>(emptyList()) }
     var isLoadingComments by remember { mutableStateOf(true) }
+    val authState by authViewModel.authState.collectAsState()
     
     // Load comments when dialog opens
     LaunchedEffect(post.id) {
@@ -714,7 +846,23 @@ fun CommentsDialog(
                     Spacer(modifier = Modifier.width(8.dp))
                     IconButton(
                         onClick = {
-                            if (commentText.isNotBlank()) {
+                            if (commentText.isNotBlank() && authState.user != null) {
+                                // Create a new comment object with current user info
+                                val newComment = FeedComment(
+                                    id = "temp-${System.currentTimeMillis()}", // Temporary ID
+                                    content = commentText,
+                                    createdAt = Instant.now().toString(),
+                                    user = com.example.gymtracker.data.FeedUser(
+                                        id = authState.user!!.id,
+                                        username = authState.user!!.username,
+                                        profilePicture = null // User class doesn't have profilePicture field
+                                    )
+                                )
+                                
+                                // Add comment to local state immediately
+                                comments = comments + newComment
+                                
+                                // Send to server
                                 onAddComment(commentText)
                                 commentText = ""
                             }
@@ -791,7 +939,22 @@ fun CommentItem(comment: FeedComment) {
     }
 }
 
+// Cache for parsed dates to avoid repeated parsing
+private val dateCache = mutableMapOf<String, String>()
+private var lastCacheUpdate = 0L
+
 private fun formatPostDate(dateString: String): String {
+    val now = System.currentTimeMillis()
+    
+    // Update cache every 30 seconds to refresh relative times
+    if (now - lastCacheUpdate > 30_000) {
+        dateCache.clear()
+        lastCacheUpdate = now
+    }
+    
+    // Return cached result if available
+    dateCache[dateString]?.let { return it }
+    
     return try {
         // Try multiple date formats to handle different server responses
         val dateFormats = listOf(
@@ -799,13 +962,18 @@ private fun formatPostDate(dateString: String): String {
             "yyyy-MM-dd'T'HH:mm:ss'Z'",
             "yyyy-MM-dd'T'HH:mm:ss.SSS",
             "yyyy-MM-dd'T'HH:mm:ss",
-            "yyyy-MM-dd HH:mm:ss"
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss.SSS"
         )
         
         var date: Date? = null
         for (format in dateFormats) {
             try {
                 val inputFormat = SimpleDateFormat(format, Locale.getDefault())
+                // Set timezone to UTC for formats with 'Z'
+                if (format.contains("'Z'")) {
+                    inputFormat.timeZone = java.util.TimeZone.getTimeZone("UTC")
+                }
                 date = inputFormat.parse(dateString)
                 break
             } catch (e: Exception) {
@@ -818,16 +986,28 @@ private fun formatPostDate(dateString: String): String {
             return "Unknown time"
         }
         
-        val now = Date()
-        val diffInMillis = now.time - date.time
-        val diffInMinutes = diffInMillis / (1000 * 60)
+        val currentTime = Date()
+        val diffInMillis = currentTime.time - date.time
+        val diffInSeconds = diffInMillis / 1000
+        val diffInMinutes = diffInSeconds / 60
+        val diffInHours = diffInMinutes / 60
+        val diffInDays = diffInHours / 24
         
-        when {
-            diffInMinutes < 1 -> "Just now"
+        val result = when {
+            diffInSeconds < 30 -> "Just now"
+            diffInSeconds < 60 -> "${diffInSeconds}s ago"
             diffInMinutes < 60 -> "${diffInMinutes}m ago"
-            diffInMinutes < 1440 -> "${diffInMinutes / 60}h ago"
-            else -> "${diffInMinutes / 1440}d ago"
+            diffInHours < 24 -> "${diffInHours}h ago"
+            diffInDays < 7 -> "${diffInDays}d ago"
+            else -> {
+                val outputFormat = SimpleDateFormat("MMM dd", Locale.getDefault())
+                outputFormat.format(date)
+            }
         }
+        
+        // Cache the result
+        dateCache[dateString] = result
+        result
     } catch (e: Exception) {
         "Unknown time"
     }
