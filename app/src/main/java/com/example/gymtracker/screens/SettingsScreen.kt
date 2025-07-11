@@ -94,7 +94,7 @@ fun SettingsScreen(
     var showUserSettings by remember { mutableStateOf(true) }
     
     // Privacy settings state
-    var autoShareWorkouts by remember { mutableStateOf(false) }
+    var autoShareWorkouts by remember { mutableStateOf(true) }
     var defaultPrivacy by remember { mutableStateOf("FRIENDS") }
     var isLoadingPrivacySettings by remember { mutableStateOf(true) }
     var isSavingPrivacySettings by remember { mutableStateOf(false) }

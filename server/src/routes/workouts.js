@@ -9,6 +9,20 @@ function isValidUUID(uuid) {
   return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(uuid);
 }
 
+// Helper: Get achievement display name
+function getAchievementName(id) {
+  switch(id) {
+    case 'first_workout': return '🏆 First Workout';
+    case 'workout_warrior': return '💪 Workout Warrior';
+    case 'workout_master': return '🌟 Workout Master';
+    case 'bench_press_100': return '💯 Centurion';
+    case 'consistency_week': return '📅 Week Warrior';
+    case 'consistency_month': return '🗓️ Monthly Master';
+    case 'night_owl': return '🦉 Night Owl';
+    default: return id;
+  }
+}
+
 // Complete workout and optionally share to feed
 router.post('/complete', authenticateToken, async (req, res) => {
   try {
@@ -19,6 +33,7 @@ router.post('/complete', authenticateToken, async (req, res) => {
       exercises, 
       totalSets, 
       totalWeight,
+      achievements = [],
       shareToFeed = false,
       privacyLevel = 'FRIENDS'
     } = req.body;
@@ -92,10 +107,25 @@ router.post('/complete', authenticateToken, async (req, res) => {
         totalSets: totalSets || 0,
         totalWeight: totalWeight || 0,
         workoutId: workoutId,
-        workoutName: workoutName
+        workoutName: workoutName,
+        achievements: achievements || []
       };
 
-      const content = `Just completed ${workoutName}! 💪\nDuration: ${Math.round(duration / 60)} minutes\nExercises: ${exercises?.length || 0}\nTotal sets: ${totalSets || 0}`;
+      // Build achievement text if any achievements were unlocked
+      let achievementText = '';
+      if (achievements && achievements.length > 0) {
+        const achievementDetails = achievements.map(achievement => {
+          const achievementName = getAchievementName(achievement.id);
+          if (achievement.additionalInfo) {
+            return `${achievementName}: ${achievement.additionalInfo}`;
+          } else {
+            return achievementName;
+          }
+        });
+        achievementText = `\n🎉 Achievements unlocked:\n${achievementDetails.join('\n')}`;
+      }
+
+      const content = `Just completed ${workoutName}! 💪\nDuration: ${Math.round(duration / (60 * 1000))} minutes\nExercises: ${exercises?.length || 0}\nTotal sets: ${totalSets || 0}${achievementText}`;
 
       try {
         const postResult = await query(
