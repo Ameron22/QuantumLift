@@ -22,6 +22,7 @@ app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 const authRoutes = require('./src/routes/auth');
 const friendRoutes = require('./src/routes/friends');
 const feedRoutes = require('./src/routes/feed');
+const workoutRoutes = require('./src/routes/workouts');
 
 // Basic health check endpoint
 app.get('/health', (req, res) => {
@@ -36,6 +37,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/feed', feedRoutes);
+app.use('/api/workouts', workoutRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {

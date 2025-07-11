@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.People
 
 @Composable
 fun BottomNavBar(navController: NavController) {
@@ -64,7 +65,7 @@ fun BottomNavBar(navController: NavController) {
                             modifier = Modifier.size(26.dp)
                         )
                         Screen.Feed -> Icon(
-                            painter = painterResource(id = R.drawable.food_icon),
+                            imageVector = Icons.Default.People,
                             contentDescription = "Feed",
                             modifier = Modifier.size(36.dp)
                         )

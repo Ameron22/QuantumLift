@@ -32,6 +32,7 @@ import java.util.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.gymtracker.classes.WeightProgressionData
 import com.example.gymtracker.classes.VolumeProgressionData
+import com.example.gymtracker.components.LoadingSpinner
 
 private val SectionSpacing = 16.dp
 private val ItemPadding = 8.dp
@@ -57,6 +58,7 @@ fun LoadHistoryScreen(
 ) {
     val workoutSessions by viewModel.workoutSessions.collectAsState()
     val muscleSoreness by viewModel.muscleSoreness.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
     
     // State for tab selection
     var selectedTabIndex by remember { mutableStateOf(0) }
@@ -103,7 +105,25 @@ fun LoadHistoryScreen(
         },
         bottomBar = { BottomNavBar(navController) }
     ) { paddingValues ->
-        when (selectedTabIndex) {
+        if (isLoading) {
+            // Loading indicator in center of page
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    LoadingSpinner(
+                        modifier = Modifier.size(80.dp)
+                    )
+                }
+            }
+        } else {
+            when (selectedTabIndex) {
             0 -> WorkoutsTab(
                 workoutSessions = workoutSessions,
                 muscleSoreness = muscleSoreness,
@@ -146,6 +166,7 @@ fun LoadHistoryScreen(
                 )
             }
         }
+    }
     }
 }
 

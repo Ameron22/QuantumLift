@@ -47,8 +47,8 @@ ID,Title,Category,Muscle_Group,Muscles,Equipment,Difficulty,GIF_URL,use_time
 46,Alternate Heel Touchers Waist Fix,Strength,Core,"Abs, Obliques",,3/3,https://fitcron.com/wp-content/uploads/2024/05/00061301-Alternate-Heel-Touchers_waist-FIX_720.gif,False
 47,Air Bike M Waist,Strength,Core,"Abs, Obliques",,3/3,https://fitcron.com/wp-content/uploads/2024/05/00031301-air-bike-m_waist_FIX_720.gif,False
 48,45° Side Bend,Strength,Core,"Abs, Obliques",Other,2/3,https://fitcron.com/wp-content/uploads/2024/05/00021301-45°-Side-Bend_Waist_720.gif,False
-49,Estiramiento.Jpg,Stretching,All,,,1/3,https://fitcron.com/wp-content/uploads/2024/02/estiramiento.jpg,True
-50,Calentamiento.Jpg,Stretching,All,,,1/3,https://fitcron.com/wp-content/uploads/2024/02/calentamiento.jpg,True
+49,Stretching,Stretching,All,,,1/3,https://fitcron.com/wp-content/uploads/2024/02/estiramiento.jpg,True
+50,Warm-up,Stretching,All,,,1/3,https://fitcron.com/wp-content/uploads/2024/02/calentamiento.jpg,True
 51,Band Side Bend Male,Strength,Core,"Abs, Obliques",Resistance Bands,2/3,https://fitcron.com/wp-content/uploads/2021/04/38411301-Band-side-bend-male_Waist_720.gif,False
 52,Smith Hip Raise,Strength,Core,"Abs, Obliques",Machine,3/3,https://fitcron.com/wp-content/uploads/2021/04/07561301-Smith-Hip-Raise_waist_720.gif,False
 53,Lever Total Abdominal Crunch,Strength,Core,"Abs, Obliques",Machine,3/3,https://fitcron.com/wp-content/uploads/2021/04/18571301-Lever-Total-Abdominal-Crunch_Waist_720.gif,False
@@ -639,16 +639,16 @@ ID,Title,Category,Muscle_Group,Muscles,Equipment,Difficulty,GIF_URL,use_time
 639,Landmine Floor One Arm Chest Fly,Strength,Chest,"Pectorals, Triceps",Machine,2/3,https://fitcron.com/wp-content/uploads/2021/03/39231301-Landmine-Floor-One-Arm-Chest-Fly_Chest_720.gif,False
 640,Barbell Decline Wide Grip Press,Strength,Chest,"Pectorals, Triceps","Incline Bench, Barbell",2/3,https://fitcron.com/wp-content/uploads/2021/03/00361301-Barbell-Decline-Wide-grip-Press_Chest_720.gif,False
 641,Barbell Reverse Grip Decline Bench Press,Strength,Chest,"Pectorals, Triceps","Incline Bench, Barbell",2/3,https://fitcron.com/wp-content/uploads/2021/03/12561301-Barbell-Reverse-Grip-Decline-Bench-Press_Chest_720.gif,False
-642,Barbell Decline Bent Arm Pullover,Strength,Arms,"Triceps, Pectorals","Incline Bench, Barbell",2/3,https://fitcron.com/wp-content/uploads/2021/03/00341301-Barbell-Decline-Bent-Arm-Pullover_Back_720.gif,False
+642,Barbell Decline Bent Arm Pullover,Strength,Chest,"Triceps, Pectorals","Incline Bench, Barbell",2/3,https://fitcron.com/wp-content/uploads/2021/03/00341301-Barbell-Decline-Bent-Arm-Pullover_Back_720.gif,False
 643,Barbell Wide Reverse Grip Bench Press,Strength,Chest,"Pectorals, Triceps","Flat Bench, Barbell",2/3,https://fitcron.com/wp-content/uploads/2021/03/12581301-Barbell-Wide-Reverse-Grip-Bench-Press_Chest_720.gif,False
 644,Barbell Reverse Grip Incline Bench Press,Strength,Chest,"Pectorals, Triceps","Incline Bench, Barbell",2/3,https://fitcron.com/wp-content/uploads/2021/03/12571301-Barbell-Reverse-Grip-Incline-Bench-Press_Chest_720.gif,False
-645,Barbell Decline Wide Grip Pullover,Strength,Arms,"Triceps, Pectorals","Incline Bench, Barbell",2/3,https://fitcron.com/wp-content/uploads/2021/03/00371301-Barbell-Decline-wide-grip-pullover_Back_720.gif,False
-646,Barbell Bent Arm Pullover,Strength,Arms,"Triceps, Pectorals","Flat Bench, Barbell",2/3,https://fitcron.com/wp-content/uploads/2021/03/13161301-Barbell-Bent-Arm-Pullover_Back_720.gif,False
+645,Barbell Decline Wide Grip Pullover,Strength,Chest,"Triceps, Pectorals","Incline Bench, Barbell",2/3,https://fitcron.com/wp-content/uploads/2021/03/00371301-Barbell-Decline-wide-grip-pullover_Back_720.gif,False
+646,Barbell Bent Arm Pullover,Strength,Chest,"Triceps, Pectorals","Flat Bench, Barbell",2/3,https://fitcron.com/wp-content/uploads/2021/03/13161301-Barbell-Bent-Arm-Pullover_Back_720.gif,False
 647,Smith Hex Press,Strength,Chest,"Pectorals, Triceps","Flat Bench, Machine",2/3,https://fitcron.com/wp-content/uploads/2021/03/29191301-Smith-Hex-Press_Chest_720.gif,False
 648,Ez Bar Close Grip Bench Press Upper Arms,Strength,Chest,"Pectorals, Triceps","Flat Bench, EZ Bar",2/3,https://fitcron.com/wp-content/uploads/2021/03/24321301-EZ-bar-Close-Grip-Bench-Press_Upper-Arms_720.gif,False
 649,Barbell Wide Bench Press,Strength,Chest,"Pectorals, Triceps","Flat Bench, Barbell",2/3,https://fitcron.com/wp-content/uploads/2021/03/01221301-Barbell-Wide-Bench-Press_Chest_720.gif,False
 650,Barbell Incline Bench Press,Strength,Chest,"Pectorals, Triceps","Incline Bench, Barbell",2/3,https://fitcron.com/wp-content/uploads/2021/03/00471301-Barbell-Incline-Bench-Press_Chest_720.gif,False
-651,Barbell Bench Press Chest Fix,Strength,Arms,"Triceps, Pectorals","Flat Bench, Barbell",1/3,https://fitcron.com/wp-content/uploads/2021/03/00251301-Barbell-Bench-Press_Chest-FIX_720.gif,False
+651,Barbell Bench Press Chest Fix,Strength,Chest,"Triceps, Pectorals","Flat Bench, Barbell",1/3,https://fitcron.com/wp-content/uploads/2021/03/00251301-Barbell-Bench-Press_Chest-FIX_720.gif,False
 652,Cable Lying Extension Pullover With Rope Attachment,Strength,Chest,"Pectorals, Triceps","Flat Bench, Cable",2/3,https://fitcron.com/wp-content/uploads/2021/03/01841301-Cable-Lying-Extension-Pullover-with-rope-attachment_Back_720.gif,False
 653,Cable One Arm Decline Chest Fly,Strength,Chest,"Pectorals, Triceps","Incline Bench, Cable",2/3,https://fitcron.com/wp-content/uploads/2021/03/12621301-Cable-One-Arm-Decline-Chest-Fly_Chest_720.gif,False
 654,Cable Decline One Arm Press,Strength,Chest,"Pectorals, Triceps","Incline Bench, Cable",2/3,https://fitcron.com/wp-content/uploads/2021/03/12601301-Cable-Decline-One-Arm-Press_Chest_720.gif,False

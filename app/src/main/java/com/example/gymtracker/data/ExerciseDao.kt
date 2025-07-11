@@ -138,4 +138,7 @@ interface ExerciseDao {
 
     @Query("DELETE FROM workout_sessions WHERE sessionId = :sessionId")
     suspend fun deleteWorkoutSessionById(sessionId: Long)
+    
+    @Query("SELECT * FROM exercise_sessions WHERE sessionId = :sessionId")
+    suspend fun getExerciseSessionsForSession(sessionId: Long): List<SessionEntityExercise>
 }

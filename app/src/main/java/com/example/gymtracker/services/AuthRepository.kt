@@ -486,4 +486,81 @@ class AuthRepository(private val context: Context) {
             Result.failure(e)
         }
     }
+    
+    // Workout privacy methods
+    
+    suspend fun getWorkoutPrivacySettings(): Result<WorkoutPrivacySettings> {
+        Log.d("AUTH_REPO", "Attempting to get workout privacy settings")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.getWorkoutPrivacySettings("Bearer $token")
+            Log.d("AUTH_REPO", "Get workout privacy settings response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { settings ->
+                    Log.d("AUTH_REPO", "Workout privacy settings retrieved successfully")
+                    Result.success(settings)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Get workout privacy settings failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to get workout privacy settings: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Get workout privacy settings exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun updateWorkoutPrivacySettings(request: UpdateWorkoutPrivacySettingsRequest): Result<PostActionResponse> {
+        Log.d("AUTH_REPO", "Attempting to update workout privacy settings")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.updateWorkoutPrivacySettings(request, "Bearer $token")
+            Log.d("AUTH_REPO", "Update workout privacy settings response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { actionResponse ->
+                    Log.d("AUTH_REPO", "Workout privacy settings updated successfully")
+                    Result.success(actionResponse)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Update workout privacy settings failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to update workout privacy settings: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Update workout privacy settings exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun completeWorkout(request: WorkoutCompletionRequest): Result<WorkoutCompletionResponse> {
+        Log.d("AUTH_REPO", "Attempting to complete workout")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.completeWorkout(request, "Bearer $token")
+            Log.d("AUTH_REPO", "Complete workout response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { completionResponse ->
+                    Log.d("AUTH_REPO", "Workout completed successfully")
+                    Result.success(completionResponse)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Complete workout failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to complete workout: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Complete workout exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
 } 

@@ -13,6 +13,7 @@ class UserSettingsPreferences(context: Context) {
         UserSettings(
             defaultWorkTime = prefs.getInt("default_work_time", 30),
             defaultBreakTime = prefs.getInt("default_break_time", 60),
+            defaultPreSetBreakTime = prefs.getInt("default_pre_set_break_time", 10),
             soundEnabled = prefs.getBoolean("sound_enabled", true),
             vibrationEnabled = prefs.getBoolean("vibration_enabled", true),
             soundVolume = prefs.getFloat("sound_volume", 0.5f)
@@ -32,6 +33,13 @@ class UserSettingsPreferences(context: Context) {
         prefs.edit().putInt("default_break_time", seconds).apply()
         _settingsFlow.value = _settingsFlow.value.copy(defaultBreakTime = seconds)
         Log.d("UserSettingsPreferences", "Break time saved successfully")
+    }
+    
+    fun updatePreSetBreakTime(seconds: Int) {
+        Log.d("UserSettingsPreferences", "Saving pre-set break time: $seconds seconds")
+        prefs.edit().putInt("default_pre_set_break_time", seconds).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(defaultPreSetBreakTime = seconds)
+        Log.d("UserSettingsPreferences", "Pre-set break time saved successfully")
     }
     
     fun updateSoundEnabled(enabled: Boolean) {
@@ -58,13 +66,15 @@ class UserSettingsPreferences(context: Context) {
     fun getCurrentSettings(): UserSettings {
         val workTime = prefs.getInt("default_work_time", 30)
         val breakTime = prefs.getInt("default_break_time", 60)
+        val preSetBreakTime = prefs.getInt("default_pre_set_break_time", 10)
         val soundEnabled = prefs.getBoolean("sound_enabled", true)
         val vibrationEnabled = prefs.getBoolean("vibration_enabled", true)
         val soundVolume = prefs.getFloat("sound_volume", 0.5f)
-        Log.d("UserSettingsPreferences", "Current settings - Work: $workTime, Break: $breakTime, Sound: $soundEnabled, Vibration: $vibrationEnabled, Volume: $soundVolume")
+        Log.d("UserSettingsPreferences", "Current settings - Work: $workTime, Break: $breakTime, Pre-Set: $preSetBreakTime, Sound: $soundEnabled, Vibration: $vibrationEnabled, Volume: $soundVolume")
         return UserSettings(
             defaultWorkTime = workTime, 
             defaultBreakTime = breakTime,
+            defaultPreSetBreakTime = preSetBreakTime,
             soundEnabled = soundEnabled,
             vibrationEnabled = vibrationEnabled,
             soundVolume = soundVolume

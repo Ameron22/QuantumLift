@@ -5,6 +5,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,7 +38,14 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material3.Icon
+import com.example.gymtracker.components.LoadingSpinner
+import com.example.gymtracker.data.WorkoutPrivacySettings
+import com.example.gymtracker.data.UpdateWorkoutPrivacySettingsRequest
+import com.example.gymtracker.services.AuthRepository
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,9 +59,12 @@ fun SettingsScreen(
     val prefs = remember { UserSettingsPreferences(context) }
     val settings by prefs.settingsFlow.collectAsState(initial = null)
     val authState by authViewModel.authState.collectAsState()
+    val scope = rememberCoroutineScope()
+    val authRepository = remember { AuthRepository(context) }
 
     var workTime by remember { mutableStateOf(settings?.defaultWorkTime ?: 30) }
     var breakTime by remember { mutableStateOf(settings?.defaultBreakTime ?: 60) }
+    var preSetBreakTime by remember { mutableStateOf(settings?.defaultPreSetBreakTime ?: 10) }
     var soundEnabled by remember { mutableStateOf(settings?.soundEnabled ?: true) }
     var vibrationEnabled by remember { mutableStateOf(settings?.vibrationEnabled ?: true) }
     var soundVolume by remember { mutableStateOf(settings?.soundVolume ?: 0.5f) }
@@ -62,6 +73,7 @@ fun SettingsScreen(
     // Track original values to detect changes
     var originalWorkTime by remember { mutableStateOf(settings?.defaultWorkTime ?: 30) }
     var originalBreakTime by remember { mutableStateOf(settings?.defaultBreakTime ?: 60) }
+    var originalPreSetBreakTime by remember { mutableStateOf(settings?.defaultPreSetBreakTime ?: 10) }
     var originalSoundEnabled by remember { mutableStateOf(settings?.soundEnabled ?: true) }
     var originalVibrationEnabled by remember { mutableStateOf(settings?.vibrationEnabled ?: true) }
     var originalSoundVolume by remember { mutableStateOf(settings?.soundVolume ?: 0.5f) }
@@ -69,6 +81,7 @@ fun SettingsScreen(
     // State for number picker dialogs
     var showWorkTimePicker by remember { mutableStateOf(false) }
     var showBreakTimePicker by remember { mutableStateOf(false) }
+    var showPreSetBreakTimePicker by remember { mutableStateOf(false) }
     
     // State for back confirmation dialog
     var showBackConfirmationDialog by remember { mutableStateOf(false) }
@@ -79,19 +92,59 @@ fun SettingsScreen(
     
     // State for collapsible user settings
     var showUserSettings by remember { mutableStateOf(true) }
+    
+    // Privacy settings state
+    var autoShareWorkouts by remember { mutableStateOf(false) }
+    var defaultPrivacy by remember { mutableStateOf("FRIENDS") }
+    var isLoadingPrivacySettings by remember { mutableStateOf(true) }
+    var isSavingPrivacySettings by remember { mutableStateOf(false) }
+    var showPrivacySuccessMessage by remember { mutableStateOf(false) }
+    var privacyErrorMessage by remember { mutableStateOf<String?>(null) }
+    
+    val privacyOptions = listOf("PUBLIC", "FRIENDS", "PRIVATE")
 
     LaunchedEffect(settings) {
         settings?.let {
             workTime = it.defaultWorkTime
             breakTime = it.defaultBreakTime
+            preSetBreakTime = it.defaultPreSetBreakTime ?: 10
             soundEnabled = it.soundEnabled
             vibrationEnabled = it.vibrationEnabled
             soundVolume = it.soundVolume
             originalWorkTime = it.defaultWorkTime
             originalBreakTime = it.defaultBreakTime
+            originalPreSetBreakTime = it.defaultPreSetBreakTime ?: 10
             originalSoundEnabled = it.soundEnabled
             originalVibrationEnabled = it.vibrationEnabled
             originalSoundVolume = it.soundVolume
+        }
+    }
+    
+    // Load privacy settings
+    LaunchedEffect(Unit) {
+        try {
+            val result = authRepository.getWorkoutPrivacySettings()
+            result.fold(
+                onSuccess = { settings ->
+                    autoShareWorkouts = settings.autoShareWorkouts
+                    defaultPrivacy = settings.defaultPostPrivacy
+                },
+                onFailure = { exception ->
+                    privacyErrorMessage = "Error loading settings: ${exception.message}"
+                }
+            )
+        } catch (e: Exception) {
+            privacyErrorMessage = "Error loading settings: ${e.message}"
+        } finally {
+            isLoadingPrivacySettings = false
+        }
+    }
+    
+    // Auto-clear privacy success message
+    LaunchedEffect(showPrivacySuccessMessage) {
+        if (showPrivacySuccessMessage) {
+            kotlinx.coroutines.delay(3000)
+            showPrivacySuccessMessage = false
         }
     }
 
@@ -99,6 +152,7 @@ fun SettingsScreen(
     fun hasChanges(): Boolean {
         return workTime != originalWorkTime || 
                breakTime != originalBreakTime || 
+               preSetBreakTime != originalPreSetBreakTime ||
                soundEnabled != originalSoundEnabled || 
                vibrationEnabled != originalVibrationEnabled ||
                soundVolume != originalSoundVolume
@@ -108,6 +162,7 @@ fun SettingsScreen(
     fun saveSettings() {
         prefs.updateWorkTime(workTime)
         prefs.updateBreakTime(breakTime)
+        prefs.updatePreSetBreakTime(preSetBreakTime)
         prefs.updateSoundEnabled(soundEnabled)
         prefs.updateVibrationEnabled(vibrationEnabled)
         prefs.updateSoundVolume(soundVolume)
@@ -115,6 +170,7 @@ fun SettingsScreen(
         // Update original values after saving
         originalWorkTime = workTime
         originalBreakTime = breakTime
+        originalPreSetBreakTime = preSetBreakTime
         originalSoundEnabled = soundEnabled
         originalVibrationEnabled = vibrationEnabled
         originalSoundVolume = soundVolume
@@ -124,6 +180,35 @@ fun SettingsScreen(
         // Verify the save by reading back the values
         val currentSettings = prefs.getCurrentSettings()
         Log.d("SettingsScreen", "Settings after save - Work: ${currentSettings.defaultWorkTime}, Break: ${currentSettings.defaultBreakTime}, Sound: ${currentSettings.soundEnabled}, Vibration: ${currentSettings.vibrationEnabled}, Volume: ${currentSettings.soundVolume}")
+    }
+    
+    // Function to save privacy settings
+    fun savePrivacySettings() {
+        scope.launch {
+            isSavingPrivacySettings = true
+            privacyErrorMessage = null
+            
+            try {
+                val request = UpdateWorkoutPrivacySettingsRequest(
+                    autoShareWorkouts = autoShareWorkouts,
+                    defaultPostPrivacy = defaultPrivacy
+                )
+                
+                val result = authRepository.updateWorkoutPrivacySettings(request)
+                result.fold(
+                    onSuccess = {
+                        showPrivacySuccessMessage = true
+                    },
+                    onFailure = { exception ->
+                        privacyErrorMessage = "Error saving settings: ${exception.message}"
+                    }
+                )
+            } catch (e: Exception) {
+                privacyErrorMessage = "Error saving settings: ${e.message}"
+            } finally {
+                isSavingPrivacySettings = false
+            }
+        }
     }
 
     // Function to handle navigation with change detection
@@ -160,6 +245,7 @@ fun SettingsScreen(
                 Screen.Home,
                 Screen.LoadWorkout,
                 Screen.LoadHistory,
+                Screen.Feed,
                 Screen.Achievements,
                 Screen.Settings
             )
@@ -194,13 +280,18 @@ fun SettingsScreen(
                                     contentDescription = "Achievements",
                                     modifier = Modifier.size(40.dp)
                                 )
+                                Screen.Feed -> Icon(
+                                    imageVector = Icons.Default.People,
+                                    contentDescription = "Feed",
+                                    modifier = Modifier.size(36.dp)
+                                )
                                 Screen.Settings -> Icon(
                                     painter = painterResource(id = R.drawable.settings_svgrepo_com),
                                     contentDescription = "Settings",
                                     modifier = Modifier.size(26.dp)
                                 )
                                 else -> Icon(
-                                    painter = painterResource(id = R.drawable.food_icon),
+                                    imageVector = Icons.Default.People,
                                     contentDescription = screen.route,
                                     modifier = Modifier.size(40.dp)
                                 )
@@ -218,15 +309,33 @@ fun SettingsScreen(
             }
         }
     ) { paddingValues ->
-        // Make the content scrollable
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(paddingValues)
-                .padding(16.dp)
-                .padding(top = 32.dp)
-        ) {
+        if (authState.isLoading) {
+            // Loading indicator in center of page
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    LoadingSpinner(
+                        modifier = Modifier.size(80.dp)
+                    )
+                }
+            }
+        } else {
+            // Make the content scrollable
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(paddingValues)
+                    .padding(16.dp)
+                    .padding(top = 32.dp)
+            ) {
         
         // User Settings Container
         Card(
@@ -394,6 +503,210 @@ fun SettingsScreen(
                         }
                     }
                     
+                    // Privacy Settings Section
+                    if (isLoadingPrivacySettings) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .padding(12.dp)
+                                    .fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.People,
+                                    contentDescription = "Privacy Settings",
+                                    modifier = Modifier.size(24.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = "Privacy Settings",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Loading privacy settings...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            }
+                        }
+                    } else {
+                        // Auto-share toggle
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(
+                                            text = "Auto-Share Workouts",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "Automatically share completed workouts to your feed",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Switch(
+                                        checked = autoShareWorkouts,
+                                        onCheckedChange = { autoShareWorkouts = it }
+                                    )
+                                }
+                                
+                                // Default privacy level
+                                Text(
+                                    text = "Default Privacy Level",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Choose who can see your shared workouts by default",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                
+                                privacyOptions.forEach { option ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = defaultPrivacy == option,
+                                            onClick = { defaultPrivacy = option }
+                                        )
+                                        Column(
+                                            modifier = Modifier.padding(start = 8.dp)
+                                        ) {
+                                            Text(
+                                                text = when (option) {
+                                                    "PUBLIC" -> "Public"
+                                                    "FRIENDS" -> "Friends"
+                                                    "PRIVATE" -> "Private"
+                                                    else -> option
+                                                },
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                            Text(
+                                                text = when (option) {
+                                                    "PUBLIC" -> "Everyone can see your posts"
+                                                    "FRIENDS" -> "Only your friends can see your posts"
+                                                    "PRIVATE" -> "Only you can see your posts"
+                                                    else -> ""
+                                                },
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                                
+                                // Save privacy settings button
+                                Button(
+                                    onClick = { savePrivacySettings() },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = !isSavingPrivacySettings
+                                ) {
+                                    if (isSavingPrivacySettings) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Text("Save Privacy Settings")
+                                    }
+                                }
+                                
+                                // Privacy success message
+                                if (showPrivacySuccessMessage) {
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                                        )
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = androidx.compose.material.icons.Icons.Default.Check,
+                                                contentDescription = "Success",
+                                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "Privacy settings saved successfully!",
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                        }
+                                    }
+                                }
+                                
+                                // Privacy error message
+                                privacyErrorMessage?.let { error ->
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.errorContainer
+                                        )
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = androidx.compose.material.icons.Icons.Default.Error,
+                                                contentDescription = "Error",
+                                                tint = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = error,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     // Logout Button
@@ -538,6 +851,46 @@ fun SettingsScreen(
                                     "%02d:%02d",
                                     breakTime / 60,
                                     breakTime % 60
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Text(
+                        "Default Pre-Set Break Time",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                            .clickable { showPreSetBreakTimePicker = true },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .padding(12.dp)
+                                .fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Pre-Set Break Time",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = String.format(
+                                    "%02d:%02d",
+                                    preSetBreakTime / 60,
+                                    preSetBreakTime % 60
                                 ),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.primary
@@ -744,6 +1097,52 @@ fun SettingsScreen(
                 modifier = Modifier.background(Color.Transparent)
             )
         }
+        
+        // Pre-Set Break Time Picker Dialog
+        if (showPreSetBreakTimePicker) {
+            AlertDialog(
+                onDismissRequest = { showPreSetBreakTimePicker = false },
+                title = {
+                    Text(
+                        "Select Pre-Set Break Time",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                },
+                text = {
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(215.dp)
+                            .width(260.dp)
+                    ) {
+                        NumberPicker(
+                            value = preSetBreakTime / 60,
+                            range = 0..5,
+                            onValueChange = { newMinutes ->
+                                preSetBreakTime = (newMinutes * 60) + (preSetBreakTime % 60)
+                            },
+                            unit = "m"
+                        )
+                        NumberPicker(
+                            value = preSetBreakTime % 60,
+                            range = 0..59,
+                            onValueChange = { newSeconds ->
+                                preSetBreakTime = (preSetBreakTime / 60 * 60) + newSeconds
+                            },
+                            unit = "s"
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showPreSetBreakTimePicker = false }) {
+                        Text("OK")
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.background(Color.Transparent)
+            )
+        }
     }
     
     // Handle back navigation
@@ -815,4 +1214,5 @@ fun SettingsScreen(
         )
     }
     }
-} 
+    }
+}
