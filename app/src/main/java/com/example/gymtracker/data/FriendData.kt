@@ -25,7 +25,7 @@ data class FriendsListResponse(
 // Friend data model
 data class Friend(
     @SerializedName("id")
-    val id: Int,
+    val id: String, // Changed from Int to String for UUID
     @SerializedName("username")
     val username: String,
     @SerializedName("email")
@@ -37,7 +37,7 @@ data class Friend(
 // Friend invitation data model
 data class FriendInvitation(
     @SerializedName("id")
-    val id: Int,
+    val id: String, // Changed from Int to String for UUID
     @SerializedName("invitationCode")
     val invitationCode: String,
     @SerializedName("createdAt")

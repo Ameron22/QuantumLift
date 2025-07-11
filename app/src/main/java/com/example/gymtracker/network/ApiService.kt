@@ -163,7 +163,7 @@ interface ApiService {
      */
     @POST("api/feed/posts/{postId}/like")
     suspend fun likePost(
-        @retrofit2.http.Path("postId") postId: Int,
+        @retrofit2.http.Path("postId") postId: String,
         @Header("Authorization") authorization: String
     ): Response<PostActionResponse>
     
@@ -177,7 +177,7 @@ interface ApiService {
      */
     @GET("api/feed/posts/{postId}/comments")
     suspend fun getComments(
-        @retrofit2.http.Path("postId") postId: Int,
+        @retrofit2.http.Path("postId") postId: String,
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 20,
         @Header("Authorization") authorization: String
@@ -192,7 +192,7 @@ interface ApiService {
      */
     @POST("api/feed/posts/{postId}/comments")
     suspend fun addComment(
-        @retrofit2.http.Path("postId") postId: Int,
+        @retrofit2.http.Path("postId") postId: String,
         @Body request: AddCommentRequest,
         @Header("Authorization") authorization: String
     ): Response<PostActionResponse>
@@ -205,7 +205,7 @@ interface ApiService {
      */
     @DELETE("api/feed/posts/{postId}")
     suspend fun deletePost(
-        @retrofit2.http.Path("postId") postId: Int,
+        @retrofit2.http.Path("postId") postId: String,
         @Header("Authorization") authorization: String
     ): Response<PostActionResponse>
     

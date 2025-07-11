@@ -337,7 +337,7 @@ class AuthRepository(private val context: Context) {
         }
     }
     
-    suspend fun likePost(postId: Int): Result<PostActionResponse> {
+    suspend fun likePost(postId: String): Result<PostActionResponse> {
         Log.d("AUTH_REPO", "Attempting to like/unlike post: $postId")
         return try {
             val token = tokenManager.getStoredToken()
@@ -362,7 +362,7 @@ class AuthRepository(private val context: Context) {
         }
     }
     
-    suspend fun getComments(postId: Int, page: Int = 1, limit: Int = 20): Result<List<FeedComment>> {
+    suspend fun getComments(postId: String, page: Int = 1, limit: Int = 20): Result<List<FeedComment>> {
         Log.d("AUTH_REPO", "Attempting to get comments for post: $postId")
         return try {
             val token = tokenManager.getStoredToken()
@@ -387,7 +387,7 @@ class AuthRepository(private val context: Context) {
         }
     }
     
-    suspend fun addComment(postId: Int, content: String): Result<PostActionResponse> {
+    suspend fun addComment(postId: String, content: String): Result<PostActionResponse> {
         Log.d("AUTH_REPO", "Attempting to add comment to post: $postId")
         return try {
             val token = tokenManager.getStoredToken()
@@ -412,7 +412,7 @@ class AuthRepository(private val context: Context) {
         }
     }
     
-    suspend fun deletePost(postId: Int): Result<PostActionResponse> {
+    suspend fun deletePost(postId: String): Result<PostActionResponse> {
         Log.d("AUTH_REPO", "Attempting to delete post: $postId")
         return try {
             val token = tokenManager.getStoredToken()

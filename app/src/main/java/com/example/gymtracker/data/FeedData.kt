@@ -5,7 +5,7 @@ import com.google.gson.annotations.SerializedName
 // Feed post data model
 data class FeedPost(
     @SerializedName("id")
-    val id: Int,
+    val id: String, // Changed from Int to String for UUID
     @SerializedName("postType")
     val postType: String,
     @SerializedName("content")
@@ -75,7 +75,7 @@ data class ChallengeData(
 // Comment data model
 data class FeedComment(
     @SerializedName("id")
-    val id: Int,
+    val id: String, // Changed from Int to String for UUID
     @SerializedName("content")
     val content: String,
     @SerializedName("createdAt")
@@ -147,7 +147,7 @@ data class PostActionResponse(
 // Data for post creation response
 data class PostActionData(
     @SerializedName("id")
-    val id: Int,
+    val id: String, // Changed from Int to String for UUID
     @SerializedName("createdAt")
     val createdAt: String
 )
@@ -155,7 +155,7 @@ data class PostActionData(
 // Data for comment creation response
 data class CommentActionData(
     @SerializedName("id")
-    val id: Int,
+    val id: String, // Changed from Int to String for UUID
     @SerializedName("createdAt")
     val createdAt: String
 )

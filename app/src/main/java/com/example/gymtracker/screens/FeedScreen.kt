@@ -208,7 +208,7 @@ fun FeedScreen(
                     onLike = { authViewModel.likePost(post.id) },
                     onComment = { selectedPostForComments = post },
                     onDelete = { authViewModel.deletePost(post.id) },
-                    isOwnPost = post.user.id == authState.user?.id.toString()
+                    isOwnPost = post.user.id == authState.user?.id
                 )
             }
         }
@@ -232,7 +232,8 @@ fun FeedScreen(
             onDismiss = { selectedPostForComments = null },
             onAddComment = { content ->
                 authViewModel.addComment(post.id, content)
-            }
+            },
+            authViewModel = authViewModel
         )
     }
 }
@@ -631,15 +632,27 @@ fun CreatePostDialog(
 fun CommentsDialog(
     post: FeedPost,
     onDismiss: () -> Unit,
-    onAddComment: (String) -> Unit
+    onAddComment: (String) -> Unit,
+    authViewModel: AuthViewModel
 ) {
     var commentText by remember { mutableStateOf("") }
     var comments by remember { mutableStateOf<List<FeedComment>>(emptyList()) }
+    var isLoadingComments by remember { mutableStateOf(true) }
     
     // Load comments when dialog opens
     LaunchedEffect(post.id) {
-        // In a real app, you'd load comments from the ViewModel
-        // For now, we'll use empty list
+        isLoadingComments = true
+        val result = authViewModel.getComments(post.id)
+        result.fold(
+            onSuccess = { commentsList ->
+                comments = commentsList
+                isLoadingComments = false
+            },
+            onFailure = { exception ->
+                // Handle error
+                isLoadingComments = false
+            }
+        )
     }
     
     AlertDialog(
@@ -654,7 +667,20 @@ fun CommentsDialog(
                     modifier = Modifier.height(200.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (comments.isEmpty()) {
+                    if (isLoadingComments) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    } else if (comments.isEmpty()) {
                         item {
                             Text(
                                 text = "No comments yet. Be the first to comment!",
