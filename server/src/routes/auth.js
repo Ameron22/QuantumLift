@@ -1,9 +1,20 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { query } = require('../config/database');
 
 const router = express.Router();
+
+// Helper: Validate UUID format
+function isValidUUID(uuid) {
+  return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(uuid);
+}
+
+// Helper: Generate UUID for new users
+function generateUUID() {
+  return crypto.randomUUID();
+}
 
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
@@ -40,6 +51,17 @@ const authenticateToken = (req, res, next) => {
       user.userId = user.sub;
     }
     
+    // Validate that user ID is a UUID
+    const userId = user.userId || user.sub;
+    if (!userId || !isValidUUID(userId)) {
+      console.log('[AUTH_MIDDLEWARE] ❌ Invalid user ID format:', userId);
+      return res.status(403).json({ 
+        error: 'Invalid user ID',
+        message: 'User ID must be a valid UUID' 
+      });
+    }
+    
+    console.log('[AUTH_MIDDLEWARE] ✅ User ID validation passed:', userId);
     req.user = user;
     next();
   });

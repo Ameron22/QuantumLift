@@ -1,9 +1,10 @@
--- GymTracker Database Schema
--- This file contains all the SQL commands to create the necessary tables
+-- GymTracker Database Schema (UUID version)
+-- Enable pgcrypto for UUID generation
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
@@ -16,8 +17,8 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Friend invitations table
 CREATE TABLE IF NOT EXISTS friend_invitations (
-    id SERIAL PRIMARY KEY,
-    sender_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sender_id UUID REFERENCES users(id) ON DELETE CASCADE,
     recipient_email VARCHAR(100) NOT NULL,
     invitation_code VARCHAR(50) UNIQUE NOT NULL,
     status VARCHAR(20) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACCEPTED', 'EXPIRED')),
@@ -27,9 +28,9 @@ CREATE TABLE IF NOT EXISTS friend_invitations (
 
 -- Friend connections table (for accepted invitations)
 CREATE TABLE IF NOT EXISTS friend_connections (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    friend_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    friend_id UUID REFERENCES users(id) ON DELETE CASCADE,
     status VARCHAR(20) DEFAULT 'ACCEPTED' CHECK (status IN ('ACCEPTED', 'BLOCKED')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, friend_id)
@@ -37,8 +38,8 @@ CREATE TABLE IF NOT EXISTS friend_connections (
 
 -- Feed posts table
 CREATE TABLE IF NOT EXISTS feed_posts (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     post_type VARCHAR(50) NOT NULL CHECK (post_type IN ('WORKOUT_COMPLETED', 'ACHIEVEMENT', 'CHALLENGE', 'TEXT_POST')),
     content TEXT NOT NULL,
     workout_data JSONB, -- For workout posts: exercises, duration, etc.
@@ -53,18 +54,18 @@ CREATE TABLE IF NOT EXISTS feed_posts (
 
 -- Post likes table
 CREATE TABLE IF NOT EXISTS post_likes (
-    id SERIAL PRIMARY KEY,
-    post_id INTEGER NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id UUID NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(post_id, user_id)
 );
 
 -- Post comments table
 CREATE TABLE IF NOT EXISTS post_comments (
-    id SERIAL PRIMARY KEY,
-    post_id INTEGER NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id UUID NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -72,8 +73,8 @@ CREATE TABLE IF NOT EXISTS post_comments (
 
 -- User privacy settings table
 CREATE TABLE IF NOT EXISTS user_privacy_settings (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     auto_share_workouts BOOLEAN DEFAULT false,
     auto_share_achievements BOOLEAN DEFAULT true,
     default_post_privacy VARCHAR(20) DEFAULT 'FRIENDS',

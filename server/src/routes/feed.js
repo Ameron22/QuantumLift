@@ -5,20 +5,7 @@ const { query } = require('../config/database');
 
 // Helper: Validate UUID format
 function isValidUUID(uuid) {
-  return /^[0-9a-fA-F-]{36}$/.test(uuid);
-}
-
-// Helper: Check if value is a valid user ID (UUID or integer)
-function isValidUserId(userId) {
-  // Allow UUIDs
-  if (isValidUUID(userId)) {
-    return true;
-  }
-  // Allow integers (for backward compatibility)
-  if (typeof userId === 'number' || (typeof userId === 'string' && /^\d+$/.test(userId))) {
-    return true;
-  }
-  return false;
+  return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(uuid);
 }
 
 // Get feed posts for current user (friends + public posts)
@@ -28,15 +15,15 @@ router.get('/posts', authenticateToken, async (req, res) => {
   console.log('[FEED_ROUTE] 📄 Query params:', req.query);
   
   try {
-    const userId = req.user.userId; // Can be UUID string or integer
-    console.log('[FEED_ROUTE] 🔍 Validating user ID format:', userId);
+    const userId = req.user.userId; // Must be UUID string
+    console.log('[FEED_ROUTE] 🔍 Validating UUID format:', userId);
     
-    if (!isValidUserId(userId)) {
-      console.log('[FEED_ROUTE] ❌ Invalid user ID format:', userId);
-      return res.status(400).json({ error: 'Invalid userId format', userId });
+    if (!isValidUUID(userId)) {
+      console.log('[FEED_ROUTE] ❌ Invalid UUID format:', userId);
+      return res.status(400).json({ error: 'Invalid userId format - must be UUID', userId });
     }
     
-    console.log('[FEED_ROUTE] ✅ User ID validation passed');
+    console.log('[FEED_ROUTE] ✅ UUID validation passed');
     
     const { page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
@@ -120,15 +107,15 @@ router.post('/posts', authenticateToken, async (req, res) => {
   console.log('[FEED_ROUTE] 📝 Request body:', req.body);
   
   try {
-    const userId = req.user.userId; // Can be UUID string or integer
-    console.log('[FEED_ROUTE] 🔍 Validating user ID format:', userId);
+    const userId = req.user.userId; // Must be UUID string
+    console.log('[FEED_ROUTE] 🔍 Validating UUID format:', userId);
     
-    if (!isValidUserId(userId)) {
-      console.log('[FEED_ROUTE] ❌ Invalid user ID format:', userId);
-      return res.status(400).json({ error: 'Invalid userId format', userId });
+    if (!isValidUUID(userId)) {
+      console.log('[FEED_ROUTE] ❌ Invalid UUID format:', userId);
+      return res.status(400).json({ error: 'Invalid userId format - must be UUID', userId });
     }
     
-    console.log('[FEED_ROUTE] ✅ User ID validation passed');
+    console.log('[FEED_ROUTE] ✅ UUID validation passed');
     
     const { 
       postType, 
@@ -200,8 +187,23 @@ router.post('/posts', authenticateToken, async (req, res) => {
     console.error('[FEED_ROUTE] ❌ Error details:', {
       message: error.message,
       stack: error.stack,
-      code: error.code
+      code: error.code,
+      detail: error.detail,
+      hint: error.hint,
+      where: error.where
     });
+    
+    // Log the specific database error if available
+    if (error.code) {
+      console.error('[FEED_ROUTE] ❌ Database error code:', error.code);
+    }
+    if (error.detail) {
+      console.error('[FEED_ROUTE] ❌ Database error detail:', error.detail);
+    }
+    if (error.hint) {
+      console.error('[FEED_ROUTE] ❌ Database error hint:', error.hint);
+    }
+    
     res.status(500).json({ 
       error: 'Failed to create post',
       message: 'Internal server error' 
