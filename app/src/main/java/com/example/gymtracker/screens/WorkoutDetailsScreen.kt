@@ -87,6 +87,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
+import com.example.gymtracker.data.WorkoutAchievementData
 import com.example.gymtracker.services.AuthRepository
 import com.example.gymtracker.data.WorkoutCompletionRequest
 
@@ -592,9 +593,9 @@ fun WorkoutDetailsScreen(
                     // Get newly unlocked achievements for feed post
                     val newlyUnlockedAchievements = achievementManager.newlyUnlockedAchievements.value
                     
-                    // Convert achievement IDs to AchievementData objects
+                    // Convert achievement IDs to WorkoutAchievementData objects
                     val achievementDataList = newlyUnlockedAchievements.map { achievementId ->
-                        AchievementData(
+                        WorkoutAchievementData(
                             id = achievementId,
                             additionalInfo = when (achievementId) {
                                 "bench_press_100" -> "New PR: 100kg bench press!"

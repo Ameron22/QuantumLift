@@ -3,7 +3,7 @@ package com.example.gymtracker.data
 import com.google.gson.annotations.SerializedName
 
 // Achievement data for workout completion
-data class AchievementData(
+data class WorkoutAchievementData(
     @SerializedName("id")
     val id: String,
     @SerializedName("additionalInfo")
@@ -25,7 +25,7 @@ data class WorkoutCompletionRequest(
     @SerializedName("totalWeight")
     val totalWeight: Double? = null,
     @SerializedName("achievements")
-    val achievements: List<AchievementData>? = null,
+    val achievements: List<WorkoutAchievementData>? = null,
     @SerializedName("shareToFeed")
     val shareToFeed: Boolean = false,
     @SerializedName("privacyLevel")
