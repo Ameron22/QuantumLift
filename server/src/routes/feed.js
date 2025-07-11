@@ -8,6 +8,19 @@ function isValidUUID(uuid) {
   return /^[0-9a-fA-F-]{36}$/.test(uuid);
 }
 
+// Helper: Check if value is a valid user ID (UUID or integer)
+function isValidUserId(userId) {
+  // Allow UUIDs
+  if (isValidUUID(userId)) {
+    return true;
+  }
+  // Allow integers (for backward compatibility)
+  if (typeof userId === 'number' || (typeof userId === 'string' && /^\d+$/.test(userId))) {
+    return true;
+  }
+  return false;
+}
+
 // Get feed posts for current user (friends + public posts)
 router.get('/posts', authenticateToken, async (req, res) => {
   console.log('[FEED_ROUTE] 📖 Get feed posts request received');
@@ -15,15 +28,15 @@ router.get('/posts', authenticateToken, async (req, res) => {
   console.log('[FEED_ROUTE] 📄 Query params:', req.query);
   
   try {
-    const userId = req.user.userId; // Should be a UUID string
-    console.log('[FEED_ROUTE] 🔍 Validating UUID format for userId:', userId);
+    const userId = req.user.userId; // Can be UUID string or integer
+    console.log('[FEED_ROUTE] 🔍 Validating user ID format:', userId);
     
-    if (!isValidUUID(userId)) {
-      console.log('[FEED_ROUTE] ❌ Invalid UUID format:', userId);
+    if (!isValidUserId(userId)) {
+      console.log('[FEED_ROUTE] ❌ Invalid user ID format:', userId);
       return res.status(400).json({ error: 'Invalid userId format', userId });
     }
     
-    console.log('[FEED_ROUTE] ✅ UUID validation passed');
+    console.log('[FEED_ROUTE] ✅ User ID validation passed');
     
     const { page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
@@ -107,15 +120,15 @@ router.post('/posts', authenticateToken, async (req, res) => {
   console.log('[FEED_ROUTE] 📝 Request body:', req.body);
   
   try {
-    const userId = req.user.userId; // UUID string
-    console.log('[FEED_ROUTE] 🔍 Validating UUID format for userId:', userId);
+    const userId = req.user.userId; // Can be UUID string or integer
+    console.log('[FEED_ROUTE] 🔍 Validating user ID format:', userId);
     
-    if (!isValidUUID(userId)) {
-      console.log('[FEED_ROUTE] ❌ Invalid UUID format:', userId);
+    if (!isValidUserId(userId)) {
+      console.log('[FEED_ROUTE] ❌ Invalid user ID format:', userId);
       return res.status(400).json({ error: 'Invalid userId format', userId });
     }
     
-    console.log('[FEED_ROUTE] ✅ UUID validation passed');
+    console.log('[FEED_ROUTE] ✅ User ID validation passed');
     
     const { 
       postType, 
