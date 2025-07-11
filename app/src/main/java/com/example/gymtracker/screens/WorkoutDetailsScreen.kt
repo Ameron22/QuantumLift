@@ -590,11 +590,11 @@ fun WorkoutDetailsScreen(
                     val streak = calculateWorkoutStreak(dao)
                     achievementManager.updateConsistencyStreak(streak)
                     
-                    // Get newly unlocked achievements for feed post
-                    val newlyUnlockedAchievements = achievementManager.newlyUnlockedAchievements.value
+                    // Get newly unlocked achievements that haven't been posted to feed yet
+                    val newlyUnlockedAchievementsForFeed = achievementManager.getNewlyUnlockedAchievementsForFeed()
                     
                     // Convert achievement IDs to WorkoutAchievementData objects
-                    val achievementDataList = newlyUnlockedAchievements.map { achievementId ->
+                    val achievementDataList = newlyUnlockedAchievementsForFeed.map { achievementId ->
                         WorkoutAchievementData(
                             id = achievementId,
                             additionalInfo = when (achievementId) {
@@ -643,13 +643,29 @@ fun WorkoutDetailsScreen(
                         result.fold(
                             onSuccess = { completionResponse ->
                                 Log.d("WorkoutDetailsScreen", "Workout shared to feed: ${completionResponse.shared}")
+                                // Mark achievements as posted to feed to prevent duplicates in future posts
+                                if (newlyUnlockedAchievementsForFeed.isNotEmpty()) {
+                                    achievementManager.markAchievementsAsPostedToFeed(newlyUnlockedAchievementsForFeed)
+                                    Log.d("WorkoutDetailsScreen", "Marked ${newlyUnlockedAchievementsForFeed.size} achievements as posted to feed")
+                                }
                             },
                             onFailure = { exception ->
                                 Log.w("WorkoutDetailsScreen", "Failed to share workout to feed: ${exception.message}")
+                                // Even if sharing fails, mark achievements as posted to prevent duplicates
+                                // The achievements are still properly unlocked in the database
+                                if (newlyUnlockedAchievementsForFeed.isNotEmpty()) {
+                                    achievementManager.markAchievementsAsPostedToFeed(newlyUnlockedAchievementsForFeed)
+                                    Log.d("WorkoutDetailsScreen", "Marked ${newlyUnlockedAchievementsForFeed.size} achievements as posted to feed despite failure")
+                                }
                             }
                         )
                     } catch (e: Exception) {
                         Log.e("WorkoutDetailsScreen", "Error sharing workout to feed: ${e.message}")
+                        // Even if there's an error, mark achievements as posted to prevent duplicates
+                        if (newlyUnlockedAchievementsForFeed.isNotEmpty()) {
+                            achievementManager.markAchievementsAsPostedToFeed(newlyUnlockedAchievementsForFeed)
+                            Log.d("WorkoutDetailsScreen", "Marked ${newlyUnlockedAchievementsForFeed.size} achievements as posted to feed despite error")
+                        }
                         // Don't fail the workout completion if sharing fails
                     }
                 }

@@ -25,6 +25,10 @@ class AchievementManager private constructor(context: Context) {
     private val _newlyUnlockedAchievements = MutableStateFlow<Set<String>>(emptySet())
     val newlyUnlockedAchievements: StateFlow<Set<String>> = _newlyUnlockedAchievements.asStateFlow()
 
+    // Track which achievements have been posted to feed to prevent duplicates
+    private val _achievementsPostedToFeed = MutableStateFlow<Set<String>>(emptySet())
+    val achievementsPostedToFeed: StateFlow<Set<String>> = _achievementsPostedToFeed.asStateFlow()
+
     init {
         // Initialize achievements if needed
         scope.launch {
@@ -277,6 +281,25 @@ class AchievementManager private constructor(context: Context) {
 
     fun clearSpecificNewlyUnlockedAchievement(achievementId: String) {
         _newlyUnlockedAchievements.value = _newlyUnlockedAchievements.value - achievementId
+        // Also clear from posted to feed to allow future posting if unlocked again
+        _achievementsPostedToFeed.value = _achievementsPostedToFeed.value - achievementId
+    }
+
+    /**
+     * Get newly unlocked achievements that haven't been posted to feed yet
+     */
+    fun getNewlyUnlockedAchievementsForFeed(): Set<String> {
+        val newlyUnlocked = _newlyUnlockedAchievements.value
+        val alreadyPosted = _achievementsPostedToFeed.value
+        return newlyUnlocked - alreadyPosted
+    }
+
+    /**
+     * Mark achievements as posted to feed to prevent duplicates
+     */
+    fun markAchievementsAsPostedToFeed(achievementIds: Set<String>) {
+        _achievementsPostedToFeed.value = _achievementsPostedToFeed.value + achievementIds
+        Log.d("AchievementManager", "Marked achievements as posted to feed: $achievementIds")
     }
     
     // Method to show notification for multiple achievements at once
@@ -342,8 +365,9 @@ class AchievementManager private constructor(context: Context) {
                 )
             }
             
-            // Clear newly unlocked achievements
+            // Clear newly unlocked achievements and posted to feed state
             _newlyUnlockedAchievements.value = emptySet()
+            _achievementsPostedToFeed.value = emptySet()
         }
     }
 
