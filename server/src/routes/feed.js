@@ -457,11 +457,11 @@ router.get('/privacy-settings', authenticateToken, async (req, res) => {
       // Create default privacy settings
       await query(`
         INSERT INTO user_privacy_settings (user_id, auto_share_workouts, auto_share_achievements, default_post_privacy)
-        VALUES ($1, false, true, 'FRIENDS')
+        VALUES ($1, true, true, 'FRIENDS')
       `, [userId]);
 
       res.json({
-        autoShareWorkouts: false,
+        autoShareWorkouts: true,
         autoShareAchievements: true,
         defaultPostPrivacy: 'FRIENDS'
       });

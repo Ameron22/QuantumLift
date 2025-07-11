@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS post_comments (
 CREATE TABLE IF NOT EXISTS user_privacy_settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    auto_share_workouts BOOLEAN DEFAULT false,
+    auto_share_workouts BOOLEAN DEFAULT true,
     auto_share_achievements BOOLEAN DEFAULT true,
     default_post_privacy VARCHAR(20) DEFAULT 'FRIENDS',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

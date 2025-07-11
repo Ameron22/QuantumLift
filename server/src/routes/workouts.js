@@ -142,11 +142,11 @@ router.get('/privacy-settings', authenticateToken, async (req, res) => {
       // Create default settings if none exist
       await query(
         'INSERT INTO user_privacy_settings (user_id, auto_share_workouts, default_post_privacy) VALUES ($1, $2, $3)',
-        [userId, false, 'FRIENDS']
+        [userId, true, 'FRIENDS']
       );
 
       res.json({
-        autoShareWorkouts: false,
+        autoShareWorkouts: true,
         defaultPostPrivacy: 'FRIENDS'
       });
     } else {
