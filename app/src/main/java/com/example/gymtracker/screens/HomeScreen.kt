@@ -66,21 +66,21 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             Column {
-                TopAppBar(
-                    title = { 
-                        Text(
-                            text = "Quantum Lift",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    actions = {
-                        WorkoutIndicator(generalViewModel = generalViewModel, navController = navController)
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+            TopAppBar(
+                title = { 
+                    Text(
+                        text = "Quantum Lift",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.primary
                     )
+                },
+                actions = {
+                    WorkoutIndicator(generalViewModel = generalViewModel, navController = navController)
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
                 )
+            )
                 
                 // Tab bar under TopAppBar
                 TabRow(
@@ -111,27 +111,27 @@ fun HomeScreen(
 
 @Composable
 fun WelcomeTab(paddingValues: PaddingValues) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(paddingValues)
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = "Welcome to Quantum Lift",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Your journey to fitness starts here",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "Welcome to Quantum Lift",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Your journey to fitness starts here",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
+            )
         
         Spacer(modifier = Modifier.height(32.dp))
         

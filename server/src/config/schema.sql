@@ -88,7 +88,7 @@ CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_friend_invitations_email ON friend_invitations(recipient_email);
 CREATE INDEX IF NOT EXISTS idx_friend_invitations_code ON friend_invitations(invitation_code);
 CREATE INDEX IF NOT EXISTS idx_friend_connections_user_id ON friend_connections(user_id);
-CREATE INDEX IF NOT EXISTS idx_friend_connections_friend_id ON friend_connections(friend_id);
+CREATE INDEX IF NOT EXISTS idx_friend_connections_friend_id ON friend_connections(friend_id); 
 CREATE INDEX IF NOT EXISTS idx_feed_posts_user_id ON feed_posts(user_id);
 CREATE INDEX IF NOT EXISTS idx_feed_posts_created_at ON feed_posts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_feed_posts_privacy ON feed_posts(privacy_level);
