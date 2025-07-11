@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -23,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.gymtracker.components.ExerciseGif
@@ -39,6 +43,51 @@ import com.example.gymtracker.viewmodels.WorkoutDetailsViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.verticalScroll
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun FilterChipFlowRow(
+    items: List<String>,
+    selectedItems: List<String>,
+    onItemClick: (String) -> Unit,
+    onAllClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    spacing: Int = 8
+) {
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(spacing.dp),
+        verticalArrangement = Arrangement.spacedBy(spacing.dp)
+    ) {
+        FilterChip(
+            selected = selectedItems.isEmpty(),
+            onClick = onAllClick,
+            label = { Text("All", maxLines = 1) },
+        )
+        items.forEach { item ->
+            FilterChip(
+                selected = selectedItems.contains(item),
+                onClick = { onItemClick(item) },
+                label = {
+                    Text(
+                        text = item,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        color = when (item) {
+                            "Beginner" -> Color(0xFF4CAF50)
+                            "Intermediate" -> Color(0xFFFFA000)
+                            "Advanced" -> Color(0xFFF44336)
+                            else -> MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                }
+            )
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,10 +142,11 @@ fun AddExerciseToWorkoutScreen(
     
     // Filter muscle parts based on selected muscle groups
     val availableMuscleParts = if (selectedMuscleGroups.isEmpty()) {
-        exercises.flatMap { Converter().fromString(it.parts) }.distinct().sorted()
+        exercises.flatMap { Converter().fromString(it.parts) }.filter { it.isNotBlank() }.distinct().sorted()
     } else {
         exercises.filter { it.muscle in selectedMuscleGroups }
             .flatMap { Converter().fromString(it.parts) }
+            .filter { it.isNotBlank() }
             .distinct()
             .sorted()
     }
@@ -489,8 +539,9 @@ fun AddExerciseToWorkoutScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .padding(vertical = 8.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)                    
                 ) {
                     // Muscle Group Filter
                     Text(
@@ -498,32 +549,20 @@ fun AddExerciseToWorkoutScreen(
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    LazyRow(
+                    FilterChipFlowRow(
+                        items = muscleGroups,
+                        selectedItems = selectedMuscleGroups,
+                        onItemClick = { muscle ->
+                            if (selectedMuscleGroups.contains(muscle)) {
+                                selectedMuscleGroups = selectedMuscleGroups.filter { it != muscle }
+                            } else {
+                                selectedMuscleGroups = selectedMuscleGroups + muscle
+                            }
+                        },
+                        onAllClick = { selectedMuscleGroups = emptyList() },
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(vertical = 4.dp)
-                    ) {
-                        item {
-                            FilterChip(
-                                selected = selectedMuscleGroups.isEmpty(),
-                                onClick = { selectedMuscleGroups = emptyList() },
-                                label = { Text("All") }
-                            )
-                        }
-                        items(muscleGroups) { muscle ->
-                            FilterChip(
-                                selected = selectedMuscleGroups.contains(muscle),
-                                onClick = {
-                                    if (selectedMuscleGroups.contains(muscle)) {
-                                        selectedMuscleGroups = selectedMuscleGroups.filter { it != muscle }
-                                    } else {
-                                        selectedMuscleGroups = selectedMuscleGroups + muscle
-                                    }
-                                },
-                                label = { Text(muscle) }
-                            )
-                        }
-                    }
+                        spacing = 8
+                    )
 
                     Divider(modifier = Modifier.padding(vertical = 8.dp))
 
@@ -533,32 +572,20 @@ fun AddExerciseToWorkoutScreen(
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    LazyRow(
+                    FilterChipFlowRow(
+                        items = availableMuscleParts,
+                        selectedItems = selectedMuscleParts,
+                        onItemClick = { musclePart ->
+                            if (selectedMuscleParts.contains(musclePart)) {
+                                selectedMuscleParts = selectedMuscleParts.filter { it != musclePart }
+                            } else {
+                                selectedMuscleParts = selectedMuscleParts + musclePart
+                            }
+                        },
+                        onAllClick = { selectedMuscleParts = emptyList() },
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(vertical = 4.dp)
-                    ) {
-                        item {
-                            FilterChip(
-                                selected = selectedMuscleParts.isEmpty(),
-                                onClick = { selectedMuscleParts = emptyList() },
-                                label = { Text("All") }
-                            )
-                        }
-                        items(availableMuscleParts) { musclePart ->
-                            FilterChip(
-                                selected = selectedMuscleParts.contains(musclePart),
-                                onClick = {
-                                    if (selectedMuscleParts.contains(musclePart)) {
-                                        selectedMuscleParts = selectedMuscleParts.filter { it != musclePart }
-                                    } else {
-                                        selectedMuscleParts = selectedMuscleParts + musclePart
-                                    }
-                                },
-                                label = { Text(musclePart) }
-                            )
-                        }
-                    }
+                        spacing = 8
+                    )
 
                     Divider(modifier = Modifier.padding(vertical = 8.dp))
 
@@ -568,39 +595,22 @@ fun AddExerciseToWorkoutScreen(
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    Row(
+                    
+                    FilterChipFlowRow(
+                        items = difficulties,
+                        selectedItems = selectedDifficulties,
+                        onItemClick = { difficulty ->
+                            if (selectedDifficulties.contains(difficulty)) {
+                                selectedDifficulties = selectedDifficulties.filter { it != difficulty }
+                            } else {
+                                selectedDifficulties = selectedDifficulties + difficulty
+                            }
+                        },
+                        onAllClick = { selectedDifficulties = emptyList() },
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        FilterChip(
-                            selected = selectedDifficulties.isEmpty(),
-                            onClick = { selectedDifficulties = emptyList() },
-                            label = { Text("All") }
-                        )
-                        difficulties.forEach { difficulty ->
-                            FilterChip(
-                                selected = selectedDifficulties.contains(difficulty),
-                                onClick = {
-                                    if (selectedDifficulties.contains(difficulty)) {
-                                        selectedDifficulties = selectedDifficulties.filter { it != difficulty }
-                                    } else {
-                                        selectedDifficulties = selectedDifficulties + difficulty
-                                    }
-                                },
-                                label = { 
-                                    Text(
-                                        text = difficulty,
-                                        color = when (difficulty) {
-                                            "Beginner" -> Color(0xFF4CAF50)
-                                            "Intermediate" -> Color(0xFFFFA000)
-                                            "Advanced" -> Color(0xFFF44336)
-                                            else -> MaterialTheme.colorScheme.onSurface
-                                        }
-                                    )
-                                }
-                            )
-                        }
-                    }
+                        spacing = 8
+                    )
+                
                 }
             },
             confirmButton = {

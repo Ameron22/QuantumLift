@@ -87,6 +87,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
+import com.example.gymtracker.services.AuthRepository
+import com.example.gymtracker.data.WorkoutCompletionRequest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -374,8 +376,6 @@ fun WorkoutDetailsScreen(
 
                     if (exercisesData.isEmpty()) {
                         Log.e("WorkoutDetailsScreen", "No exercises found for workout ID: $workoutId")
-                        // Add 1-second delay to show loading effect
-                        delay(1000)
                         isLoading = false
                     } else {
                         // Convert to WorkoutExerciseWithDetails and sync with ViewModel
@@ -405,9 +405,13 @@ fun WorkoutDetailsScreen(
                         } else {
                             Log.d("WorkoutDetailsScreen", "Initializing new workout session")
                             viewModel.initializeWorkoutSession(workoutId, workoutName)
-                            // Only initialize a new workout in GeneralViewModel if there's no workout at all
+                            // Only initialize a new workout session if there's no active workout
                             val hasAnyWorkout = currentWorkout != null
-                            if (!hasAnyWorkout) {
+                            val hasActiveWorkout = hasAnyWorkout && currentWorkout?.isActive == true
+                            val isDifferentWorkout = hasAnyWorkout && currentWorkout?.workoutId != workoutId
+                            
+                            // Only initialize if there's no workout at all, or if there's no active workout and it's a different workout
+                            if (!hasAnyWorkout || (!hasActiveWorkout && isDifferentWorkout)) {
                                 // Initialize a new workout session in GeneralViewModel (not active yet)
                                 coroutineScope.launch {
                                     generalViewModel.initializeWorkoutWithName(workoutId, context)
@@ -421,8 +425,6 @@ fun WorkoutDetailsScreen(
                             "Number of exercises: ${exercisesData.size}"
                         )
                         
-                        // Add 1-second delay to show loading effect
-                        delay(500)
                         isLoading = false
                     }
                 }
@@ -586,6 +588,49 @@ fun WorkoutDetailsScreen(
                     // Calculate and update streak
                     val streak = calculateWorkoutStreak(dao)
                     achievementManager.updateConsistencyStreak(streak)
+                    
+                    // Share workout completion to feed if user is authenticated
+                    try {
+                        val authRepository = AuthRepository(context)
+                        
+                        // Get completed exercises for this session
+                        val completedExercises = dao.getExerciseSessionsForSession(sessionWorkout.sessionId)
+                        val exerciseNames = completedExercises.map { exercise ->
+                            // Get exercise name from exercise ID
+                            val exerciseEntity = dao.getExerciseById(exercise.exerciseId.toInt())
+                            exerciseEntity?.name ?: "Unknown Exercise"
+                        }
+                        
+                        // Calculate total sets and weight
+                        val totalSets = completedExercises.sumOf { it.completedSets }
+                        val totalWeight = completedExercises.sumOf { exercise ->
+                            exercise.weight.filterNotNull().sum()
+                        }.toDouble()
+                        
+                        val request = WorkoutCompletionRequest(
+                            workoutId = currentWorkoutState.workoutId,
+                            workoutName = currentWorkoutState.workoutName,
+                            duration = duration,
+                            exercises = exerciseNames,
+                            totalSets = totalSets,
+                            totalWeight = totalWeight,
+                            shareToFeed = false, // Let the server decide based on user settings
+                            privacyLevel = "FRIENDS"
+                        )
+                        
+                        val result = authRepository.completeWorkout(request)
+                        result.fold(
+                            onSuccess = { completionResponse ->
+                                Log.d("WorkoutDetailsScreen", "Workout shared to feed: ${completionResponse.shared}")
+                            },
+                            onFailure = { exception ->
+                                Log.w("WorkoutDetailsScreen", "Failed to share workout to feed: ${exception.message}")
+                            }
+                        )
+                    } catch (e: Exception) {
+                        Log.e("WorkoutDetailsScreen", "Error sharing workout to feed: ${e.message}")
+                        // Don't fail the workout completion if sharing fails
+                    }
                 }
 
                 // Switch to main thread for UI updates

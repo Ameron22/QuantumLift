@@ -29,7 +29,7 @@ data class ProfileResponse(
 )
 
 data class User(
-    val id: Int,
+    val id: String, // Changed from Int to String for UUID
     val username: String,
     val email: String,
     val createdAt: String

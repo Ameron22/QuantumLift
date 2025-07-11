@@ -22,6 +22,10 @@ import com.example.gymtracker.data.AddCommentRequest
 import com.example.gymtracker.data.PostActionResponse
 import com.example.gymtracker.data.PrivacySettings
 import com.example.gymtracker.data.UpdatePrivacySettingsRequest
+import com.example.gymtracker.data.UpdateWorkoutPrivacySettingsRequest
+import com.example.gymtracker.data.WorkoutCompletionRequest
+import com.example.gymtracker.data.WorkoutCompletionResponse
+import com.example.gymtracker.data.WorkoutPrivacySettings
 import retrofit2.http.DELETE
 import retrofit2.http.PUT
 import retrofit2.http.Query
@@ -163,7 +167,7 @@ interface ApiService {
      */
     @POST("api/feed/posts/{postId}/like")
     suspend fun likePost(
-        @retrofit2.http.Path("postId") postId: Int,
+        @retrofit2.http.Path("postId") postId: String,
         @Header("Authorization") authorization: String
     ): Response<PostActionResponse>
     
@@ -177,7 +181,7 @@ interface ApiService {
      */
     @GET("api/feed/posts/{postId}/comments")
     suspend fun getComments(
-        @retrofit2.http.Path("postId") postId: Int,
+        @retrofit2.http.Path("postId") postId: String,
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 20,
         @Header("Authorization") authorization: String
@@ -192,7 +196,7 @@ interface ApiService {
      */
     @POST("api/feed/posts/{postId}/comments")
     suspend fun addComment(
-        @retrofit2.http.Path("postId") postId: Int,
+        @retrofit2.http.Path("postId") postId: String,
         @Body request: AddCommentRequest,
         @Header("Authorization") authorization: String
     ): Response<PostActionResponse>
@@ -205,7 +209,7 @@ interface ApiService {
      */
     @DELETE("api/feed/posts/{postId}")
     suspend fun deletePost(
-        @retrofit2.http.Path("postId") postId: Int,
+        @retrofit2.http.Path("postId") postId: String,
         @Header("Authorization") authorization: String
     ): Response<PostActionResponse>
     
@@ -228,6 +232,42 @@ interface ApiService {
     @PUT("api/feed/privacy-settings")
     suspend fun updatePrivacySettings(
         @Body request: UpdatePrivacySettingsRequest,
+        @Header("Authorization") authorization: String
+    ): Response<PostActionResponse>
+    
+    // Workout API endpoints
+    
+    /**
+     * Complete workout and optionally share to feed endpoint
+     * @param request Workout completion request
+     * @param authorization Bearer token for authentication
+     * @return Response containing success/error message
+     */
+    @POST("api/workouts/complete")
+    suspend fun completeWorkout(
+        @Body request: WorkoutCompletionRequest,
+        @Header("Authorization") authorization: String
+    ): Response<WorkoutCompletionResponse>
+    
+    /**
+     * Get workout privacy settings endpoint
+     * @param authorization Bearer token for authentication
+     * @return Response containing workout privacy settings
+     */
+    @GET("api/workouts/privacy-settings")
+    suspend fun getWorkoutPrivacySettings(
+        @Header("Authorization") authorization: String
+    ): Response<WorkoutPrivacySettings>
+    
+    /**
+     * Update workout privacy settings endpoint
+     * @param request Workout privacy settings update request
+     * @param authorization Bearer token for authentication
+     * @return Response containing success/error message
+     */
+    @PUT("api/workouts/privacy-settings")
+    suspend fun updateWorkoutPrivacySettings(
+        @Body request: UpdateWorkoutPrivacySettingsRequest,
         @Header("Authorization") authorization: String
     ): Response<PostActionResponse>
 } 

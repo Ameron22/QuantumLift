@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 data class AuthState(
     val isLoading: Boolean = false,
@@ -90,6 +91,7 @@ class AuthViewModel(private val context: Context) : ViewModel() {
                         success = response.message,
                         error = null
                     )
+                    clearSuccessAfterDelay()
                 },
                 onFailure = { exception ->
                     Log.e("AUTH_LOG", "Login failed: ${exception.message}", exception)
@@ -123,6 +125,7 @@ class AuthViewModel(private val context: Context) : ViewModel() {
                         success = response.message,
                         error = null
                     )
+                    clearSuccessAfterDelay()
                 },
                 onFailure = { exception ->
                     Log.e("AUTH_LOG", "Registration failed: ${exception.message}", exception)
@@ -180,6 +183,13 @@ class AuthViewModel(private val context: Context) : ViewModel() {
     
     fun clearSuccess() {
         _authState.value = _authState.value.copy(success = null)
+    }
+    
+    fun clearSuccessAfterDelay() {
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(500) // Clear after 0.5 seconds
+            clearSuccess()
+        }
     }
     
     fun sendFriendInvitation(recipientEmail: String) {
@@ -390,7 +400,7 @@ class AuthViewModel(private val context: Context) : ViewModel() {
         }
     }
     
-    fun likePost(postId: Int) {
+    fun likePost(postId: String) {
         Log.d("AUTH_LOG", "Liking/unliking post: $postId")
         viewModelScope.launch {
             val result = authRepository.likePost(postId)
@@ -420,7 +430,7 @@ class AuthViewModel(private val context: Context) : ViewModel() {
         }
     }
     
-    fun addComment(postId: Int, content: String) {
+    fun addComment(postId: String, content: String) {
         Log.d("AUTH_LOG", "Adding comment to post: $postId")
         viewModelScope.launch {
             val result = authRepository.addComment(postId, content)
@@ -447,7 +457,7 @@ class AuthViewModel(private val context: Context) : ViewModel() {
         }
     }
     
-    fun deletePost(postId: Int) {
+    fun deletePost(postId: String) {
         Log.d("AUTH_LOG", "Deleting post: $postId")
         viewModelScope.launch {
             val result = authRepository.deletePost(postId)
@@ -517,6 +527,12 @@ class AuthViewModel(private val context: Context) : ViewModel() {
                     )
                 }
             )
+        }
+    }
+    
+    fun getComments(postId: String): Result<List<FeedComment>> {
+        return runBlocking {
+            authRepository.getComments(postId)
         }
     }
 } 

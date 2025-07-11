@@ -73,8 +73,6 @@ fun LoadWorkoutScreen(
             }
             
             withContext(Dispatchers.Main) {
-                // Add 1-second delay to show loading effect
-                kotlinx.coroutines.delay(500)
                 workouts.value = workoutsWithExercises
                 filteredWorkouts.value = workouts.value
                 isLoading = false

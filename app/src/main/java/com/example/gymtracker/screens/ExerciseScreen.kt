@@ -224,7 +224,7 @@ fun ExerciseScreen(
     val context = LocalContext.current
     val db = remember { AppDatabase.getDatabase(context) }
     val dao = remember { db.exerciseDao() }
-    val preSetBreakTime = 10 // seconds
+    var preSetBreakTime by remember { mutableIntStateOf(10) } // Will be set from user preferences
     var exerciseWithDetails by remember { mutableStateOf<ExerciseWithWorkoutData?>(null) }
     var showWeightPicker by remember { mutableStateOf(false) }
     var showRepsPicker by remember { mutableStateOf(false) }
@@ -392,6 +392,7 @@ fun ExerciseScreen(
         settings?.let { userSettings: com.example.gymtracker.data.UserSettings ->
             breakTime = userSettings.defaultBreakTime
             setTimeReps = userSettings.defaultWorkTime
+            preSetBreakTime = userSettings.defaultPreSetBreakTime
         }
     }
     
