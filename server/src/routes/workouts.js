@@ -9,6 +9,20 @@ function isValidUUID(uuid) {
   return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(uuid);
 }
 
+// Helper: Get achievement display name
+function getAchievementName(id) {
+  switch(id) {
+    case 'first_workout': return '🏆 First Workout';
+    case 'workout_warrior': return '💪 Workout Warrior';
+    case 'workout_master': return '🌟 Workout Master';
+    case 'bench_press_100': return '💯 Centurion';
+    case 'consistency_week': return '📅 Week Warrior';
+    case 'consistency_month': return '🗓️ Monthly Master';
+    case 'night_owl': return '🦉 Night Owl';
+    default: return id;
+  }
+}
+
 // Complete workout and optionally share to feed
 router.post('/complete', authenticateToken, async (req, res) => {
   try {
@@ -19,6 +33,7 @@ router.post('/complete', authenticateToken, async (req, res) => {
       exercises, 
       totalSets, 
       totalWeight,
+      achievements = [],
       shareToFeed = false,
       privacyLevel = 'FRIENDS'
     } = req.body;
@@ -55,7 +70,7 @@ router.post('/complete', authenticateToken, async (req, res) => {
     }
 
     // Check user's auto-share settings
-    let autoShareEnabled = false;
+    let autoShareEnabled = true; // Default to true for new users
     let defaultPrivacy = 'FRIENDS';
     
     try {
@@ -67,10 +82,17 @@ router.post('/complete', authenticateToken, async (req, res) => {
       if (privacySettings.rows.length > 0) {
         autoShareEnabled = privacySettings.rows[0].auto_share_workouts;
         defaultPrivacy = privacySettings.rows[0].default_post_privacy || 'FRIENDS';
+      } else {
+        // Create default settings for new users
+        await query(
+          'INSERT INTO user_privacy_settings (user_id, auto_share_workouts, default_post_privacy) VALUES ($1, $2, $3)',
+          [userId, true, 'FRIENDS']
+        );
+        console.log('[WORKOUT_COMPLETE] ✅ Created default privacy settings for new user');
       }
     } catch (error) {
       console.log('[WORKOUT_COMPLETE] ⚠️ Could not fetch privacy settings:', error.message);
-      // Continue with defaults
+      // Continue with defaults (autoShareEnabled = true)
     }
 
     // Determine if we should share to feed
@@ -92,10 +114,35 @@ router.post('/complete', authenticateToken, async (req, res) => {
         totalSets: totalSets || 0,
         totalWeight: totalWeight || 0,
         workoutId: workoutId,
-        workoutName: workoutName
+        workoutName: workoutName,
+        achievements: achievements || []
       };
 
-      const content = `Just completed ${workoutName}! 💪\nDuration: ${Math.round(duration / 60)} minutes\nExercises: ${exercises?.length || 0}\nTotal sets: ${totalSets || 0}`;
+      // Build achievement text if any achievements were unlocked
+      let achievementText = '';
+      if (achievements && achievements.length > 0) {
+        const achievementDetails = achievements.map(achievement => {
+          const achievementName = getAchievementName(achievement.id);
+          if (achievement.additionalInfo) {
+            return `${achievementName}: ${achievement.additionalInfo}`;
+          } else {
+            return achievementName;
+          }
+        });
+        achievementText = `\n🎉 Achievements unlocked:\n${achievementDetails.join('\n')}`;
+      }
+
+      // Format duration appropriately
+      let durationText;
+      const durationInSeconds = Math.round(duration / 1000);
+      if (durationInSeconds < 60) {
+        durationText = `${durationInSeconds} seconds`;
+      } else {
+        const durationInMinutes = Math.round(duration / (60 * 1000));
+        durationText = `${durationInMinutes} minutes`;
+      }
+
+      const content = `Just completed ${workoutName}! 💪\nDuration: ${durationText}\nExercises: ${exercises?.length || 0}\nTotal sets: ${totalSets || 0}${achievementText}`;
 
       try {
         const postResult = await query(

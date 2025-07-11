@@ -793,8 +793,31 @@ fun CommentItem(comment: FeedComment) {
 
 private fun formatPostDate(dateString: String): String {
     return try {
-        val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
-        val date = inputFormat.parse(dateString)
+        // Try multiple date formats to handle different server responses
+        val dateFormats = listOf(
+            "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.SSS",
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss"
+        )
+        
+        var date: Date? = null
+        for (format in dateFormats) {
+            try {
+                val inputFormat = SimpleDateFormat(format, Locale.getDefault())
+                date = inputFormat.parse(dateString)
+                break
+            } catch (e: Exception) {
+                // Try next format
+                continue
+            }
+        }
+        
+        if (date == null) {
+            return "Unknown time"
+        }
+        
         val now = Date()
         val diffInMillis = now.time - date.time
         val diffInMinutes = diffInMillis / (1000 * 60)

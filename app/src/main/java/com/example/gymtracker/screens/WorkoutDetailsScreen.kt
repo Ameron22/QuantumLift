@@ -87,6 +87,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
+import com.example.gymtracker.data.WorkoutAchievementData
 import com.example.gymtracker.services.AuthRepository
 import com.example.gymtracker.data.WorkoutCompletionRequest
 
@@ -589,6 +590,25 @@ fun WorkoutDetailsScreen(
                     val streak = calculateWorkoutStreak(dao)
                     achievementManager.updateConsistencyStreak(streak)
                     
+                    // Get newly unlocked achievements for feed post
+                    val newlyUnlockedAchievements = achievementManager.newlyUnlockedAchievements.value
+                    
+                    // Convert achievement IDs to WorkoutAchievementData objects
+                    val achievementDataList = newlyUnlockedAchievements.map { achievementId ->
+                        WorkoutAchievementData(
+                            id = achievementId,
+                            additionalInfo = when (achievementId) {
+                                "bench_press_100" -> "New PR: 100kg bench press!"
+                                "workout_warrior" -> "Completed 10 workouts!"
+                                "workout_master" -> "Completed 50 workouts!"
+                                "consistency_week" -> "7-day streak achieved!"
+                                "consistency_month" -> "30-day streak achieved!"
+                                "night_owl" -> "Late night workout completed!"
+                                else -> null
+                            }
+                        )
+                    }
+                    
                     // Share workout completion to feed if user is authenticated
                     try {
                         val authRepository = AuthRepository(context)
@@ -614,6 +634,7 @@ fun WorkoutDetailsScreen(
                             exercises = exerciseNames,
                             totalSets = totalSets,
                             totalWeight = totalWeight,
+                            achievements = achievementDataList,
                             shareToFeed = false, // Let the server decide based on user settings
                             privacyLevel = "FRIENDS"
                         )
