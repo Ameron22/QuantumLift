@@ -21,14 +21,20 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 
 import androidx.navigation.NavController
 import com.example.gymtracker.data.*
 import com.example.gymtracker.viewmodels.AuthViewModel
 import com.example.gymtracker.components.LoadingSpinner
+import com.example.gymtracker.components.BottomNavBar
+import com.example.gymtracker.viewmodels.AuthState
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.util.*
@@ -44,6 +50,10 @@ fun FeedScreen(
     val listState = rememberLazyListState()
     var showCreatePostDialog by remember { mutableStateOf(false) }
     var selectedPostForComments by remember { mutableStateOf<FeedPost?>(null) }
+    
+    // State for tab selection
+    var selectedTabIndex by remember { mutableStateOf(0) }
+    val tabs = listOf("Feed", "Friends")
     
     // Hidden space management - scroll to hide the 200dp spacer initially
     val density = LocalDensity.current
@@ -128,36 +138,99 @@ fun FeedScreen(
         }
     }
     
-    Scaffold(
+        Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Social Feed",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary
+            Column {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "Social",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
                     )
-                },
-                actions = {
-                    IconButton(onClick = { showCreatePostDialog = true }) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Create Post",
-                            tint = MaterialTheme.colorScheme.primary
+                )
+                
+                // Tab bar under TopAppBar
+                TabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    modifier = Modifier.fillMaxWidth(),
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.primary
+                ) {
+                    tabs.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTabIndex == index,
+                            onClick = { selectedTabIndex = index },
+                            text = { Text(title) }
                         )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
-                )
-            )
-        }
+                }
+            }
+        },
+        bottomBar = { BottomNavBar(navController) }
     ) { paddingValues ->
+        when (selectedTabIndex) {
+            0 -> FeedTab(
+                paddingValues = paddingValues,
+                authState = authState,
+                listState = listState,
+                hasScrolledToHideSpace = hasScrolledToHideSpace,
+                isShowingRefreshAnimation = isShowingRefreshAnimation,
+                showCreatePostDialog = showCreatePostDialog,
+                selectedPostForComments = selectedPostForComments,
+                onShowCreatePostDialog = { showCreatePostDialog = true },
+                onSelectedPostForComments = { selectedPostForComments = it },
+                authViewModel = authViewModel
+            )
+            1 -> FeedFriendsTab(paddingValues = paddingValues, authViewModel = authViewModel)
+        }
+    }
+    
+    // Create post dialog
+    if (showCreatePostDialog) {
+        CreatePostDialog(
+            onDismiss = { showCreatePostDialog = false },
+            onConfirm = { request ->
+                authViewModel.createPost(request)
+                showCreatePostDialog = false
+            }
+        )
+    }
+    
+    // Comments dialog
+    selectedPostForComments?.let { post ->
+        CommentsDialog(
+            post = post,
+            onDismiss = { selectedPostForComments = null },
+            onAddComment = { content ->
+                authViewModel.addComment(post.id, content)
+            },
+            authViewModel = authViewModel
+        )
+    }
+}
+
+@Composable
+fun FeedTab(
+    paddingValues: PaddingValues,
+    authState: AuthState,
+    listState: LazyListState,
+    hasScrolledToHideSpace: Boolean,
+    isShowingRefreshAnimation: Boolean,
+    showCreatePostDialog: Boolean,
+    selectedPostForComments: FeedPost?,
+    onShowCreatePostDialog: () -> Unit,
+    onSelectedPostForComments: (FeedPost?) -> Unit,
+    authViewModel: AuthViewModel
+) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-
         ) {
             // Initial loading indicator - centered on screen
             if (authState.isLoading && authState.feedPosts.isEmpty()) {
@@ -282,7 +355,7 @@ fun FeedScreen(
                                         )
                                         Spacer(modifier = Modifier.height(16.dp))
                                         Button(
-                                            onClick = { showCreatePostDialog = true }
+                                        onClick = onShowCreatePostDialog
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Add,
@@ -301,7 +374,7 @@ fun FeedScreen(
                             FeedPostCard(
                                 post = post,
                                 onLike = { authViewModel.likePost(post.id) },
-                                onComment = { selectedPostForComments = post },
+                            onComment = { onSelectedPostForComments(post) },
                                 onDelete = { authViewModel.deletePost(post.id) },
                                 isOwnPost = post.user.id == authState.user?.id
                             )
@@ -321,49 +394,389 @@ fun FeedScreen(
                                 modifier = Modifier.size(40.dp),
                                 scale = 0.3f //Don't change this
                             )
-                        }
                     }
-                    
-                    // Loading spinner overlay - only shown while refreshing
-//                   if (isRefreshing) {
-//                        Box(
-//                            modifier = Modifier
-//                                .fillMaxWidth()
-//                                .padding(top = 24.dp),
-//                            contentAlignment = Alignment.TopCenter
-//                        ) {
-//                            LoadingSpinner(
-//                                modifier = Modifier.size(40.dp)
-//                            )
-//                        }
-//                   }
                 }
+            }
+        }
+        
+        // Add Post FAB - positioned in bottom right corner
+        Box(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            FloatingActionButton(
+                onClick = { onShowCreatePostDialog() },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+                containerColor = MaterialTheme.colorScheme.primary
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Create Post",
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun FeedFriendsTab(paddingValues: PaddingValues, authViewModel: AuthViewModel) {
+    val authState by authViewModel.authState.collectAsState()
+    var showAddFriendDialog by remember { mutableStateOf(false) }
+    var friendEmail by remember { mutableStateOf("") }
+    
+    // Load friends list and pending invitations when the tab is selected
+    LaunchedEffect(Unit) {
+        authViewModel.loadFriendsList()
+        authViewModel.loadPendingInvitations()
+    }
+    
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Add Friend Button (always visible at the top)
+        item {
+            Button(
+                onClick = { showAddFriendDialog = true },
+                modifier = Modifier.fillMaxWidth()
+                                    .padding(top = 16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PersonAdd,
+                    contentDescription = "Add friend",
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Add Friend")
+            }
+        }
+        
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+        
+        // Friend Invitations Section
+        if (authState.pendingInvitations.isNotEmpty()) {
+            item {
+                Text(
+                    text = "Friend Invitations",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+            
+            items(authState.pendingInvitations) { invitation ->
+                FeedInvitationCard(
+                    invitation = invitation,
+                    onAccept = { authViewModel.acceptFriendInvitation(invitation.invitationCode) },
+                    onDecline = { authViewModel.declineFriendInvitation(invitation.invitationCode) },
+                    isLoading = authState.isLoading
+                )
+            }
+            
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                Divider()
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+        
+        // Friends List Section
+        if (authState.friends.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "No friends",
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "No friends yet",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Add friends to share your fitness journey",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        } else {
+            items(authState.friends) { friend ->
+                FeedFriendCard(friend = friend)
             }
         }
     }
     
-    // Create post dialog
-    if (showCreatePostDialog) {
-        CreatePostDialog(
-            onDismiss = { showCreatePostDialog = false },
-            onConfirm = { request ->
-                authViewModel.createPost(request)
-                showCreatePostDialog = false
-            }
-        )
-    }
-    
-    // Comments dialog
-    selectedPostForComments?.let { post ->
-        CommentsDialog(
-            post = post,
-            onDismiss = { selectedPostForComments = null },
-            onAddComment = { content ->
-                authViewModel.addComment(post.id, content)
+    // Add Friend Dialog
+    if (showAddFriendDialog) {
+        FeedAddFriendDialog(
+            onDismiss = { 
+                showAddFriendDialog = false
+                friendEmail = ""
+                authViewModel.clearError()
+                authViewModel.clearSuccess()
             },
-            authViewModel = authViewModel
+            onConfirm = {
+                if (friendEmail.isNotBlank()) {
+                    authViewModel.sendFriendInvitation(friendEmail)
+                    showAddFriendDialog = false
+                    friendEmail = ""
+                }
+            },
+            email = friendEmail,
+            onEmailChange = { email -> friendEmail = email },
+            isLoading = authState.isLoading,
+            error = authState.error,
+            success = authState.success
         )
     }
+}
+
+@Composable
+fun FeedInvitationCard(
+    invitation: com.example.gymtracker.data.FriendInvitation,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit,
+    isLoading: Boolean
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Sender avatar
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(24.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = invitation.senderUsername.first().uppercase(),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                
+                Spacer(modifier = Modifier.width(12.dp))
+                
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = invitation.senderUsername,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Wants to be your friend",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Sent ${invitation.createdAt.substring(0, 10)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onAccept,
+                    enabled = !isLoading,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text("Accept")
+                    }
+                }
+                
+                OutlinedButton(
+                    onClick = onDecline,
+                    enabled = !isLoading,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Decline")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FeedFriendCard(friend: com.example.gymtracker.data.Friend) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Friend avatar placeholder
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.primary,
+                        shape = RoundedCornerShape(24.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = friend.username.first().uppercase(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = friend.username,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Friends since ${friend.friendshipDate.substring(0, 10)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun FeedAddFriendDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    email: String,
+    onEmailChange: (String) -> Unit,
+    isLoading: Boolean,
+    error: String?,
+    success: String?
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Add Friend")
+        },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = onEmailChange,
+                    label = { Text("Friend's Email") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Email,
+                        imeAction = ImeAction.Done
+                    )
+                )
+                
+                if (error != null) {
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+                
+                if (success != null) {
+                    Text(
+                        text = success,
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = email.isNotBlank() && !isLoading
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text("Send Invitation")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable
