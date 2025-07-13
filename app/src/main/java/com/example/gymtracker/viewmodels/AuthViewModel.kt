@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import com.example.gymtracker.data.EntityExercise
 
 data class AuthState(
     val isLoading: Boolean = false,
@@ -38,6 +39,9 @@ data class AuthState(
 )
 
 class AuthViewModel(private val context: Context) : ViewModel() {
+    
+    // Helper function to determine if an exercise is custom
+    private fun isCustomExercise(exerciseId: Int): Boolean = exerciseId > 750
     
     private val authRepository = AuthRepository(context)
     
@@ -540,7 +544,7 @@ class AuthViewModel(private val context: Context) : ViewModel() {
     
     // Workout sharing methods
     
-    fun copyWorkout(sharedWorkoutId: String, onSuccess: (Int, String) -> Unit, onError: (String) -> Unit) {
+    fun copyWorkout(sharedWorkoutId: String, onSuccess: (String, List<EntityExercise>) -> Unit, onError: (String) -> Unit) {
         Log.d("AUTH_LOG", "Copying workout: $sharedWorkoutId")
         viewModelScope.launch {
             _authState.value = _authState.value.copy(
@@ -564,8 +568,9 @@ class AuthViewModel(private val context: Context) : ViewModel() {
                         error = null
                     )
                     
-                    if (response.success && response.newWorkoutId != null && response.workoutName != null) {
-                        onSuccess(response.newWorkoutId, response.workoutName)
+                    if (response.success && response.workoutName != null && response.exercises != null) {
+                        // The exercises are already EntityExercise objects from the response
+                        onSuccess(response.workoutName, response.exercises)
                     } else {
                         onError(response.message ?: "Failed to copy workout")
                     }

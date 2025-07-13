@@ -258,21 +258,24 @@ router.put('/privacy-settings', authenticateToken, async (req, res) => {
 // Share workout with friends
 router.post('/share', authenticateToken, async (req, res) => {
   try {
-    const { workoutId, targetUserIds, shareType = 'DIRECT' } = req.body;
+    const { workoutId, workoutName, difficulty, exercises, targetUserIds, shareType = 'DIRECT' } = req.body;
     const userId = req.user.userId;
 
     console.log('[WORKOUT_SHARE] 📤 Workout share request:', {
       userId,
       workoutId,
+      workoutName,
+      difficulty,
+      exercisesCount: exercises?.length,
       targetUserIds,
       shareType
     });
 
     // Validate required fields
-    if (!workoutId || !targetUserIds || !Array.isArray(targetUserIds) || targetUserIds.length === 0) {
+    if (!workoutId || !workoutName || !exercises || !Array.isArray(exercises) || !targetUserIds || !Array.isArray(targetUserIds) || targetUserIds.length === 0) {
       return res.status(400).json({
         error: 'Missing required fields',
-        message: 'Workout ID and target user IDs are required'
+        message: 'Workout ID, name, exercises, and target user IDs are required'
       });
     }
 
@@ -291,60 +294,14 @@ router.post('/share', authenticateToken, async (req, res) => {
 
     const creatorUsername = userResult.rows[0].username;
 
-    // Get workout data (template only - no sets/reps/weights)
-    const workoutResult = await query(
-      `SELECT w.name as workout_name, w.difficulty
-       FROM workouts w 
-       WHERE w.id = $1 AND w.user_id = $2`,
-      [workoutId, userId]
-    );
-
-    if (workoutResult.rows.length === 0) {
-      return res.status(404).json({
-        error: 'Workout not found',
-        message: 'Workout does not exist or you do not have permission to share it'
-      });
-    }
-
-    const workout = workoutResult.rows[0];
-
-    // Get exercises for this workout (template only)
-    const exercisesResult = await query(
-      `SELECT 
-         we.exercise_id,
-         we.is_custom_exercise,
-         e.name as exercise_name,
-         e.equipment,
-         e.body_part,
-         e.target_muscle,
-         e.instructions,
-         e.gif_url
-       FROM workout_exercises we
-       LEFT JOIN exercises e ON we.exercise_id = e.id
-       WHERE we.workout_id = $1
-       ORDER BY we.order_index`,
-      [workoutId]
-    );
-
-    const exercises = exercisesResult.rows.map(row => ({
-      exerciseId: row.exercise_id,
-      exerciseName: row.exercise_name,
-      isCustomExercise: row.is_custom_exercise,
-      equipment: row.equipment,
-      bodyPart: row.body_part,
-      targetMuscle: row.target_muscle,
-      instructions: row.instructions,
-      gifUrl: row.gif_url
-    }));
-
     // Create shared workout data
     const sharedWorkoutData = {
       workoutId: `shared_${Date.now()}_${userId}_${workoutId}`,
-      workoutTitle: workout.workout_name,
+      workoutTitle: workoutName,
       creatorId: userId,
       creatorUsername: creatorUsername,
       exercises: exercises,
-      difficulty: workout.difficulty,
+      difficulty: difficulty,
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
     };
@@ -365,7 +322,7 @@ router.post('/share', authenticateToken, async (req, res) => {
           return null;
         }
 
-        const content = `${creatorUsername} shared a workout with you: "${workout.workout_name}" 💪`;
+        const content = `${creatorUsername} shared a workout with you: "${workoutName}" 💪`;
 
         const postResult = await query(
           `INSERT INTO feed_posts 
@@ -458,51 +415,14 @@ router.post('/copy', authenticateToken, async (req, res) => {
       });
     }
 
-    // Create new workout for the user
-    const newWorkoutResult = await query(
-      `INSERT INTO workouts (user_id, name, difficulty) 
-       VALUES ($1, $2, $3) 
-       RETURNING id`,
-      [userId, sharedWorkoutData.workoutTitle, sharedWorkoutData.difficulty]
-    );
-
-    const newWorkoutId = newWorkoutResult.rows[0].id;
-
-    // Copy exercises to the new workout
-    const exercisePromises = sharedWorkoutData.exercises.map(async (exercise, index) => {
-      try {
-        if (exercise.isCustomExercise) {
-          // For custom exercises, we need to create the exercise first
-          const customExerciseResult = await query(
-            `INSERT INTO exercises (name, equipment, body_part, target_muscle, instructions, gif_url, is_custom, user_id) 
-             VALUES ($1, $2, $3, $4, $5, $6, true, $7) 
-             RETURNING id`,
-            [exercise.exerciseName, exercise.equipment, exercise.bodyPart, exercise.targetMuscle, exercise.instructions, exercise.gifUrl, userId]
-          );
-          
-          const customExerciseId = customExerciseResult.rows[0].id;
-          
-          // Add to workout
-          await query(
-            `INSERT INTO workout_exercises (workout_id, exercise_id, order_index, is_custom_exercise) 
-             VALUES ($1, $2, $3, true)`,
-            [newWorkoutId, customExerciseId, index]
-          );
-        } else {
-          // For standard exercises, just add to workout
-          await query(
-            `INSERT INTO workout_exercises (workout_id, exercise_id, order_index, is_custom_exercise) 
-             VALUES ($1, $2, $3, false)`,
-            [newWorkoutId, exercise.exerciseId, index]
-          );
-        }
-      } catch (error) {
-        console.error(`[WORKOUT_COPY] ❌ Error copying exercise ${exercise.exerciseName}:`, error);
-        throw error;
-      }
+    // Return the shared workout data for the client to save locally
+    // The client will handle creating the workout in their local database
+    res.json({
+      success: true,
+      message: 'Workout copied successfully',
+      workoutName: sharedWorkoutData.workoutTitle,
+      exercises: sharedWorkoutData.exercises
     });
-
-    await Promise.all(exercisePromises);
 
     // Delete the shared workout post after successful copy
     await query(
@@ -523,6 +443,82 @@ router.post('/copy', authenticateToken, async (req, res) => {
     console.error('[WORKOUT_COPY] ❌ Error copying workout:', error);
     res.status(500).json({
       error: 'Failed to copy workout',
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Create a test workout for development/testing
+router.post('/create-test-workout', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    console.log('[CREATE_TEST_WORKOUT] Creating test workout for user:', userId);
+    
+    // Create a test workout
+    const workoutResult = await query(
+      `INSERT INTO workouts (user_id, name, difficulty) 
+       VALUES ($1, $2, $3) 
+       RETURNING id, name`,
+      [userId, 'Test Workout', 'Intermediate']
+    );
+    
+    const workout = workoutResult.rows[0];
+    
+    // Add some exercises to the workout
+    const exercises = [
+      { name: 'Bench Press', equipment: 'Barbell', body_part: 'Chest' },
+      { name: 'Squat', equipment: 'Barbell', body_part: 'Legs' },
+      { name: 'Pull-up', equipment: 'Bodyweight', body_part: 'Back' }
+    ];
+    
+    for (let i = 0; i < exercises.length; i++) {
+      const exercise = exercises[i];
+      
+      // Get or create the exercise
+      let exerciseResult = await query(
+        'SELECT id FROM exercises WHERE name = $1',
+        [exercise.name]
+      );
+      
+      let exerciseId;
+      if (exerciseResult.rows.length === 0) {
+        // Create the exercise
+        exerciseResult = await query(
+          `INSERT INTO exercises (name, equipment, body_part, target_muscle, instructions, is_custom) 
+           VALUES ($1, $2, $3, $4, $5, false) 
+           RETURNING id`,
+          [exercise.name, exercise.equipment, exercise.body_part, exercise.body_part, 'Standard exercise']
+        );
+        exerciseId = exerciseResult.rows[0].id;
+      } else {
+        exerciseId = exerciseResult.rows[0].id;
+      }
+      
+      // Add exercise to workout
+      await query(
+        `INSERT INTO workout_exercises (workout_id, exercise_id, order_index, is_custom_exercise) 
+         VALUES ($1, $2, $3, false)`,
+        [workout.id, exerciseId, i]
+      );
+    }
+    
+    console.log('[CREATE_TEST_WORKOUT] ✅ Test workout created:', workout);
+    
+    res.json({
+      success: true,
+      message: 'Test workout created successfully',
+      workout: {
+        id: workout.id,
+        name: workout.name,
+        difficulty: 'Intermediate'
+      }
+    });
+    
+  } catch (error) {
+    console.error('[CREATE_TEST_WORKOUT] ❌ Error creating test workout:', error);
+    res.status(500).json({
+      error: 'Failed to create test workout',
       message: 'Internal server error'
     });
   }

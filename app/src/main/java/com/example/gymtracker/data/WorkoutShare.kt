@@ -19,7 +19,10 @@ data class WorkoutExerciseShare(
 )
 
 data class ShareWorkoutRequest(
-    val workoutId: Int,
+    val workoutId: Int, // Local workout ID
+    val workoutName: String,
+    val difficulty: String?,
+    val exercises: List<WorkoutExerciseShare>, // Full exercise data from local workout
     val targetUserIds: List<String>, // List of friend user IDs to share with
     val shareType: String = "DIRECT" // For now, only direct sharing
 )
