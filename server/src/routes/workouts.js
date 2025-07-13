@@ -407,6 +407,13 @@ router.post('/copy', authenticateToken, async (req, res) => {
     // PostgreSQL JSONB is already parsed as an object, no need to parse again
     const sharedWorkoutData = post.workout_share_data;
 
+    console.log('[WORKOUT_COPY] 📊 Retrieved shared workout data:', {
+      workoutId: sharedWorkoutData.workoutId,
+      workoutTitle: sharedWorkoutData.workoutTitle,
+      exercisesCount: sharedWorkoutData.exercises?.length,
+      exercises: sharedWorkoutData.exercises
+    });
+
     // Check if workout has expired (7 days)
     const expiresAt = new Date(sharedWorkoutData.expiresAt);
     if (new Date() > expiresAt) {
@@ -426,12 +433,20 @@ router.post('/copy', authenticateToken, async (req, res) => {
 
     // Convert exercises back to EntityExercise format for the client
     const exercisesForClient = sharedWorkoutData.exercises.map(exercise => {
+      console.log('[WORKOUT_COPY] 🔄 Processing exercise:', {
+        exerciseId: exercise.exerciseId,
+        exerciseName: exercise.exerciseName,
+        isCustomExercise: exercise.isCustomExercise,
+        hasCustomData: !!exercise.customExerciseData
+      });
+
       if (exercise.isCustomExercise && exercise.customExerciseData) {
         // For custom exercises, use the stored custom exercise data
+        console.log('[WORKOUT_COPY] 📝 Using custom exercise data:', exercise.customExerciseData);
         return exercise.customExerciseData;
       } else {
         // For standard exercises, create EntityExercise from the stored data
-        return {
+        const standardExercise = {
           id: exercise.exerciseId,
           name: exercise.exerciseName,
           description: exercise.customExerciseData?.description || '',
@@ -442,7 +457,14 @@ router.post('/copy', authenticateToken, async (req, res) => {
           gifUrl: exercise.customExerciseData?.gifUrl || '',
           useTime: exercise.customExerciseData?.useTime || false
         };
+        console.log('[WORKOUT_COPY] 📝 Created standard exercise:', standardExercise);
+        return standardExercise;
       }
+    });
+
+    console.log('[WORKOUT_COPY] 📤 Sending exercises to client:', {
+      exercisesCount: exercisesForClient.length,
+      exercises: exercisesForClient
     });
 
     // Return the shared workout data for the client to save locally

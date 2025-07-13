@@ -562,6 +562,9 @@ class AuthViewModel(private val context: Context) : ViewModel() {
             result.fold(
                 onSuccess = { response ->
                     Log.d("AUTH_LOG", "Workout copied successfully")
+                    Log.d("AUTH_LOG", "Response: success=${response.success}, workoutName=${response.workoutName}, exercisesCount=${response.exercises?.size}")
+                    Log.d("AUTH_LOG", "Exercises: ${response.exercises}")
+                    
                     _authState.value = _authState.value.copy(
                         isLoading = false,
                         success = response.message,
@@ -569,9 +572,11 @@ class AuthViewModel(private val context: Context) : ViewModel() {
                     )
                     
                     if (response.success && response.workoutName != null && response.exercises != null) {
+                        Log.d("AUTH_LOG", "Calling onSuccess with ${response.exercises.size} exercises")
                         // The exercises are already EntityExercise objects from the response
                         onSuccess(response.workoutName, response.exercises)
                     } else {
+                        Log.e("AUTH_LOG", "Copy response validation failed: success=${response.success}, workoutName=${response.workoutName}, exercises=${response.exercises}")
                         onError(response.message ?: "Failed to copy workout")
                     }
                     
