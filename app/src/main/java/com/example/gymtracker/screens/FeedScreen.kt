@@ -1080,6 +1080,11 @@ fun FeedPostCard(
                                     authViewModel.copyWorkout(
                                         sharedWorkoutId = workoutId,
                                         onSuccess = { workoutName: String, exercises: List<EntityExercise> ->
+                                            Log.d("FeedScreen", "Copy workout success callback received")
+                                            Log.d("FeedScreen", "Workout name: $workoutName")
+                                            Log.d("FeedScreen", "Exercises count: ${exercises.size}")
+                                            Log.d("FeedScreen", "Exercises: $exercises")
+                                            
                                             scope.launch {
                                                 try {
                                                     val db = AppDatabase.getDatabase(context)
@@ -1092,9 +1097,11 @@ fun FeedPostCard(
                                                     )
                                                     
                                                     val workoutId = dao.insertWorkout(newWorkout).toInt()
+                                                    Log.d("FeedScreen", "Created new workout with ID: $workoutId")
                                                     
                                                     // Add exercises to workout
                                                     exercises.forEachIndexed { index, exercise ->
+                                                        Log.d("FeedScreen", "Adding exercise $index: ${exercise.name} (ID: ${exercise.id})")
                                                         val workoutExercise = WorkoutExercise(
                                                             id = 0, // Auto-generated
                                                             workoutId = workoutId,
@@ -1104,13 +1111,15 @@ fun FeedPostCard(
                                                             weight = 0, // Required by data class, but not used for template
                                                             order = index
                                                         )
-                                                        dao.insertWorkoutExercise(workoutExercise)
+                                                        val exerciseId = dao.insertWorkoutExercise(workoutExercise)
+                                                        Log.d("FeedScreen", "Inserted workout exercise with ID: $exerciseId")
                                                     }
                                                     
+                                                    Log.d("FeedScreen", "Successfully copied workout with ${exercises.size} exercises")
                                                     // Navigate to the new workout
                                                     navController.navigate(Screen.WorkoutDetails.createRoute(workoutId))
                                                 } catch (e: Exception) {
-                                                    Log.e("FeedScreen", "Error saving copied workout: ${e.message}")
+                                                    Log.e("FeedScreen", "Error saving copied workout: ${e.message}", e)
                                                 }
                                             }
                                         },
