@@ -424,12 +424,33 @@ router.post('/copy', authenticateToken, async (req, res) => {
 
     console.log(`[WORKOUT_COPY] ✅ Workout copied successfully: ${sharedWorkoutId}`);
 
+    // Convert exercises back to EntityExercise format for the client
+    const exercisesForClient = sharedWorkoutData.exercises.map(exercise => {
+      if (exercise.isCustomExercise && exercise.customExerciseData) {
+        // For custom exercises, use the stored custom exercise data
+        return exercise.customExerciseData;
+      } else {
+        // For standard exercises, create EntityExercise from the stored data
+        return {
+          id: exercise.exerciseId,
+          name: exercise.exerciseName,
+          description: exercise.customExerciseData?.description || '',
+          muscle: exercise.customExerciseData?.muscle || '',
+          parts: exercise.customExerciseData?.parts || '',
+          equipment: exercise.customExerciseData?.equipment || '',
+          difficulty: exercise.customExerciseData?.difficulty || 'Intermediate',
+          gifUrl: exercise.customExerciseData?.gifUrl || '',
+          useTime: exercise.customExerciseData?.useTime || false
+        };
+      }
+    });
+
     // Return the shared workout data for the client to save locally
     res.json({
       success: true,
       message: 'Workout copied successfully',
       workoutName: sharedWorkoutData.workoutTitle,
-      exercises: sharedWorkoutData.exercises
+      exercises: exercisesForClient
     });
 
   } catch (error) {
