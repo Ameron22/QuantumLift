@@ -94,6 +94,9 @@ import com.example.gymtracker.data.WorkoutCompletionRequest
 import com.example.gymtracker.components.ShareWorkoutDialog
 import com.example.gymtracker.data.ShareWorkoutRequest
 import com.example.gymtracker.data.Friend
+import com.example.gymtracker.data.WorkoutExerciseShare
+
+fun isCustomExercise(exerciseId: Int): Boolean = exerciseId > 750
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -354,8 +357,34 @@ fun WorkoutDetailsScreen(
         coroutineScope.launch {
             try {
                 isSharing = true
+                
+                // Get local workout data
+                val localWorkout = dao.getAllWorkouts().find { it.id == workoutId }
+                val localExercises = dao.getExercisesWithWorkoutData(workoutId)
+                
+                if (localWorkout == null) {
+                    Toast.makeText(context, "Workout not found", Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                
+                // Convert to sharing format
+                val exercisesForSharing = localExercises.map { exerciseWithDetails ->
+                    val exercise = exerciseWithDetails.exercise
+                    val isCustom = isCustomExercise(exercise.id)
+                    
+                    WorkoutExerciseShare(
+                        exerciseId = if (!isCustom) exercise.id else null,
+                        exerciseName = exercise.name,
+                        isCustomExercise = isCustom,
+                        customExerciseData = if (isCustom) exercise else null
+                    )
+                }
+                
                 val request = ShareWorkoutRequest(
                     workoutId = workoutId,
+                    workoutName = localWorkout.name,
+                    difficulty = null, // EntityWorkout doesn't have difficulty field
+                    exercises = exercisesForSharing,
                     targetUserIds = targetUserIds
                 )
                 

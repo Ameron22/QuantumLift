@@ -1,5 +1,6 @@
 package com.example.gymtracker.screens
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,28 +19,28 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.gestures.animateScrollBy
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-
 import androidx.navigation.NavController
 import com.example.gymtracker.data.*
 import com.example.gymtracker.viewmodels.AuthViewModel
 import com.example.gymtracker.components.LoadingSpinner
 import com.example.gymtracker.components.BottomNavBar
+import com.example.gymtracker.navigation.Screen
 import com.example.gymtracker.viewmodels.AuthState
+import com.example.gymtracker.data.AppDatabase
+import com.example.gymtracker.data.EntityWorkout
+import com.example.gymtracker.data.WorkoutExercise
+import kotlinx.coroutines.coroutineScope
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.util.*
-import kotlin.math.abs
+import kotlin.collections.forEachIndexed
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -185,7 +186,8 @@ fun FeedScreen(
                 selectedPostForComments = selectedPostForComments,
                 onShowCreatePostDialog = { showCreatePostDialog = true },
                 onSelectedPostForComments = { selectedPostForComments = it },
-                authViewModel = authViewModel
+                authViewModel = authViewModel,
+                navController = navController
             )
             1 -> FeedFriendsTab(paddingValues = paddingValues, authViewModel = authViewModel)
         }
@@ -226,7 +228,8 @@ fun FeedTab(
     selectedPostForComments: FeedPost?,
     onShowCreatePostDialog: () -> Unit,
     onSelectedPostForComments: (FeedPost?) -> Unit,
-    authViewModel: AuthViewModel
+    authViewModel: AuthViewModel,
+    navController: NavController
 ) {
         Box(
             modifier = Modifier
@@ -792,6 +795,8 @@ fun FeedPostCard(
     navController: NavController,
     authViewModel: AuthViewModel
 ) {
+    val scope = rememberCoroutineScope()
+    
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -1068,14 +1073,46 @@ fun FeedPostCard(
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val context = LocalContext.current
                         IconButton(
                             onClick = {
                                 post.workoutShareData?.workoutId?.let { workoutId ->
                                     authViewModel.copyWorkout(
                                         sharedWorkoutId = workoutId,
-                                        onSuccess = { newWorkoutId, workoutName ->
-                                            // Navigate to the new workout
-                                            navController.navigate(Screen.WorkoutDetails.createRoute(newWorkoutId))
+                                        onSuccess = { workoutName: String, exercises: List<EntityExercise> ->
+                                            scope.launch {
+                                                try {
+                                                    val db = AppDatabase.getDatabase(context)
+                                                    val dao = db.exerciseDao()
+                                                    
+                                                    // Create new workout
+                                                    val newWorkout = EntityWorkout(
+                                                        id = 0, // Auto-generated
+                                                        name = workoutName
+                                                    )
+                                                    
+                                                    val workoutId = dao.insertWorkout(newWorkout).toInt()
+                                                    
+                                                    // Add exercises to workout
+                                                    exercises.forEachIndexed { index, exercise ->
+                                                        val workoutExercise = WorkoutExercise(
+                                                            id = 0, // Auto-generated
+                                                            workoutId = workoutId,
+                                                            exerciseId = exercise.id,
+                                                            sets = 1, // Required by data class, but not used for template
+                                                            reps = 10, // Required by data class, but not used for template
+                                                            weight = 0, // Required by data class, but not used for template
+                                                            order = index
+                                                        )
+                                                        dao.insertWorkoutExercise(workoutExercise)
+                                                    }
+                                                    
+                                                    // Navigate to the new workout
+                                                    navController.navigate(Screen.WorkoutDetails.createRoute(workoutId))
+                                                } catch (e: Exception) {
+                                                    Log.e("FeedScreen", "Error saving copied workout: ${e.message}")
+                                                }
+                                            }
                                         },
                                         onError = { error ->
                                             // Error will be shown in the AuthState
