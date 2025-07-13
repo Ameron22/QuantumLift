@@ -18,28 +18,22 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.gestures.animateScrollBy
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-
 import androidx.navigation.NavController
 import com.example.gymtracker.data.*
 import com.example.gymtracker.viewmodels.AuthViewModel
 import com.example.gymtracker.components.LoadingSpinner
 import com.example.gymtracker.components.BottomNavBar
+import com.example.gymtracker.navigation.Screen
 import com.example.gymtracker.viewmodels.AuthState
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.util.*
-import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -185,7 +179,8 @@ fun FeedScreen(
                 selectedPostForComments = selectedPostForComments,
                 onShowCreatePostDialog = { showCreatePostDialog = true },
                 onSelectedPostForComments = { selectedPostForComments = it },
-                authViewModel = authViewModel
+                authViewModel = authViewModel,
+                navController = navController
             )
             1 -> FeedFriendsTab(paddingValues = paddingValues, authViewModel = authViewModel)
         }
@@ -226,7 +221,8 @@ fun FeedTab(
     selectedPostForComments: FeedPost?,
     onShowCreatePostDialog: () -> Unit,
     onSelectedPostForComments: (FeedPost?) -> Unit,
-    authViewModel: AuthViewModel
+    authViewModel: AuthViewModel,
+    navController: NavController
 ) {
         Box(
             modifier = Modifier
