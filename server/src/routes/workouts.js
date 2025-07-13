@@ -311,9 +311,9 @@ router.post('/share', authenticateToken, async (req, res) => {
       try {
         // Verify the target user exists and is a friend
         const friendCheck = await query(
-          `SELECT 1 FROM friendships 
+          `SELECT 1 FROM friend_connections 
            WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)
-           AND status = 'accepted'`,
+           AND status = 'ACCEPTED'`,
           [userId, targetUserId]
         );
 
@@ -388,7 +388,7 @@ router.post('/copy', authenticateToken, async (req, res) => {
 
     // Find the shared workout post
     const postResult = await query(
-      `SELECT workout_share_data, user_id 
+      `SELECT workout_share_data, user_id, id
        FROM feed_posts 
        WHERE post_type = 'WORKOUT_SHARED' 
        AND workout_share_data->>'workoutId' = $1
@@ -415,28 +415,20 @@ router.post('/copy', authenticateToken, async (req, res) => {
       });
     }
 
-    // Return the shared workout data for the client to save locally
-    // The client will handle creating the workout in their local database
-    res.json({
-      success: true,
-      message: 'Workout copied successfully',
-      workoutName: sharedWorkoutData.workoutTitle,
-      exercises: sharedWorkoutData.exercises
-    });
-
     // Delete the shared workout post after successful copy
     await query(
       'DELETE FROM feed_posts WHERE id = $1',
       [post.id]
     );
 
-    console.log(`[WORKOUT_COPY] ✅ Workout copied successfully: ${newWorkoutId}`);
+    console.log(`[WORKOUT_COPY] ✅ Workout copied successfully: ${sharedWorkoutId}`);
 
+    // Return the shared workout data for the client to save locally
     res.json({
       success: true,
       message: 'Workout copied successfully',
-      newWorkoutId: newWorkoutId,
-      workoutName: sharedWorkoutData.workoutTitle
+      workoutName: sharedWorkoutData.workoutTitle,
+      exercises: sharedWorkoutData.exercises
     });
 
   } catch (error) {

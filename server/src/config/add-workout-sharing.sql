@@ -4,9 +4,19 @@ ALTER TABLE feed_posts
 ADD COLUMN IF NOT EXISTS workout_share_data JSONB;
 
 -- Update post_type check constraint to include WORKOUT_SHARED
-ALTER TABLE feed_posts 
-DROP CONSTRAINT IF EXISTS feed_posts_post_type_check;
+-- First drop the existing constraint if it exists
+DO $$ 
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'feed_posts_post_type_check' 
+        AND table_name = 'feed_posts'
+    ) THEN
+        ALTER TABLE feed_posts DROP CONSTRAINT feed_posts_post_type_check;
+    END IF;
+END $$;
 
+-- Add the new constraint with WORKOUT_SHARED included
 ALTER TABLE feed_posts 
 ADD CONSTRAINT feed_posts_post_type_check 
 CHECK (post_type IN ('WORKOUT_COMPLETED', 'ACHIEVEMENT', 'CHALLENGE', 'TEXT_POST', 'WORKOUT_SHARED'));
