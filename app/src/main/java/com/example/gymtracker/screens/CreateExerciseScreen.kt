@@ -7,6 +7,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -43,10 +47,14 @@ fun CreateExerciseScreen(navController: NavController) {
     var currentMuscle by remember { mutableStateOf("") }
     var currentPart by remember { mutableStateOf("") }
     var currentDifficulty by remember { mutableStateOf("Intermediate") }
+    var currentEquipment by remember { mutableStateOf("") }
+    var equipmentSearchQuery by remember { mutableStateOf("") }
     var selectedParts by remember { mutableStateOf<List<String>>(emptyList()) }
     var isMuscleGroupDropdownExpanded by remember { mutableStateOf(false) }
     var isPartDropdownExpanded by remember { mutableStateOf(false) }
     var isDifficultyDropdownExpanded by remember { mutableStateOf(false) }
+    var isEquipmentDropdownExpanded by remember { mutableStateOf(false) }
+    var existingEquipment by remember { mutableStateOf<List<String>>(emptyList()) }
     var gifPath by remember { mutableStateOf<String?>(null) }
     var showGifError by remember { mutableStateOf(false) }
     var gifErrorMessage by remember { mutableStateOf("") }
@@ -58,6 +66,25 @@ fun CreateExerciseScreen(navController: NavController) {
     val focusManager = LocalFocusManager.current
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused = interactionSource.collectIsFocusedAsState().value
+
+    // Load existing equipment from database
+    LaunchedEffect(Unit) {
+        try {
+            val allExercises = dao.getAllExercises()
+            val equipmentSet = mutableSetOf<String>()
+            allExercises.forEach { exercise ->
+                if (exercise.equipment.isNotBlank()) {
+                    // Split by comma and add each equipment type
+                    exercise.equipment.split(",").forEach { equipment ->
+                        equipmentSet.add(equipment.trim())
+                    }
+                }
+            }
+            existingEquipment = equipmentSet.toList().sorted()
+        } catch (e: Exception) {
+            Log.e("CreateExerciseScreen", "Error loading existing equipment: ${e.message}")
+        }
+    }
 
     // Launcher for picking GIF from gallery with better error handling
     val gifPickerLauncher = rememberLauncherForActivityResult(
@@ -357,6 +384,148 @@ fun CreateExerciseScreen(navController: NavController) {
                 }
             }
 
+            // Equipment selection section
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = MaterialTheme.shapes.medium,
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Equipment",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    // Equipment input field
+                    OutlinedTextField(
+                        value = currentEquipment,
+                        onValueChange = { 
+                            currentEquipment = it
+                            equipmentSearchQuery = it
+                        },
+                        label = { Text("Enter equipment or select from list") },
+                        modifier = Modifier.fillMaxWidth(),
+                        trailingIcon = {
+                            IconButton(
+                                onClick = { 
+                                    isEquipmentDropdownExpanded = !isEquipmentDropdownExpanded
+                                    equipmentSearchQuery = ""
+                                }
+                            ) {
+                                androidx.compose.animation.core.animateFloatAsState(
+                                    targetValue = if (isEquipmentDropdownExpanded) 180f else 0f,
+                                    label = "arrow_rotation"
+                                ).value.let { rotation ->
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = "Show equipment options",
+                                        modifier = Modifier.graphicsLayer(rotationZ = rotation)
+                                    )
+                                }
+                            }
+                        }
+                    )
+                    
+                    // Equipment dropdown
+                    if (isEquipmentDropdownExpanded) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            shape = MaterialTheme.shapes.medium,
+                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 200.dp)
+                                    .padding(8.dp)
+                            ) {
+                                // Filtered equipment list
+                                val filteredEquipment = if (equipmentSearchQuery.isBlank()) {
+                                    existingEquipment
+                                } else {
+                                    existingEquipment.filter { 
+                                        it.lowercase().contains(equipmentSearchQuery.lowercase()) 
+                                    }
+                                }
+                                
+                                LazyColumn(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    items(filteredEquipment) { equipment ->
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    currentEquipment = equipment
+                                                    isEquipmentDropdownExpanded = false
+                                                    equipmentSearchQuery = ""
+                                                },
+                                            shape = MaterialTheme.shapes.small,
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MaterialTheme.colorScheme.surface
+                                            )
+                                        ) {
+                                            Text(
+                                                text = equipment,
+                                                modifier = Modifier.padding(12.dp),
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        }
+                                    }
+                                    
+                                    // Add custom equipment option if search query doesn't match existing
+                                    if (equipmentSearchQuery.isNotBlank() && !filteredEquipment.contains(equipmentSearchQuery)) {
+                                        item {
+                                            Card(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        currentEquipment = equipmentSearchQuery
+                                                        isEquipmentDropdownExpanded = false
+                                                        equipmentSearchQuery = ""
+                                                    },
+                                                shape = MaterialTheme.shapes.small,
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                                                )
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(12.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Add,
+                                                        contentDescription = "Add new equipment",
+                                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        text = "Add \"$equipmentSearchQuery\"",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Muscle selection section (moved down)
             Row(
                 modifier = Modifier
@@ -523,6 +692,7 @@ fun CreateExerciseScreen(navController: NavController) {
                                 description = currentDescription,
                                 muscle = currentMuscle,
                                 parts = Converter().fromList(selectedParts),
+                                equipment = currentEquipment,
                                 difficulty = currentDifficulty,
                                 gifUrl = gifPath ?: "",
                                 useTime = useTime

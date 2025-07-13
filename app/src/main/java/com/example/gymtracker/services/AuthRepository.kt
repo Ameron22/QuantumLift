@@ -563,4 +563,56 @@ class AuthRepository(private val context: Context) {
             Result.failure(e)
         }
     }
+    
+    // Workout sharing methods
+    
+    suspend fun shareWorkout(request: ShareWorkoutRequest): Result<ShareWorkoutResponse> {
+        Log.d("AUTH_REPO", "Attempting to share workout: ${request.workoutId}")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.shareWorkout(request, "Bearer $token")
+            Log.d("AUTH_REPO", "Share workout response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { shareResponse ->
+                    Log.d("AUTH_REPO", "Workout shared successfully")
+                    Result.success(shareResponse)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Share workout failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to share workout: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Share workout exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun copyWorkout(request: CopyWorkoutRequest): Result<CopyWorkoutResponse> {
+        Log.d("AUTH_REPO", "Attempting to copy workout: ${request.sharedWorkoutId}")
+        return try {
+            val token = tokenManager.getStoredToken()
+            if (token == null) {
+                return Result.failure(Exception("No authentication token found"))
+            }
+            
+            val response = apiService.copyWorkout(request, "Bearer $token")
+            Log.d("AUTH_REPO", "Copy workout response code: ${response.code()}")
+            if (response.isSuccessful) {
+                response.body()?.let { copyResponse ->
+                    Log.d("AUTH_REPO", "Workout copied successfully")
+                    Result.success(copyResponse)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Log.e("AUTH_REPO", "Copy workout failed with code: ${response.code()}")
+                Result.failure(Exception("Failed to copy workout: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Copy workout exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
 } 

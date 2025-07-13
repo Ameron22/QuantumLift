@@ -20,6 +20,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "GymTracker"
+rootProject.name = "QuantumLift"
 include(":app")
  

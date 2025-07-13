@@ -1,6 +1,6 @@
-# GymTracker Server
+# QuantumLift Server
 
-Backend server for the GymTracker Android app, providing authentication and social features.
+Backend server for the QuantumLift Android app, providing authentication and social features.
 
 ## 🚀 Quick Start
 
@@ -25,9 +25,9 @@ Backend server for the GymTracker Android app, providing authentication and soci
 3. **Set up PostgreSQL database:**
    ```bash
    # Create database and user
-   sudo -u postgres createdb gymtracker
+   sudo -u postgres createdb quantumlift
    sudo -u postgres psql -c "CREATE USER gymuser WITH PASSWORD 'your_password';"
-   sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE gymtracker TO gymuser;"
+   sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE quantumlift TO gymuser;"
    ```
 
 4. **Initialize database schema:**
@@ -75,7 +75,7 @@ NODE_ENV=development
 # Database Configuration
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=gymtracker
+DB_NAME=quantumlift
 DB_USER=gymuser
 DB_PASSWORD=your_password
 

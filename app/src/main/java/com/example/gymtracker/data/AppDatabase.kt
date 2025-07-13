@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
         AchievementEntity::class,
         WorkoutExercise::class
     ],
-    version = 38,  // Increment version number to force database recreation
+    version = 39,  // Increment version number to force database recreation with equipment field
     exportSchema = false
 )
 @TypeConverters(Converter::class)

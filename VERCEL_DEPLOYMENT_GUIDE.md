@@ -50,7 +50,7 @@ git push origin main
 3. Click "New Project"
 
 ### 3.2 Import Repository
-1. Select your GymTracker repository
+1. Select your QuantumLift repository
 2. Vercel will auto-detect Node.js project
 3. Configure settings:
    - **Framework Preset**: Node.js
@@ -72,7 +72,7 @@ PORT=3000
 ### 3.4 Deploy
 1. Click "Deploy"
 2. Vercel will build and deploy automatically
-3. Get your HTTPS URL (e.g., `https://gymtracker-api.vercel.app`)
+3. Get your HTTPS URL (e.g., `https://quantumlift-api.vercel.app`)
 
 ## Step 4: Update Database Configuration
 
@@ -180,4 +180,4 @@ curl -X POST https://your-app-name.vercel.app/api/auth/register \
 - ✅ **Custom domains**: Add your own domain
 - ✅ **Analytics**: Performance monitoring
 
-Your GymTracker app will be live forever for free! 🌐 
+Your QuantumLift app will be live forever for free! 🌐 

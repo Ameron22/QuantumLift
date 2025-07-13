@@ -26,6 +26,10 @@ import com.example.gymtracker.data.UpdateWorkoutPrivacySettingsRequest
 import com.example.gymtracker.data.WorkoutCompletionRequest
 import com.example.gymtracker.data.WorkoutCompletionResponse
 import com.example.gymtracker.data.WorkoutPrivacySettings
+import com.example.gymtracker.data.ShareWorkoutRequest
+import com.example.gymtracker.data.ShareWorkoutResponse
+import com.example.gymtracker.data.CopyWorkoutRequest
+import com.example.gymtracker.data.CopyWorkoutResponse
 import retrofit2.http.DELETE
 import retrofit2.http.PUT
 import retrofit2.http.Query
@@ -270,4 +274,30 @@ interface ApiService {
         @Body request: UpdateWorkoutPrivacySettingsRequest,
         @Header("Authorization") authorization: String
     ): Response<PostActionResponse>
+    
+    // Workout sharing API endpoints
+    
+    /**
+     * Share workout with friends endpoint
+     * @param request Share workout request
+     * @param authorization Bearer token for authentication
+     * @return Response containing success/error message
+     */
+    @POST("api/workouts/share")
+    suspend fun shareWorkout(
+        @Body request: ShareWorkoutRequest,
+        @Header("Authorization") authorization: String
+    ): Response<ShareWorkoutResponse>
+    
+    /**
+     * Copy shared workout endpoint
+     * @param request Copy workout request
+     * @param authorization Bearer token for authentication
+     * @return Response containing success/error message
+     */
+    @POST("api/workouts/copy")
+    suspend fun copyWorkout(
+        @Body request: CopyWorkoutRequest,
+        @Header("Authorization") authorization: String
+    ): Response<CopyWorkoutResponse>
 } 

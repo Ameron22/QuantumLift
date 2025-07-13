@@ -1,6 +1,6 @@
-# Authentication System for GymTracker
+# Authentication System for QuantumLift
 
-This document explains how to set up and use the authentication system in the GymTracker Android app.
+This document explains how to set up and use the authentication system in the QuantumLift Android app.
 
 ## 🚀 Quick Start
 

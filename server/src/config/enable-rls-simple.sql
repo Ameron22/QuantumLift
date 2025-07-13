@@ -1,4 +1,4 @@
--- Simple RLS setup for GymTracker with custom authentication
+-- Simple RLS setup for QuantumLift with custom authentication
 -- This script should be run in your Supabase SQL editor
 
 -- Option 1: Enable RLS with permissive policies for custom auth

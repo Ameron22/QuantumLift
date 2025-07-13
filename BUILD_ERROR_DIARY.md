@@ -429,7 +429,7 @@ ExerciseScreen (Single Timer Source) → Updates → TimerService (Display Only)
 - Material Icons require proper imports: `Icons.Filled.Visibility` not `Icons.Default.Visibility`
 - Compose compiler version must match Kotlin version
 - Room entities with complex types need proper TypeConverters
-- App name is "QuantumLift" not "GymTracker"
+- App name is "QuantumLift" ✅
 - UI spacing issues often require conditional padding based on component visibility
 
 ## Current Status

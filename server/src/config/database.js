@@ -9,7 +9,7 @@ const pool = new Pool(
   } : {
     host: process.env.DB_HOST || 'localhost',
     port: process.env.DB_PORT || 5432,
-    database: process.env.DB_NAME || 'gymtracker',
+    database: process.env.DB_NAME || 'quantumlift',
     user: process.env.DB_USER || 'gymuser',
     password: process.env.DB_PASSWORD,
     // Connection pool settings
