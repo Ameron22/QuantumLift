@@ -1,4 +1,4 @@
--- GymTracker Database Schema (UUID version)
+-- QuantumLift Database Schema (UUID version)
 -- Enable pgcrypto for UUID generation
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 

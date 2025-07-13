@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -374,9 +375,11 @@ fun FeedTab(
                             FeedPostCard(
                                 post = post,
                                 onLike = { authViewModel.likePost(post.id) },
-                            onComment = { onSelectedPostForComments(post) },
+                                onComment = { onSelectedPostForComments(post) },
                                 onDelete = { authViewModel.deletePost(post.id) },
-                                isOwnPost = post.user.id == authState.user?.id
+                                isOwnPost = post.user.id == authState.user?.id,
+                                navController = navController,
+                                authViewModel = authViewModel
                             )
                         }
                     }
@@ -785,7 +788,9 @@ fun FeedPostCard(
     onLike: () -> Unit,
     onComment: () -> Unit,
     onDelete: () -> Unit,
-    isOwnPost: Boolean
+    isOwnPost: Boolean,
+    navController: NavController,
+    authViewModel: AuthViewModel
 ) {
     Card(
         modifier = Modifier
@@ -844,6 +849,7 @@ fun FeedPostCard(
                 Icon(
                     imageVector = when (post.postType) {
                         "WORKOUT_COMPLETED" -> Icons.Default.FitnessCenter
+                        "WORKOUT_SHARED" -> Icons.Default.Share
                         "ACHIEVEMENT" -> Icons.Default.Star
                         "CHALLENGE" -> Icons.Default.EmojiEvents
                         else -> Icons.Default.Chat
@@ -1055,6 +1061,43 @@ fun FeedPostCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+                
+                // Copy button for shared workouts
+                if (post.postType == "WORKOUT_SHARED") {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = {
+                                post.workoutShareData?.workoutId?.let { workoutId ->
+                                    authViewModel.copyWorkout(
+                                        sharedWorkoutId = workoutId,
+                                        onSuccess = { newWorkoutId, workoutName ->
+                                            // Navigate to the new workout
+                                            navController.navigate(Screen.WorkoutDetails.createRoute(newWorkoutId))
+                                        },
+                                        onError = { error ->
+                                            // Error will be shown in the AuthState
+                                        }
+                                    )
+                                }
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = "Copy Workout",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Text(
+                            text = "Copy",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
         }

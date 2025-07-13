@@ -17,6 +17,8 @@ import com.example.gymtracker.data.CreatePostRequest
 import com.example.gymtracker.data.PostActionResponse
 import com.example.gymtracker.data.PrivacySettings
 import com.example.gymtracker.data.UpdatePrivacySettingsRequest
+import com.example.gymtracker.data.CopyWorkoutRequest
+import com.example.gymtracker.data.CopyWorkoutResponse
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -533,6 +535,58 @@ class AuthViewModel(private val context: Context) : ViewModel() {
     fun getComments(postId: String): Result<List<FeedComment>> {
         return runBlocking {
             authRepository.getComments(postId)
+        }
+    }
+    
+    // Workout sharing methods
+    
+    fun copyWorkout(sharedWorkoutId: String, onSuccess: (Int, String) -> Unit, onError: (String) -> Unit) {
+        Log.d("AUTH_LOG", "Copying workout: $sharedWorkoutId")
+        viewModelScope.launch {
+            _authState.value = _authState.value.copy(
+                isLoading = true,
+                error = null,
+                success = null
+            )
+            
+            val request = CopyWorkoutRequest(
+                sharedWorkoutId = sharedWorkoutId,
+                targetUserId = _authState.value.user?.id ?: ""
+            )
+            
+            val result = authRepository.copyWorkout(request)
+            result.fold(
+                onSuccess = { response ->
+                    Log.d("AUTH_LOG", "Workout copied successfully")
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        success = response.message,
+                        error = null
+                    )
+                    
+                    if (response.success && response.newWorkoutId != null && response.workoutName != null) {
+                        onSuccess(response.newWorkoutId, response.workoutName)
+                    } else {
+                        onError(response.message ?: "Failed to copy workout")
+                    }
+                    
+                    // Remove the shared workout post from feed
+                    val updatedPosts = _authState.value.feedPosts.filter { post ->
+                        !(post.postType == "WORKOUT_SHARED" && 
+                          post.workoutShareData?.workoutId == sharedWorkoutId)
+                    }
+                    _authState.value = _authState.value.copy(feedPosts = updatedPosts)
+                },
+                onFailure = { exception ->
+                    Log.e("AUTH_LOG", "Copy workout failed: ${exception.message}", exception)
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        error = exception.message ?: "Failed to copy workout",
+                        success = null
+                    )
+                    onError(exception.message ?: "Failed to copy workout")
+                }
+            )
         }
     }
 } 

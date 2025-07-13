@@ -16,6 +16,8 @@ data class FeedPost(
     val achievementData: AchievementData?,
     @SerializedName("challengeData")
     val challengeData: ChallengeData?,
+    @SerializedName("workoutShareData")
+    val workoutShareData: WorkoutShareData?,
     @SerializedName("privacyLevel")
     val privacyLevel: String,
     @SerializedName("likesCount")

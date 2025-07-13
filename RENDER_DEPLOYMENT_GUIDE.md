@@ -30,10 +30,10 @@ git push origin main
 3. Click "New" → "Web Service"
 
 ### 2.2 Connect GitHub
-1. Select your GymTracker repository
+1. Select your QuantumLift repository
 2. Render will auto-detect Node.js project
 3. Configure settings:
-   - **Name**: `gymtracker-api`
+   - **Name**: `quantumlift-api`
    - **Environment**: `Node`
    - **Build Command**: `npm install`
    - **Start Command**: `npm start`
@@ -51,7 +51,7 @@ PORT=3000
 ### 2.4 Deploy
 1. Click "Create Web Service"
 2. Render will build and deploy automatically
-3. Get your HTTPS URL (e.g., `https://gymtracker-api.onrender.com`)
+3. Get your HTTPS URL (e.g., `https://quantumlift-api.onrender.com`)
 
 ## Step 3: Set Up PlanetScale Database
 

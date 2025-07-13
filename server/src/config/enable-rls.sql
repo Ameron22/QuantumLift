@@ -1,4 +1,4 @@
--- Enable Row Level Security (RLS) for GymTracker tables
+-- Enable Row Level Security (RLS) for QuantumLift tables
 -- This script should be run in your Supabase SQL editor
 
 -- Enable RLS on users table

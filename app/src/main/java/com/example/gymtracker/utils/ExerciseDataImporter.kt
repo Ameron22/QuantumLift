@@ -204,8 +204,9 @@ class ExerciseDataImporter(private val context: Context, private val dao: Exerci
                         name = csvExercise.title,
                         muscle = csvExercise.muscleGroup,
                         parts = Converter().fromList(csvExercise.muscles),
-                        gifUrl = csvExercise.gifUrl,
+                        equipment = csvExercise.equipment,
                         difficulty = convertedDifficulty,
+                        gifUrl = csvExercise.gifUrl,
                         useTime = csvExercise.useTime
                     )
                     

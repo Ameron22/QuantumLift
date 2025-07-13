@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -90,6 +91,9 @@ import androidx.compose.ui.unit.Constraints
 import com.example.gymtracker.data.WorkoutAchievementData
 import com.example.gymtracker.services.AuthRepository
 import com.example.gymtracker.data.WorkoutCompletionRequest
+import com.example.gymtracker.components.ShareWorkoutDialog
+import com.example.gymtracker.data.ShareWorkoutRequest
+import com.example.gymtracker.data.Friend
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -133,6 +137,12 @@ fun WorkoutDetailsScreen(
     var dragStartY by remember { mutableStateOf(0f) }
     var hasStartedDragging by remember { mutableStateOf(false) }
     var hasLoadedInitialData by remember { mutableStateOf(false) }
+    
+    // Sharing state
+    var showShareDialog by remember { mutableStateOf(false) }
+    var friends by remember { mutableStateOf<List<Friend>>(emptyList()) }
+    var isSharing by remember { mutableStateOf(false) }
+    val authRepository = remember { AuthRepository(context) }
     
     // Initialize reorderedExercises when exercisesList changes
     LaunchedEffect(exercisesList) {
@@ -321,12 +331,67 @@ fun WorkoutDetailsScreen(
             }
         }
     }
+    
+    // Sharing functions
+    fun loadFriends() {
+        coroutineScope.launch {
+            try {
+                val result = authRepository.getFriendsList()
+                if (result.isSuccess) {
+                    friends = result.getOrNull() ?: emptyList()
+                } else {
+                    Log.e("WorkoutDetailsScreen", "Failed to load friends: ${result.exceptionOrNull()?.message}")
+                }
+            } catch (e: Exception) {
+                Log.e("WorkoutDetailsScreen", "Error loading friends: ${e.message}")
+            }
+        }
+    }
+    
+    fun shareWorkout(targetUserIds: List<String>) {
+        if (targetUserIds.isEmpty()) return
+        
+        coroutineScope.launch {
+            try {
+                isSharing = true
+                val request = ShareWorkoutRequest(
+                    workoutId = workoutId,
+                    targetUserIds = targetUserIds
+                )
+                
+                val result = authRepository.shareWorkout(request)
+                if (result.isSuccess) {
+                    val response = result.getOrNull()
+                    if (response?.success == true) {
+                        Toast.makeText(context, "Workout shared successfully!", Toast.LENGTH_SHORT).show()
+                        showShareDialog = false
+                    } else {
+                        Toast.makeText(context, response?.message ?: "Failed to share workout", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Toast.makeText(context, "Failed to share workout: ${result.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Log.e("WorkoutDetailsScreen", "Error sharing workout: ${e.message}")
+                Toast.makeText(context, "Error sharing workout: ${e.message}", Toast.LENGTH_SHORT).show()
+            } finally {
+                isSharing = false
+            }
+        }
+    }
 
     // Add LaunchedEffect to sync workoutStarted with CurrentWorkoutViewModel state
     LaunchedEffect(currentWorkout) {
         workoutStarted = currentWorkout?.isActive ?: false
         startTimeWorkout = currentWorkout?.startTime ?: 0L
         Log.d("WorkoutDetailsScreen", "Synced workoutStarted state: $workoutStarted, currentWorkout isActive: ${currentWorkout?.isActive}, startTime: ${currentWorkout?.startTime}")
+    }
+    
+    // Load friends when share dialog is shown
+    LaunchedEffect(showShareDialog) {
+        if (showShareDialog && friends.isEmpty()) {
+            loadFriends()
+        }
     }
 
     // Fetch workout data and sync with ViewModel
@@ -1080,6 +1145,19 @@ fun WorkoutDetailsScreen(
                         ) {
                             Text("Exit", color = Color.White, style = MaterialTheme.typography.labelMedium)
                         }
+                    } else {
+                        // Share button - only show when workout is not active
+                        IconButton(
+                            onClick = { showShareDialog = true },
+                            modifier = Modifier.padding(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = "Share Workout",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -1451,6 +1529,17 @@ fun WorkoutDetailsScreen(
                 TextButton(onClick = { showExitDialog = false }) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+    
+    // Share Workout Dialog
+    if (showShareDialog) {
+        ShareWorkoutDialog(
+            friends = friends,
+            onDismiss = { showShareDialog = false },
+            onShare = { targetUserIds ->
+                shareWorkout(targetUserIds)
             }
         )
     }
