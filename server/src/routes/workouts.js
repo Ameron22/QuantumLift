@@ -404,7 +404,8 @@ router.post('/copy', authenticateToken, async (req, res) => {
     }
 
     const post = postResult.rows[0];
-    const sharedWorkoutData = JSON.parse(post.workout_share_data);
+    // PostgreSQL JSONB is already parsed as an object, no need to parse again
+    const sharedWorkoutData = post.workout_share_data;
 
     // Check if workout has expired (7 days)
     const expiresAt = new Date(sharedWorkoutData.expiresAt);
