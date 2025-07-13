@@ -311,9 +311,9 @@ router.post('/share', authenticateToken, async (req, res) => {
       try {
         // Verify the target user exists and is a friend
         const friendCheck = await query(
-          `SELECT 1 FROM friendships 
+          `SELECT 1 FROM friend_connections 
            WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)
-           AND status = 'accepted'`,
+           AND status = 'ACCEPTED'`,
           [userId, targetUserId]
         );
 
