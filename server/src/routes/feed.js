@@ -38,6 +38,7 @@ router.get('/posts', authenticateToken, async (req, res) => {
         fp.workout_data,
         fp.achievement_data,
         fp.challenge_data,
+        fp.workout_share_data,
         fp.privacy_level,
         fp.likes_count,
         fp.comments_count,
@@ -70,6 +71,7 @@ router.get('/posts', authenticateToken, async (req, res) => {
       workoutData: row.workout_data,
       achievementData: row.achievement_data,
       challengeData: row.challenge_data,
+      workoutShareData: row.workout_share_data,
       privacyLevel: row.privacy_level,
       likesCount: row.likes_count,
       commentsCount: row.comments_count,
@@ -123,17 +125,18 @@ router.post('/posts', authenticateToken, async (req, res) => {
       workoutData, 
       achievementData, 
       challengeData, 
+      workoutShareData,
       privacyLevel = 'FRIENDS' 
     } = req.body;
 
     console.log('[FEED_ROUTE] 🔍 Validating post type:', postType);
     // Validate post type
-    const validPostTypes = ['WORKOUT_COMPLETED', 'ACHIEVEMENT', 'CHALLENGE', 'TEXT_POST'];
+    const validPostTypes = ['WORKOUT_COMPLETED', 'ACHIEVEMENT', 'CHALLENGE', 'TEXT_POST', 'WORKOUT_SHARED'];
     if (!validPostTypes.includes(postType)) {
       console.log('[FEED_ROUTE] ❌ Invalid post type:', postType);
       return res.status(400).json({
         error: 'Invalid post type',
-        message: 'Post type must be one of: WORKOUT_COMPLETED, ACHIEVEMENT, CHALLENGE, TEXT_POST'
+        message: 'Post type must be one of: WORKOUT_COMPLETED, ACHIEVEMENT, CHALLENGE, TEXT_POST, WORKOUT_SHARED'
       });
     }
     console.log('[FEED_ROUTE] ✅ Post type validation passed');
@@ -162,14 +165,14 @@ router.post('/posts', authenticateToken, async (req, res) => {
     console.log('[FEED_ROUTE] ✅ Content validation passed');
 
     console.log('[FEED_ROUTE] 🗄️ Executing database insert with params:', {
-      userId, postType, content, workoutData, achievementData, challengeData, privacyLevel
+      userId, postType, content, workoutData, achievementData, challengeData, workoutShareData, privacyLevel
     });
     
     const result = await query(`
-      INSERT INTO feed_posts (user_id, post_type, content, workout_data, achievement_data, challenge_data, privacy_level)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO feed_posts (user_id, post_type, content, workout_data, achievement_data, challenge_data, workout_share_data, privacy_level)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING id, created_at
-    `, [userId, postType, content, workoutData, achievementData, challengeData, privacyLevel]);
+    `, [userId, postType, content, workoutData, achievementData, challengeData, workoutShareData, privacyLevel]);
 
     const post = result.rows[0];
     console.log('[FEED_ROUTE] ✅ Post created successfully with ID:', post.id);
