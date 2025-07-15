@@ -176,7 +176,7 @@ class InsertInitialData {
                     exerciseId = plankId.toInt(),
                     workoutId = coreCardioId.toInt(),
                     sets = 3,
-                    reps = 1060, // 1 minute = 1060 (60 seconds + 1000 to indicate time)
+                    reps = 60, // 1 minute = 60 seconds
                     weight = 0,
                     order = 0
                 ))
@@ -184,7 +184,7 @@ class InsertInitialData {
                     exerciseId = hiitId.toInt(),
                     workoutId = coreCardioId.toInt(),
                     sets = 1,
-                    reps = 1900, // 15 minutes = 1900 (900 seconds + 1000 to indicate time)
+                    reps = 900, // 15 minutes = 900 seconds
                     weight = 0,
                     order = 1
                 ))
@@ -347,7 +347,7 @@ class InsertInitialData {
                         sessionId = session5Id,
                         exerciseId = plankId.toLong(),
                         sets = 3,
-                        repsOrTime = listOf(1060, 1060, 1060),
+                        repsOrTime = listOf(60, 60, 60),
                         weight = listOf(0, 0, 0),
                         muscleGroup = "Core",
                         rpe = 8,
@@ -365,7 +365,7 @@ class InsertInitialData {
                         sessionId = session5Id,
                         exerciseId = hiitId.toLong(),
                         sets = 1,
-                        repsOrTime = listOf(1900),
+                        repsOrTime = listOf(900),
                         weight = listOf(0),
                         muscleGroup = "Cardio",
                         rpe = 9,

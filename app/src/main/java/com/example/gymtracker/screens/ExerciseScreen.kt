@@ -230,6 +230,10 @@ fun ExerciseScreen(
     var showRepsPicker by remember { mutableStateOf(false) }
     var showSaveNotification by remember { mutableStateOf(false) }
 
+    // Break timer state from ViewModel
+    val isBreakActive by viewModel.isBreakActive.collectAsState()
+    val breakStartTime by viewModel.breakStartTime.collectAsState()
+
     // Timer related states
     var activeSetIndex by remember { mutableStateOf<Int?>(null) }
     var remainingTime by remember { mutableIntStateOf(0) }
@@ -566,8 +570,8 @@ fun ExerciseScreen(
                         val workoutExercise = exerciseWithDetails?.workoutExercise
                         // If this was the pre-set break before the first set, start the first set now
                         if (activeSetIndex == 1 && completedSet == 0) {
-                            exerciseTime = if (workoutExercise?.reps ?: 0 > 50) {
-                                (workoutExercise?.reps ?: 0) - 1000
+                            exerciseTime = if (exerciseWithDetails?.exercise?.useTime == true) {
+                                workoutExercise?.reps ?: 0
                             } else {
                                 setTimeReps
                             }
@@ -582,8 +586,14 @@ fun ExerciseScreen(
                         if (activeSetIndex != null && activeSetIndex!! < (workoutExercise?.sets ?: 0)) {
                             // Start next set
                             activeSetIndex = activeSetIndex!! + 1
+                            // Recalculate exercise time for the new set based on current setTimeReps
+                            exerciseTime = if (exerciseWithDetails?.exercise?.useTime == true) {
+                                workoutExercise?.reps ?: 0
+                            } else {
+                                setTimeReps
+                            }
                             remainingTime = exerciseTime
-                            Log.d("ExerciseScreen", "Starting next set: ${activeSetIndex}")
+                            Log.d("ExerciseScreen", "Starting next set: ${activeSetIndex}, exerciseTime: $exerciseTime")
                             // Update floating timer immediately when switching to exercise mode
                             Log.d("ExerciseScreen", "Updating floating timer to EXERCISE mode: $remainingTime seconds")
                             updateTimerService(context, remainingTime, isBreakRunning, exerciseWithDetails?.exercise?.name ?: "Exercise", exerciseId, workoutSessionId, workoutId)
@@ -673,6 +683,31 @@ fun ExerciseScreen(
         // Don't reset completedSet to maintain progress
     }
 
+    fun formatDuration(durationInMillis: Long): String {
+        val durationInSeconds = durationInMillis / 1000
+        val hours = durationInSeconds / 3600
+        val minutes = (durationInSeconds % 3600) / 60
+        val seconds = durationInSeconds % 60
+        return when {
+            hours > 0 -> String.format("%02d:%02d:%02d", hours, minutes, seconds)
+            else -> String.format("%02d:%02d", minutes, seconds)
+        }
+    }
+
+
+    // Function to calculate break duration
+    fun calculateBreakDuration(): String {
+        val duration = if (isBreakActive && breakStartTime > 0) {
+            val currentDuration = System.currentTimeMillis() - breakStartTime
+            formatDuration(currentDuration)
+        } else {
+            "00:00"
+        }
+        Log.d("ExerciseScreen", "calculateBreakDuration - isBreakActive: $isBreakActive, breakStartTime: $breakStartTime, duration: $duration")
+        return duration
+    }
+
+
     // Handle back navigation
     BackHandler {
         if (isTimerRunning) {
@@ -724,6 +759,12 @@ fun ExerciseScreen(
         try {
             Log.d("ExerciseScreen", "startTimer called with setIndex: $setIndex")
             
+            // Stop break timer when starting an exercise
+            if (isBreakActive) {
+                Log.d("ExerciseScreen", "Stopping break timer - starting exercise")
+                viewModel.stopBreakTimer()
+            }
+            
             val workoutExercise = exerciseWithDetails?.workoutExercise ?: return
             
             // Activate workout if not already active
@@ -745,8 +786,8 @@ fun ExerciseScreen(
             }
             
             activeSetIndex = setIndex
-            exerciseTime = if (workoutExercise.reps > 50) {
-                workoutExercise.reps - 1000
+            exerciseTime = if (exerciseWithDetails?.exercise?.useTime == true) {
+                workoutExercise.reps
             } else {
                 setTimeReps
             }
@@ -805,6 +846,12 @@ fun ExerciseScreen(
     fun skipSet() {
         Log.d("ExerciseScreen", "skipSet called")
         if (isTimerRunning) {
+            // Stop break timer when skipping to start an exercise
+            if (isBreakActive) {
+                Log.d("ExerciseScreen", "Stopping break timer - skipping to exercise")
+                viewModel.stopBreakTimer()
+            }
+            
             val workoutExercise = exerciseWithDetails?.workoutExercise
             if (isBreakRunning) {
                 // Check if this is the pre-set break (before first set)
@@ -812,8 +859,8 @@ fun ExerciseScreen(
                     Log.d("ExerciseScreen", "Skipping pre-set break, starting first set")
                     isBreakRunning = false
                     // Calculate exercise time for first set
-                    exerciseTime = if (workoutExercise?.reps ?: 0 > 50) {
-                        (workoutExercise?.reps ?: 0) - 1000
+                    exerciseTime = if (exerciseWithDetails?.exercise?.useTime == true) {
+                        workoutExercise?.reps ?: 0
                     } else {
                         setTimeReps
                     }
@@ -828,6 +875,12 @@ fun ExerciseScreen(
                     isBreakRunning = false
                     activeSetIndex = activeSetIndex?.let { it + 1 }
                     if (activeSetIndex != null && activeSetIndex!! <= (workoutExercise?.sets ?: 0)) {
+                        // Recalculate exercise time for the new set based on current setTimeReps
+                        exerciseTime = if (exerciseWithDetails?.exercise?.useTime == true) {
+                            workoutExercise?.reps ?: 0
+                        } else {
+                            setTimeReps
+                        }
                         remainingTime = exerciseTime
                         // Update service with new exercise time
                         updateTimerService(context, remainingTime, isBreakRunning, exerciseWithDetails?.exercise?.name ?: "Exercise", exerciseId, workoutSessionId, workoutId)
@@ -1094,6 +1147,50 @@ fun ExerciseScreen(
             // Display exercise details
             exerciseWithDetails?.let { ex ->
                 val we = ex.workoutExercise
+                
+                // Break timer display
+                if (isBreakActive) {
+                    var breakText by remember { mutableStateOf("00:00") }
+                    
+                    LaunchedEffect(isBreakActive, breakStartTime) {
+                        Log.d("ExerciseScreen", "Break timer LaunchedEffect triggered - isBreakActive: $isBreakActive, breakStartTime: $breakStartTime")
+                        while (isBreakActive && breakStartTime > 0) {
+                            breakText = calculateBreakDuration()
+                            Log.d("ExerciseScreen", "Break timer running - breakText: $breakText")
+                            delay(1000) // Update every second
+                        }
+                    }
+                    
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Break Time",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Text(
+                                text = breakText,
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    }
+                }
+                
                 // Display GIF and exercise details in a row
                 Row(
                     modifier = Modifier
@@ -1122,6 +1219,9 @@ fun ExerciseScreen(
                         DetailItem("Muscle Group", ex.exercise.muscle)
                         DetailItem("Muscles", Converter().fromString(ex.exercise.parts).joinToString(", "))
                         DetailItem("Difficulty", ex.exercise.difficulty)
+                        if (ex.exercise.equipment.isNotBlank()) {
+                            DetailItem("Equipment", ex.exercise.equipment)
+                        }
                     }
                 }
 
@@ -1272,7 +1372,7 @@ fun ExerciseScreen(
                             }
 
 
-                            if (we.reps < 50) {
+                            if (!ex.exercise.useTime) {
                                 if (showRepsPicker && editingSetIndex == set) {
                                     AlertDialog(
                                         onDismissRequest = {
@@ -1332,7 +1432,7 @@ fun ExerciseScreen(
                                 )
                             } else {
 
-                                val timeInSeconds = setReps[set]?.minus(1000) ?: 60
+                                val timeInSeconds = setReps[set] ?: 60
                                 var minutes by remember { mutableIntStateOf(timeInSeconds / 60) }
                                 var seconds by remember { mutableIntStateOf(timeInSeconds % 60) }
 
@@ -1362,7 +1462,7 @@ fun ExerciseScreen(
                                                     onValueChange = { newMinutes ->
                                                         minutes = newMinutes
                                                         for (i in set..we.sets) {
-                                                            setReps[i] = (newMinutes * 60 + seconds) + 1000
+                                                            setReps[i] = newMinutes * 60 + seconds
                                                         }
                                                     },
                                                     unit = ""
@@ -1373,7 +1473,7 @@ fun ExerciseScreen(
                                                     onValueChange = { newSeconds ->
                                                         seconds = newSeconds
                                                         for (i in set..we.sets) {
-                                                            setReps[i] = (minutes * 60 + newSeconds) + 1000
+                                                            setReps[i] = minutes * 60 + newSeconds
                                                         }
                                                     },
                                                     unit = ""
@@ -1501,7 +1601,7 @@ fun ExerciseScreen(
                         horizontalArrangement = Arrangement.Start
                     ) {
                         // Set time selector - only show for exercises with reps
-                        if (we.reps < 50) {
+                        if (!ex.exercise.useTime) {
                             Card(
                                 modifier = Modifier
                                     .width(120.dp)
@@ -1819,27 +1919,37 @@ fun ExerciseScreen(
                         )
                     },
                     text = {
-                        Row(
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                        ) {
-                            NumberPicker(
-                                value = setTimeReps / 60,
-                                range = 0..5,
-                                onValueChange = { newMinutes ->
-                                    setTimeReps = (newMinutes * 60) + (setTimeReps % 60)
-                                },
-                                unit = "m"
-                            )
-                            NumberPicker(
-                                value = setTimeReps % 60,
-                                range = 0..59,
-                                onValueChange = { newSeconds ->
-                                    setTimeReps = (setTimeReps / 60 * 60) + newSeconds
-                                },
-                                unit = "s"
-                            )
+                        Column {
+                            if (isTimerRunning && !isBreakRunning) {
+                                Text(
+                                    "Note: Changes will take effect for the next set",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                            }
+                            Row(
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                            ) {
+                                NumberPicker(
+                                    value = setTimeReps / 60,
+                                    range = 0..5,
+                                    onValueChange = { newMinutes ->
+                                        setTimeReps = (newMinutes * 60) + (setTimeReps % 60)
+                                    },
+                                    unit = "m"
+                                )
+                                NumberPicker(
+                                    value = setTimeReps % 60,
+                                    range = 0..59,
+                                    onValueChange = { newSeconds ->
+                                        setTimeReps = (setTimeReps / 60 * 60) + newSeconds
+                                    },
+                                    unit = "s"
+                                )
+                            }
                         }
                     },
                     confirmButton = {
@@ -1863,11 +1973,20 @@ fun ExerciseScreen(
                         )
                     },
                     text = {
-                        Row(
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                        ) {
+                        Column {
+                            if (isTimerRunning && isBreakRunning) {
+                                Text(
+                                    "Note: Changes will take effect for the next break",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                            }
+                            Row(
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                            ) {
                             NumberPicker(
                                 value = breakTime / 60,
                                 range = 0..5,
@@ -1885,7 +2004,8 @@ fun ExerciseScreen(
                                 unit = "s"
                             )
                         }
-                    },
+                    }
+                },
                     confirmButton = {
                         TextButton(onClick = { showBreakTimePicker = false }) {
                             Text("OK")

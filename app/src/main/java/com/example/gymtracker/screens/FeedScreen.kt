@@ -37,6 +37,7 @@ import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.data.EntityWorkout
 import com.example.gymtracker.data.WorkoutExercise
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.util.*
@@ -1085,39 +1086,47 @@ fun FeedPostCard(
                                             Log.d("FeedScreen", "Exercises count: ${exercises.size}")
                                             Log.d("FeedScreen", "Exercises: $exercises")
                                             
-                                            scope.launch {
+                                            // Use withContext to handle database operations properly
+                                            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
                                                 try {
-                                                    val db = AppDatabase.getDatabase(context)
-                                                    val dao = db.exerciseDao()
-                                                    
-                                                    // Create new workout
-                                                    val newWorkout = EntityWorkout(
-                                                        id = 0, // Auto-generated
-                                                        name = workoutName
-                                                    )
-                                                    
-                                                    val workoutId = dao.insertWorkout(newWorkout).toInt()
-                                                    Log.d("FeedScreen", "Created new workout with ID: $workoutId")
-                                                    
-                                                    // Add exercises to workout
-                                                    exercises.forEachIndexed { index, exercise ->
-                                                        Log.d("FeedScreen", "Adding exercise $index: ${exercise.name} (ID: ${exercise.id})")
-                                                        val workoutExercise = WorkoutExercise(
+                                                    withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                        val db = AppDatabase.getDatabase(context)
+                                                        val dao = db.exerciseDao()
+                                                        
+                                                        // Create new workout
+                                                        val newWorkout = EntityWorkout(
                                                             id = 0, // Auto-generated
-                                                            workoutId = workoutId,
-                                                            exerciseId = exercise.id,
-                                                            sets = 1, // Required by data class, but not used for template
-                                                            reps = 10, // Required by data class, but not used for template
-                                                            weight = 0, // Required by data class, but not used for template
-                                                            order = index
+                                                            name = workoutName
                                                         )
-                                                        val exerciseId = dao.insertWorkoutExercise(workoutExercise)
-                                                        Log.d("FeedScreen", "Inserted workout exercise with ID: $exerciseId")
+                                                        
+                                                        val workoutId = dao.insertWorkout(newWorkout).toInt()
+                                                        Log.d("FeedScreen", "Created new workout with ID: $workoutId")
+                                                        
+                                                        // Add exercises to workout
+                                                        exercises.forEachIndexed { index, exercise ->
+                                                            Log.d("FeedScreen", "Adding exercise $index: ${exercise.name} (ID: ${exercise.id})")
+                                                            Log.d("FeedScreen", "Exercise useTime: ${exercise.useTime}")
+                                                            
+                                                            val workoutExercise = WorkoutExercise(
+                                                                id = 0, // Auto-generated
+                                                                workoutId = workoutId,
+                                                                exerciseId = exercise.id,
+                                                                sets = 3, // Default: 3 sets
+                                                                reps = if (exercise.useTime) 120 else 12, // 2 minutes (120 seconds) for time-based, 12 reps for rep-based
+                                                                weight = 5, // Default: 5 kg
+                                                                order = index
+                                                            )
+                                                            val exerciseId = dao.insertWorkoutExercise(workoutExercise)
+                                                            Log.d("FeedScreen", "Inserted workout exercise with ID: $exerciseId")
+                                                        }
+                                                        
+                                                        Log.d("FeedScreen", "Successfully copied workout with ${exercises.size} exercises")
+                                                        
+                                                        // Navigate on main thread
+                                                        withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                            navController.navigate(Screen.Routes.workoutDetails(workoutId))
+                                                        }
                                                     }
-                                                    
-                                                    Log.d("FeedScreen", "Successfully copied workout with ${exercises.size} exercises")
-                                                    // Navigate to the new workout
-                                                    navController.navigate(Screen.WorkoutDetails.createRoute(workoutId))
                                                 } catch (e: Exception) {
                                                     Log.e("FeedScreen", "Error saving copied workout: ${e.message}", e)
                                                 }
