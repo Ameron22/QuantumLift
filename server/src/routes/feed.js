@@ -55,8 +55,8 @@ router.get('/posts', authenticateToken, async (req, res) => {
         OR (
           fp.privacy_level = 'FRIENDS' 
           AND (
-            EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = $1 AND fc.friend_id = fp.user_id)
-            OR EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = fp.user_id AND fc.friend_id = $1)
+            EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = $1 AND fc.friend_id = fp.user_id AND fc.status = 'ACCEPTED')
+            OR EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = fp.user_id AND fc.friend_id = $1 AND fc.status = 'ACCEPTED')
           )
         )
       )

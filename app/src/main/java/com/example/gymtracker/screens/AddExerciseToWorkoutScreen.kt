@@ -114,6 +114,7 @@ fun AddExerciseToWorkoutScreen(
     var selectedMuscleGroups by remember { mutableStateOf<List<String>>(emptyList()) }
     var selectedDifficulties by remember { mutableStateOf<List<String>>(emptyList()) }
     var selectedMuscleParts by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selectedEquipment by remember { mutableStateOf<List<String>>(emptyList()) }
 
     // Create a single interaction source for all cards
     val interactionSource = remember { MutableInteractionSource() }
@@ -136,9 +137,16 @@ fun AddExerciseToWorkoutScreen(
         }
     }
 
-    // Get unique muscle groups and difficulties
+    // Get unique muscle groups, difficulties, and equipment
     val muscleGroups = exercises.map { it.muscle }.distinct().sorted()
     val difficulties = listOf("Beginner", "Intermediate", "Advanced")
+    val equipmentList = exercises.flatMap { exercise ->
+        if (exercise.equipment.isNotBlank()) {
+            exercise.equipment.split(",").map { it.trim() }
+        } else {
+            listOf("None")
+        }
+    }.distinct().sorted()
     
     // Filter muscle parts based on selected muscle groups
     val availableMuscleParts = if (selectedMuscleGroups.isEmpty()) {
@@ -173,7 +181,15 @@ fun AddExerciseToWorkoutScreen(
         val matchesMuscle = selectedMuscleGroups.isEmpty() || selectedMuscleGroups.contains(exercise.muscle)
         val matchesDifficulty = selectedDifficulties.isEmpty() || selectedDifficulties.contains(exercise.difficulty)
         val matchesMusclePart = selectedMuscleParts.isEmpty() || Converter().fromString(exercise.parts).any { it in selectedMuscleParts }
-        matchesSearch && matchesMuscle && matchesDifficulty && matchesMusclePart
+        val matchesEquipment = selectedEquipment.isEmpty() || run {
+            val exerciseEquipment = if (exercise.equipment.isNotBlank()) {
+                exercise.equipment.split(",").map { it.trim() }
+            } else {
+                listOf("None")
+            }
+            selectedEquipment.any { selected -> exerciseEquipment.contains(selected) }
+        }
+        matchesSearch && matchesMuscle && matchesDifficulty && matchesMusclePart && matchesEquipment
     }
 
     // Add LaunchedEffect to check returnTo state
@@ -237,7 +253,7 @@ fun AddExerciseToWorkoutScreen(
                 ) { }
                 
                 // Active filters in top bar
-                if (selectedMuscleGroups.isNotEmpty() || selectedDifficulties.isNotEmpty() || selectedMuscleParts.isNotEmpty()) {
+                if (selectedMuscleGroups.isNotEmpty() || selectedDifficulties.isNotEmpty() || selectedMuscleParts.isNotEmpty() || selectedEquipment.isNotEmpty()) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -267,6 +283,13 @@ fun AddExerciseToWorkoutScreen(
                                     selected = true,
                                     onClick = { selectedMuscleParts = selectedMuscleParts.filter { it != musclePart } },
                                     label = { Text(musclePart) }
+                                )
+                            }
+                            items(selectedEquipment) { equipment ->
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { selectedEquipment = selectedEquipment.filter { it != equipment } },
+                                    label = { Text(equipment) }
                                 )
                             }
                         }
@@ -365,6 +388,13 @@ fun AddExerciseToWorkoutScreen(
                                         text = exercise.difficulty,
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                    )
+                                }
+                                if (exercise.equipment.isNotBlank()) {
+                                    Text(
+                                        text = "Equipment: ${exercise.equipment}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                     )
                                 }
                             }
@@ -478,7 +508,7 @@ fun AddExerciseToWorkoutScreen(
                                             exerciseId = selectedExercise!!.id,
                                             workoutId = workoutId,
                                             sets = sets,
-                                            reps = if (selectedExercise!!.useTime) (minutes * 60 + seconds) + 1000 else reps,
+                                            reps = if (selectedExercise!!.useTime) (minutes * 60 + seconds) else reps,
                                             weight = if (selectedExercise!!.useTime) 0 else weight,
                                             order = 0 // order will be set when saving workout
                                         )
@@ -607,6 +637,30 @@ fun AddExerciseToWorkoutScreen(
                             }
                         },
                         onAllClick = { selectedDifficulties = emptyList() },
+                        modifier = Modifier.fillMaxWidth(),
+                        spacing = 8
+                    )
+
+                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    // Equipment Filter
+                    Text(
+                        text = "Equipment",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    
+                    FilterChipFlowRow(
+                        items = equipmentList,
+                        selectedItems = selectedEquipment,
+                        onItemClick = { equipment ->
+                            if (selectedEquipment.contains(equipment)) {
+                                selectedEquipment = selectedEquipment.filter { it != equipment }
+                            } else {
+                                selectedEquipment = selectedEquipment + equipment
+                            }
+                        },
+                        onAllClick = { selectedEquipment = emptyList() },
                         modifier = Modifier.fillMaxWidth(),
                         spacing = 8
                     )

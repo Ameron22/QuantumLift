@@ -29,6 +29,13 @@ class WorkoutDetailsViewModel : ViewModel() {
     private val _completedExercises = MutableStateFlow<Set<Int>>(emptySet())
     val completedExercises: StateFlow<Set<Int>> = _completedExercises.asStateFlow()
 
+    // Break timer state
+    private val _breakStartTime = MutableStateFlow(0L)
+    val breakStartTime: StateFlow<Long> = _breakStartTime.asStateFlow()
+
+    private val _isBreakActive = MutableStateFlow(false)
+    val isBreakActive: StateFlow<Boolean> = _isBreakActive.asStateFlow()
+
     // Exercise management for existing workouts
     private val _exercisesList = MutableStateFlow<List<WorkoutExerciseWithDetails>>(emptyList())
     val exercisesList: StateFlow<List<WorkoutExerciseWithDetails>> = _exercisesList.asStateFlow()
@@ -169,5 +176,42 @@ class WorkoutDetailsViewModel : ViewModel() {
     fun updateExercisesOrder(exercises: List<WorkoutExerciseWithDetails>) {
         Log.d("WorkoutDetailsViewModel", "Updating exercises order with ${exercises.size} exercises")
         _exercisesList.value = exercises
+    }
+
+    // Break timer functions
+    fun startBreakTimer() {
+        Log.d("WorkoutDetailsViewModel", "startBreakTimer called")
+        _breakStartTime.value = System.currentTimeMillis()
+        _isBreakActive.value = true
+        Log.d("WorkoutDetailsViewModel", "Break timer started at: ${_breakStartTime.value}, isBreakActive: ${_isBreakActive.value}")
+    }
+
+    fun stopBreakTimer() {
+        Log.d("WorkoutDetailsViewModel", "stopBreakTimer called")
+        _isBreakActive.value = false
+        _breakStartTime.value = 0L
+        Log.d("WorkoutDetailsViewModel", "Break timer stopped - isBreakActive: ${_isBreakActive.value}")
+    }
+
+    fun calculateBreakDuration(): String {
+        val duration = if (_isBreakActive.value && _breakStartTime.value > 0) {
+            val currentDuration = System.currentTimeMillis() - _breakStartTime.value
+            formatDuration(currentDuration)
+        } else {
+            "00:00"
+        }
+        Log.d("WorkoutDetailsViewModel", "calculateBreakDuration - isBreakActive: ${_isBreakActive.value}, breakStartTime: ${_breakStartTime.value}, duration: $duration")
+        return duration
+    }
+
+    private fun formatDuration(durationInMillis: Long): String {
+        val durationInSeconds = durationInMillis / 1000
+        val hours = durationInSeconds / 3600
+        val minutes = (durationInSeconds % 3600) / 60
+        val seconds = durationInSeconds % 60
+        return when {
+            hours > 0 -> String.format("%02d:%02d:%02d", hours, minutes, seconds)
+            else -> String.format("%02d:%02d", minutes, seconds)
+        }
     }
 } 

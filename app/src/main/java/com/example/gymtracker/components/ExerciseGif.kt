@@ -26,7 +26,8 @@ import android.util.Log
 @Composable
 fun ExerciseGif(
     gifPath: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    cornerRadius: Float = 24f
 ) {
     val context = LocalContext.current
     val gifUri = GifUtils.getGifUri(context, gifPath)
@@ -40,28 +41,36 @@ fun ExerciseGif(
     }
 
     if (gifUri != null && !hasError) {
-        AndroidView(
-            factory = { context ->
-                GifImageView(context).apply {
+        Card(
+            modifier = modifier,
+            shape = RoundedCornerShape(cornerRadius.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = androidx.compose.ui.graphics.Color.White
+            )
+        ) {
+            AndroidView(
+                factory = { context ->
+                    GifImageView(context).apply {
+                        try {
+                            setImageURI(gifUri)
+                            Log.d("ExerciseGif", "Successfully set GIF URI: $gifUri")
+                        } catch (e: Exception) {
+                            Log.e("ExerciseGif", "Error loading GIF: ${e.message}", e)
+                            hasError = true
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+                update = { view ->
                     try {
-                        setImageURI(gifUri)
-                        Log.d("ExerciseGif", "Successfully set GIF URI: $gifUri")
+                        view.setImageURI(gifUri)
                     } catch (e: Exception) {
-                        Log.e("ExerciseGif", "Error loading GIF: ${e.message}", e)
+                        Log.e("ExerciseGif", "Error updating GIF: ${e.message}", e)
                         hasError = true
                     }
                 }
-            },
-            modifier = modifier,
-            update = { view ->
-                try {
-                    view.setImageURI(gifUri)
-                } catch (e: Exception) {
-                    Log.e("ExerciseGif", "Error updating GIF: ${e.message}", e)
-                    hasError = true
-                }
-            }
-        )
+            )
+        }
     } else {
         // Fallback: show error message
         Box(
