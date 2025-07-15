@@ -1204,8 +1204,8 @@ fun ExerciseScreen(
                             gifPath = ex.exercise.gifUrl,
                             modifier = Modifier
                                 .weight(1f)
-                                .height(200.dp)
-                                .clip(RoundedCornerShape(8.dp))
+                                .height(200.dp),
+                            cornerRadius = 24f
                         )
                     }
 
@@ -1433,8 +1433,8 @@ fun ExerciseScreen(
                             } else {
 
                                 val timeInSeconds = setReps[set] ?: 60
-                                var minutes by remember { mutableIntStateOf(timeInSeconds / 60) }
-                                var seconds by remember { mutableIntStateOf(timeInSeconds % 60) }
+                                val currentMinutes = timeInSeconds / 60
+                                val currentSeconds = timeInSeconds % 60
 
                                 if (showRepsPicker && editingSetIndex == set) {
                                     AlertDialog(
@@ -1457,23 +1457,21 @@ fun ExerciseScreen(
                                                     .width(260.dp)
                                             ) {
                                                 NumberPicker(
-                                                    value = minutes,
+                                                    value = currentMinutes,
                                                     range = 0..59,
                                                     onValueChange = { newMinutes ->
-                                                        minutes = newMinutes
                                                         for (i in set..we.sets) {
-                                                            setReps[i] = newMinutes * 60 + seconds
+                                                            setReps[i] = newMinutes * 60 + currentSeconds
                                                         }
                                                     },
                                                     unit = ""
                                                 )
                                                 NumberPicker(
-                                                    value = seconds,
+                                                    value = currentSeconds,
                                                     range = 0..59,
                                                     onValueChange = { newSeconds ->
-                                                        seconds = newSeconds
                                                         for (i in set..we.sets) {
-                                                            setReps[i] = minutes * 60 + newSeconds
+                                                            setReps[i] = currentMinutes * 60 + newSeconds
                                                         }
                                                     },
                                                     unit = ""
@@ -1495,8 +1493,8 @@ fun ExerciseScreen(
                                 Text(
                                         text = String.format(
                                             "%02d:%02d",
-                                            minutes,
-                                            seconds
+                                            currentMinutes,
+                                            currentSeconds
                                         ), // Display as mm:ss
                                         color = MaterialTheme.colorScheme.onSurface,
                                     style = MaterialTheme.typography.bodyLarge,

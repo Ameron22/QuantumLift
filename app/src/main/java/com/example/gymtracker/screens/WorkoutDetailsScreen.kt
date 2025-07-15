@@ -89,6 +89,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.CircularProgressIndicator
+import com.example.gymtracker.data.SessionEntityExercise
+import kotlinx.coroutines.flow.first
 
 
 fun isCustomExercise(exerciseId: Int): Boolean = exerciseId > 750
@@ -126,6 +128,10 @@ fun WorkoutDetailsScreen(
     var showRenameDialog by remember { mutableStateOf(false) }
     var newWorkoutName by remember { mutableStateOf("") }
     var showExitDialog by remember { mutableStateOf(false) }
+    
+    // State for completed exercise info dialog
+    var showCompletedExerciseDialog by remember { mutableStateOf(false) }
+    var completedExerciseInfo by remember { mutableStateOf<WorkoutExerciseWithDetails?>(null) }
 
     // Drag state variables
     var isDragging by remember { mutableStateOf(false) }
@@ -174,8 +180,8 @@ fun WorkoutDetailsScreen(
                     }
                 }
 
-                // If countdown completed, deselect everything
-                if (deselectionTimeLeft <= 0 && isWaitingForContinuation && !isDragging) {
+                // If countdown completed AND finger is still down, deselect everything
+                if (deselectionTimeLeft <= 0 && isWaitingForContinuation && !isDragging && isFingerDown) {
                     Log.d("DRAG_DEBUG", "Deselection countdown completed - deselecting card")
                     isFingerDown = false
                     autoScrollDirection = 0
@@ -774,6 +780,67 @@ fun WorkoutDetailsScreen(
             }
     }
 
+    // Function to check if exercise is completed and show dialog
+    fun checkCompletedExerciseAndShowDialog(exerciseWithDetails: WorkoutExerciseWithDetails) {
+        val isActiveWorkout = currentWorkout?.workoutId == workoutId && currentWorkout?.isActive == true
+        val isCompleted = if (isActiveWorkout) {
+            generalViewModel.isExerciseCompleted(exerciseWithDetails.entityExercise.id)
+        } else {
+            false
+        }
+        
+        if (isCompleted) {
+            completedExerciseInfo = exerciseWithDetails
+            showCompletedExerciseDialog = true
+        } else {
+            // Navigate to exercise screen normally
+            // Use the current workout's session ID to ensure consistency
+            val sessionId = currentWorkout?.sessionId ?: System.currentTimeMillis()
+            Log.d("WorkoutDetailsScreen", "Navigating to exercise with consistent session ID: $sessionId")
+            navController.navigate(
+                Screen.Exercise.createRoute(
+                    exerciseWithDetails.entityExercise.id,
+                    sessionId,
+                    workoutId
+                )
+            )
+        }
+    }
+
+    // Function to fetch completed exercise session data
+    suspend fun getCompletedExerciseSessionData(exerciseId: Int): SessionEntityExercise? {
+        return try {
+            Log.d("WorkoutDetailsScreen", "Fetching session data for exercise $exerciseId")
+            
+            withContext(Dispatchers.IO) {
+                // Use the foreign key relationship: find exercise session by exerciseId and sessionId
+                val currentSessionId = currentWorkout?.sessionId
+                if (currentSessionId != null) {
+                    Log.d("WorkoutDetailsScreen", "Using consistent session ID: $currentSessionId")
+                    val exerciseSessions = dao.getExerciseSessionsForSession(currentSessionId)
+                    Log.d("WorkoutDetailsScreen", "Found ${exerciseSessions.size} exercise sessions for session $currentSessionId")
+                    
+                    val matchingSession = exerciseSessions.find { it.exerciseId.toInt() == exerciseId }
+                    if (matchingSession != null) {
+                        Log.d("WorkoutDetailsScreen", "Found matching session: exerciseId=${matchingSession.exerciseId}, completedSets=${matchingSession.completedSets}, weights=${matchingSession.weight}, reps=${matchingSession.repsOrTime}")
+                        return@withContext matchingSession
+                    } else {
+                        Log.d("WorkoutDetailsScreen", "No matching session found for exercise $exerciseId in session $currentSessionId")
+                    }
+                } else {
+                    Log.d("WorkoutDetailsScreen", "No current session ID available")
+                }
+                
+                Log.d("WorkoutDetailsScreen", "No matching session found for exercise $exerciseId")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("WorkoutDetailsScreen", "Error fetching exercise session data: ${e.message}")
+            e.printStackTrace()
+            null
+        }
+    }
+
     // Function to rename the workout
     fun renameWorkout() {
         if (newWorkoutName.isNotEmpty()) {
@@ -1349,6 +1416,14 @@ fun WorkoutDetailsScreen(
                                         isFingerDown = false
                                         autoScrollDirection = 0
                                         autoScrollAmount = 0f
+                                        
+                                        // Cancel countdown if it's running
+                                        if (isWaitingForContinuation) {
+                                            countdownJob?.cancel()
+                                            countdownJob = null
+                                            Log.d("DRAG_DEBUG", "Finger lifted - cancelling countdown")
+                                        }
+                                        
                                         isWaitingForContinuation = false
                                         deselectionTimeLeft = 0f
                                         draggedItem = null
@@ -1380,17 +1455,8 @@ fun WorkoutDetailsScreen(
                             Toast.LENGTH_SHORT
                         ).show()
                     } else {
-                        // Navigate to exercise screen - workout session will be started when timer starts
-                        val sessionId =
-                            workoutSession?.sessionId?.toLong() ?: currentWorkout?.sessionId
-                            ?: System.currentTimeMillis()
-                        navController.navigate(
-                            Screen.Exercise.createRoute(
-                                exercise.id,
-                                sessionId,
-                                workoutId
-                            )
-                        )
+                        // Check if exercise is completed and show dialog if needed
+                        checkCompletedExerciseAndShowDialog(WorkoutExerciseWithDetails(workoutExercise, exercise))
                     }
                 },
             shape = RoundedCornerShape(12.dp),
@@ -1772,7 +1838,7 @@ fun WorkoutDetailsScreen(
                     .padding(paddingValues)
                     .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
                     .pointerInput(Unit) {
-                        // Global pointer input to detect movement during countdown
+                        // Global pointer input to detect movement and finger lift during countdown
                         awaitPointerEventScope {
                             while (true) {
                                 val event = awaitPointerEvent()
@@ -1782,6 +1848,27 @@ fun WorkoutDetailsScreen(
                                         // This ensures countdown cancellation works even after drag gesture ends
                                         if (isWaitingForContinuation || autoScrollDirection != 0) {
                                             recordMovement()
+                                        }
+                                    }
+                                    androidx.compose.ui.input.pointer.PointerEventType.Release -> {
+                                        // Global finger lift detection - cancel countdown if running
+                                        if (isFingerDown && isWaitingForContinuation) {
+                                            Log.d("DRAG_DEBUG", "Global finger lift detected - cancelling countdown")
+                                            countdownJob?.cancel()
+                                            countdownJob = null
+                                            isWaitingForContinuation = false
+                                            deselectionTimeLeft = 0f
+                                        }
+                                        if (isFingerDown) {
+                                            isFingerDown = false
+                                            autoScrollDirection = 0
+                                            autoScrollAmount = 0f
+                                            draggedItem = null
+                                            draggedItemIndex = -1
+                                            dragOffset = Offset.Zero
+                                            hasStartedDragging = false
+                                            dragDirection = 0
+                                            Log.d("DRAG_DEBUG", "Global finger lift - resetting all drag state")
                                         }
                                     }
                                 }
@@ -2097,6 +2184,217 @@ fun WorkoutDetailsScreen(
         }
     }
 
+    // Completed Exercise Info Dialog
+    if (showCompletedExerciseDialog && completedExerciseInfo != null) {
+        var exerciseSessionData by remember { mutableStateOf<SessionEntityExercise?>(null) }
+        var isLoadingSessionData by remember { mutableStateOf(true) }
+        
+        // Fetch exercise session data when dialog opens
+        LaunchedEffect(completedExerciseInfo) {
+            completedExerciseInfo?.let { exerciseInfo ->
+                Log.d("WorkoutDetailsScreen", "Dialog opened for exercise: ${exerciseInfo.entityExercise.id} (${exerciseInfo.entityExercise.name})")
+                Log.d("WorkoutDetailsScreen", "Current workout state: $currentWorkout")
+                exerciseSessionData = getCompletedExerciseSessionData(exerciseInfo.entityExercise.id)
+                Log.d("WorkoutDetailsScreen", "Session data result: $exerciseSessionData")
+                isLoadingSessionData = false
+            }
+        }
+        
+        AlertDialog(
+            onDismissRequest = { 
+                showCompletedExerciseDialog = false 
+                completedExerciseInfo = null
+            },
+            title = { 
+                Text(
+                    "Exercise Completed",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.primary
+                ) 
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Exercise name
+                    Text(
+                        text = completedExerciseInfo!!.entityExercise.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    
+                    // Exercise details
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Exercise Details",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            
+                            Text(
+                                text = "Muscle Group: ${completedExerciseInfo!!.entityExercise.muscle}",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            
+                            Text(
+                                text = "Difficulty: ${completedExerciseInfo!!.entityExercise.difficulty}",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            
+                            Text(
+                                text = "Sets: ${completedExerciseInfo!!.workoutExercise.sets}",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            
+                            if (completedExerciseInfo!!.entityExercise.useTime) {
+                                val timeInSeconds = completedExerciseInfo!!.workoutExercise.reps
+                                val minutes = timeInSeconds / 60
+                                val seconds = timeInSeconds % 60
+                                Text(
+                                    text = "Time: ${minutes}:${String.format("%02d", seconds)}",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            } else {
+                                Text(
+                                    text = "Reps: ${completedExerciseInfo!!.workoutExercise.reps}",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                
+                                if (completedExerciseInfo!!.workoutExercise.weight > 0) {
+                                    Text(
+                                        text = "Weight: ${completedExerciseInfo!!.workoutExercise.weight}kg",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Individual Set Performance
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Set Performance",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            
+                            if (isLoadingSessionData) {
+                                // Loading indicator
+                                Box(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            } else if (exerciseSessionData != null) {
+                                // Display each set
+                                exerciseSessionData!!.let { sessionData ->
+                                    val completedSets = sessionData.completedSets
+                                    val weights = sessionData.weight
+                                    val repsOrTimes = sessionData.repsOrTime
+                                    
+                                    if (completedSets > 0) {
+                                        for (setIndex in 0 until completedSets) {
+                                            val setNumber = setIndex + 1
+                                            val weight = weights.getOrNull(setIndex) ?: 0
+                                            val repsOrTime = repsOrTimes.getOrNull(setIndex) ?: 0
+                                            
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "Set $setNumber",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                
+                                                if (completedExerciseInfo!!.entityExercise.useTime) {
+                                                    // Time-based exercise
+                                                    val minutes = repsOrTime / 60
+                                                    val seconds = repsOrTime % 60
+                                                    Text(
+                                                        text = "Time: ${minutes}:${String.format("%02d", seconds)}",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                } else {
+                                                    // Rep-based exercise
+                                                    Text(
+                                                        text = "Weight: ${weight}kg × Reps: $repsOrTime",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        Text(
+                                            text = "No set data available",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        )
+                                    }
+                                }
+                            } else {
+                                Text(
+                                    text = "Failed to load set data",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { 
+                        showCompletedExerciseDialog = false 
+                        completedExerciseInfo = null
+                    }
+                ) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { 
+                        showCompletedExerciseDialog = false 
+                        completedExerciseInfo = null
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
     // Rename Workout Dialog
     if (showRenameDialog) {
         AlertDialog(
@@ -2138,16 +2436,20 @@ fun WorkoutDetailsScreen(
         AlertDialog(
             onDismissRequest = { showExitDialog = false },
             title = { Text("Exit Workout") },
-            text = { Text("Are you sure you want to exit and delete this workout session? This cannot be undone.") },
+            text = { Text("Are you sure you want to exit and delete this workout session? All completed exercises will also be deleted. This cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = {
                     showExitDialog = false
                     coroutineScope.launch {
-                        // Remove session from DB
+                        // Remove session and all exercise sessions from DB
                         val sessionId = currentWorkout?.sessionId
                         if (sessionId != null && sessionId > 0) {
                             withContext(Dispatchers.IO) {
+                                // Delete exercise sessions first (due to foreign key constraints)
+                                dao.deleteExerciseSessionsBySessionId(sessionId)
+                                // Then delete the workout session
                                 dao.deleteWorkoutSessionById(sessionId)
+                                Log.d("WorkoutDetailsScreen", "Deleted workout session $sessionId and all associated exercise sessions")
                             }
                         }
                         // Reset view models

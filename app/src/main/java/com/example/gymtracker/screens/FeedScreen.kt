@@ -894,11 +894,18 @@ fun FeedPostCard(
             // Workout data if available
             post.workoutData?.let { workoutData ->
                 Spacer(modifier = Modifier.height(12.dp))
+                
+                // State for expandable workout details
+                var isWorkoutDetailsExpanded by remember { mutableStateOf(false) }
+                
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer
                     ),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.clickable {
+                        isWorkoutDetailsExpanded = !isWorkoutDetailsExpanded
+                    }
                 ) {
                     Column(
                         modifier = Modifier
@@ -906,7 +913,8 @@ fun FeedPostCard(
                             .padding(12.dp)
                     ) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(
                                 imageVector = Icons.Default.FitnessCenter,
@@ -919,7 +927,15 @@ fun FeedPostCard(
                                 text = "Workout Details",
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f)
+                            )
+                            // Expand/collapse icon
+                            Icon(
+                                imageVector = if (isWorkoutDetailsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (isWorkoutDetailsExpanded) "Collapse" else "Expand",
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                         
@@ -935,20 +951,32 @@ fun FeedPostCard(
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Column {
-                                    exercises.take(5).forEach { exercise ->
-                                        Text(
-                                            text = "• $exercise",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                                        )
-                                    }
-                                    if (exercises.size > 5) {
-                                        Text(
-                                            text = "• ... and ${exercises.size - 5} more",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                                        )
+                                    if (isWorkoutDetailsExpanded) {
+                                        // Show all exercises when expanded
+                                        exercises.forEach { exercise ->
+                                            Text(
+                                                text = "• $exercise",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                            )
+                                        }
+                                    } else {
+                                        // Show only first 5 exercises when collapsed
+                                        exercises.take(5).forEach { exercise ->
+                                            Text(
+                                                text = "• $exercise",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                            )
+                                        }
+                                        if (exercises.size > 5) {
+                                            Text(
+                                                text = "• ... and ${exercises.size - 5} more (tap to see all)",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                            )
+                                        }
                                     }
                                 }
                             }
