@@ -1311,6 +1311,19 @@ fun CommentsDialog(
     var isLoadingComments by remember { mutableStateOf(true) }
     val authState by authViewModel.authState.collectAsState()
     
+    // Add LazyListState for controlling scroll position
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    
+    // Function to scroll to the last comment
+    fun scrollToLastComment() {
+        if (comments.isNotEmpty()) {
+            coroutineScope.launch {
+                listState.animateScrollToItem(comments.size - 1)
+            }
+        }
+    }
+    
     // Load comments when dialog opens
     LaunchedEffect(post.id) {
         isLoadingComments = true
@@ -1319,6 +1332,8 @@ fun CommentsDialog(
             onSuccess = { commentsList ->
                 comments = commentsList
                 isLoadingComments = false
+                // Scroll to last comment after loading
+                scrollToLastComment()
             },
             onFailure = { exception ->
                 // Handle error
@@ -1334,9 +1349,10 @@ fun CommentsDialog(
         },
         text = {
             Column {
-                // Comments list
+                // Comments list - much bigger height
                 LazyColumn(
-                    modifier = Modifier.height(200.dp),
+                    modifier = Modifier.height(400.dp), // Increased from 200.dp to 400.dp
+                    state = listState,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     if (isLoadingComments) {
@@ -1405,6 +1421,9 @@ fun CommentsDialog(
                                 // Send to server
                                 onAddComment(commentText)
                                 commentText = ""
+                                
+                                // Scroll to the new comment
+                                scrollToLastComment()
                             }
                         },
                         enabled = commentText.isNotBlank()
