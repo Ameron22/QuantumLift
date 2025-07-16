@@ -312,8 +312,8 @@ router.get('/posts/:postId/comments', authenticateToken, async (req, res) => {
         OR (
           privacy_level = 'FRIENDS' 
           AND (
-            EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = $2 AND fc.friend_id = user_id)
-            OR EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = user_id AND fc.friend_id = $2)
+            EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = $2 AND fc.friend_id = user_id AND fc.status = 'ACCEPTED')
+            OR EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = user_id AND fc.friend_id = $2 AND fc.status = 'ACCEPTED')
           )
         )
       )
@@ -396,8 +396,8 @@ router.post('/posts/:postId/comments', authenticateToken, async (req, res) => {
         OR (
           privacy_level = 'FRIENDS' 
           AND (
-            EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = $2 AND fc.friend_id = user_id)
-            OR EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = user_id AND fc.friend_id = $2)
+            EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = $2 AND fc.friend_id = user_id AND fc.status = 'ACCEPTED')
+            OR EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = user_id AND fc.friend_id = $2 AND fc.status = 'ACCEPTED')
           )
         )
       )
