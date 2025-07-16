@@ -153,6 +153,21 @@ fun FeedScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
                     },
+                    actions = {
+                        // Temporary debug button
+                        IconButton(
+                            onClick = {
+                                // Debug the specific post that's causing issues
+                                authViewModel.debugPost("c58d6683-26f7-497d-8298-3305e44d6499")
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.BugReport,
+                                contentDescription = "Debug Post",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
                     )

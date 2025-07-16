@@ -305,15 +305,15 @@ router.get('/posts/:postId/comments', authenticateToken, async (req, res) => {
 
     // Check if post exists and user can see it
     const postCheck = await query(`
-      SELECT id FROM feed_posts 
-      WHERE id = $1 AND (
-        privacy_level = 'PUBLIC' 
-        OR user_id = $2
+      SELECT id FROM feed_posts fp
+      WHERE fp.id = $1 AND (
+        fp.privacy_level = 'PUBLIC' 
+        OR fp.user_id = $2
         OR (
-          privacy_level = 'FRIENDS' 
+          fp.privacy_level = 'FRIENDS' 
           AND (
-            EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = $2 AND fc.friend_id = user_id AND fc.status = 'ACCEPTED')
-            OR EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = user_id AND fc.friend_id = $2 AND fc.status = 'ACCEPTED')
+            EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = $2 AND fc.friend_id = fp.user_id AND fc.status = 'ACCEPTED')
+            OR EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = fp.user_id AND fc.friend_id = $2 AND fc.status = 'ACCEPTED')
           )
         )
       )
@@ -389,15 +389,15 @@ router.post('/posts/:postId/comments', authenticateToken, async (req, res) => {
 
     // Check if post exists and user can see it
     const postCheck = await query(`
-      SELECT id FROM feed_posts 
-      WHERE id = $1 AND (
-        privacy_level = 'PUBLIC' 
-        OR user_id = $2
+      SELECT id FROM feed_posts fp
+      WHERE fp.id = $1 AND (
+        fp.privacy_level = 'PUBLIC' 
+        OR fp.user_id = $2
         OR (
-          privacy_level = 'FRIENDS' 
+          fp.privacy_level = 'FRIENDS' 
           AND (
-            EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = $2 AND fc.friend_id = user_id AND fc.status = 'ACCEPTED')
-            OR EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = user_id AND fc.friend_id = $2 AND fc.status = 'ACCEPTED')
+            EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = $2 AND fc.friend_id = fp.user_id AND fc.status = 'ACCEPTED')
+            OR EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = fp.user_id AND fc.friend_id = $2 AND fc.status = 'ACCEPTED')
           )
         )
       )
@@ -563,15 +563,15 @@ router.get('/debug/:postId', authenticateToken, async (req, res) => {
 
     // Check if user can see the post
     const canSeePost = await query(`
-      SELECT 1 FROM feed_posts 
-      WHERE id = $1 AND (
-        privacy_level = 'PUBLIC' 
-        OR user_id = $2
+      SELECT 1 FROM feed_posts fp
+      WHERE fp.id = $1 AND (
+        fp.privacy_level = 'PUBLIC' 
+        OR fp.user_id = $2
         OR (
-          privacy_level = 'FRIENDS' 
+          fp.privacy_level = 'FRIENDS' 
           AND (
-            EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = $2 AND fc.friend_id = user_id AND fc.status = 'ACCEPTED')
-            OR EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = user_id AND fc.friend_id = $2 AND fc.status = 'ACCEPTED')
+            EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = $2 AND fc.friend_id = fp.user_id AND fc.status = 'ACCEPTED')
+            OR EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = fp.user_id AND fc.friend_id = $2 AND fc.status = 'ACCEPTED')
           )
         )
       )

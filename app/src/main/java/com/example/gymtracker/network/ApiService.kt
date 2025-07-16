@@ -300,4 +300,16 @@ interface ApiService {
         @Body request: CopyWorkoutRequest,
         @Header("Authorization") authorization: String
     ): Response<CopyWorkoutResponse>
+    
+    /**
+     * Debug endpoint to check friend connections and post visibility
+     * @param postId The post ID to debug
+     * @param authorization Bearer token for authentication
+     * @return Response containing debug information
+     */
+    @GET("api/feed/debug/{postId}")
+    suspend fun debugPost(
+        @retrofit2.http.Path("postId") postId: String,
+        @Header("Authorization") authorization: String
+    ): Response<Map<String, Any>>
 } 
