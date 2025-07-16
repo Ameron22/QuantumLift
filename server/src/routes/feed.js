@@ -223,23 +223,72 @@ router.post('/posts/:postId/like', authenticateToken, async (req, res) => {
     }
     const { postId } = req.params;
 
+    console.log('[LIKE_POST] 🔍 Checking post visibility for:', { postId, userId });
+
+    // First, let's check if the post exists at all
+    const postExists = await query(`
+      SELECT id, user_id, privacy_level FROM feed_posts WHERE id = $1
+    `, [postId]);
+
+    if (postExists.rows.length === 0) {
+      console.log('[LIKE_POST] ❌ Post does not exist:', postId);
+      return res.status(404).json({
+        error: 'Post not found',
+        message: 'Post does not exist'
+      });
+    }
+
+    const post = postExists.rows[0];
+    console.log('[LIKE_POST] 📄 Post found:', {
+      id: post.id,
+      user_id: post.user_id,
+      privacy_level: post.privacy_level,
+      is_own_post: post.user_id === userId
+    });
+
     // Check if post exists and user can see it
     const postCheck = await query(`
-      SELECT id, user_id, privacy_level FROM feed_posts 
-      WHERE id = $1 AND (
-        privacy_level = 'PUBLIC' 
-        OR user_id = $2
+      SELECT id, user_id, privacy_level FROM feed_posts fp
+      WHERE fp.id = $1 AND (
+        fp.privacy_level = 'PUBLIC' 
+        OR fp.user_id = $2
         OR (
-          privacy_level = 'FRIENDS' 
+          fp.privacy_level = 'FRIENDS' 
           AND (
-            EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = $2 AND fc.friend_id = user_id AND fc.status = 'ACCEPTED')
-            OR EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = user_id AND fc.friend_id = $2 AND fc.status = 'ACCEPTED')
+            EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = $2 AND fc.friend_id = fp.user_id AND fc.status = 'ACCEPTED')
+            OR EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = fp.user_id AND fc.friend_id = $2 AND fc.status = 'ACCEPTED')
           )
         )
       )
     `, [postId, userId]);
 
+    console.log('[LIKE_POST] 🔍 Post visibility check result:', {
+      rows_found: postCheck.rows.length,
+      post_id: postId,
+      user_id: userId
+    });
+
     if (postCheck.rows.length === 0) {
+      console.log('[LIKE_POST] ❌ User does not have permission to view post');
+      
+      // Let's check friend connections for debugging
+      if (post.privacy_level === 'FRIENDS') {
+        const friendCheck = await query(`
+          SELECT 
+            fc1.user_id as fc1_user_id, fc1.friend_id as fc1_friend_id, fc1.status as fc1_status,
+            fc2.user_id as fc2_user_id, fc2.friend_id as fc2_friend_id, fc2.status as fc2_status
+          FROM friend_connections fc1
+          FULL OUTER JOIN friend_connections fc2 ON fc1.user_id = fc2.friend_id AND fc1.friend_id = fc2.user_id
+          WHERE (fc1.user_id = $1 AND fc1.friend_id = $2) OR (fc1.user_id = $2 AND fc1.friend_id = $1)
+        `, [userId, post.user_id]);
+        
+        console.log('[LIKE_POST] 🔍 Friend connection check:', {
+          friend_connections: friendCheck.rows,
+          post_owner: post.user_id,
+          current_user: userId
+        });
+      }
+      
       return res.status(404).json({
         error: 'Post not found',
         message: 'Post does not exist or you do not have permission to view it'
@@ -528,81 +577,7 @@ router.put('/privacy-settings', authenticateToken, async (req, res) => {
   }
 });
 
-// Debug route to check friend connections and post visibility
-router.get('/debug/:postId', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.user.userId;
-    const { postId } = req.params;
 
-    console.log('[DEBUG] 🔍 Debugging post access:', { userId, postId });
-
-    // Get the post details
-    const postResult = await query(
-      'SELECT id, user_id, privacy_level FROM feed_posts WHERE id = $1',
-      [postId]
-    );
-
-    if (postResult.rows.length === 0) {
-      return res.json({
-        error: 'Post not found',
-        postExists: false
-      });
-    }
-
-    const post = postResult.rows[0];
-    console.log('[DEBUG] 📝 Post details:', post);
-
-    // Check friend connections
-    const friendConnections = await query(
-      `SELECT user_id, friend_id, status FROM friend_connections 
-       WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)`,
-      [userId, post.user_id]
-    );
-
-    console.log('[DEBUG] 👥 Friend connections:', friendConnections.rows);
-
-    // Check if user can see the post
-    const canSeePost = await query(`
-      SELECT 1 FROM feed_posts fp
-      WHERE fp.id = $1 AND (
-        fp.privacy_level = 'PUBLIC' 
-        OR fp.user_id = $2
-        OR (
-          fp.privacy_level = 'FRIENDS' 
-          AND (
-            EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = $2 AND fc.friend_id = fp.user_id AND fc.status = 'ACCEPTED')
-            OR EXISTS(SELECT 1 FROM friend_connections fc WHERE fc.user_id = fp.user_id AND fc.friend_id = $2 AND fc.status = 'ACCEPTED')
-          )
-        )
-      )
-    `, [postId, userId]);
-
-    res.json({
-      postExists: true,
-      post: {
-        id: post.id,
-        userId: post.user_id,
-        privacyLevel: post.privacy_level
-      },
-      friendConnections: friendConnections.rows,
-      canSeePost: canSeePost.rows.length > 0,
-      debugInfo: {
-        currentUserId: userId,
-        postUserId: post.user_id,
-        isOwnPost: userId === post.user_id,
-        isPublic: post.privacy_level === 'PUBLIC',
-        isFriends: post.privacy_level === 'FRIENDS'
-      }
-    });
-
-  } catch (error) {
-    console.error('[DEBUG] ❌ Debug error:', error);
-    res.status(500).json({ 
-      error: 'Debug failed',
-      message: 'Internal server error' 
-    });
-  }
-});
 
 // Delete a post (only by the post author)
 router.delete('/posts/:postId', authenticateToken, async (req, res) => {

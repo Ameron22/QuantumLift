@@ -600,25 +600,5 @@ class AuthViewModel(private val context: Context) : ViewModel() {
         }
     }
     
-    fun debugPost(postId: String) {
-        Log.d("AUTH_LOG", "Debugging post: $postId")
-        viewModelScope.launch {
-            val result = authRepository.debugPost(postId)
-            result.fold(
-                onSuccess = { debugInfo ->
-                    Log.d("AUTH_LOG", "Debug info received: $debugInfo")
-                    // Show debug info in error field temporarily
-                    _authState.value = _authState.value.copy(
-                        error = "DEBUG: $debugInfo"
-                    )
-                },
-                onFailure = { exception ->
-                    Log.e("AUTH_LOG", "Debug post failed: ${exception.message}", exception)
-                    _authState.value = _authState.value.copy(
-                        error = "Debug failed: ${exception.message}"
-                    )
-                }
-            )
-        }
-    }
+
 } 

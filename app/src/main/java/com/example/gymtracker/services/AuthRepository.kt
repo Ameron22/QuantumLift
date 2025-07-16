@@ -616,28 +616,5 @@ class AuthRepository(private val context: Context) {
         }
     }
     
-    suspend fun debugPost(postId: String): Result<Map<String, Any>> {
-        Log.d("AUTH_REPO", "Attempting to debug post: $postId")
-        return try {
-            val token = tokenManager.getStoredToken()
-            if (token == null) {
-                return Result.failure(Exception("No authentication token found"))
-            }
-            
-            val response = apiService.debugPost(postId, "Bearer $token")
-            Log.d("AUTH_REPO", "Debug post response code: ${response.code()}")
-            if (response.isSuccessful) {
-                response.body()?.let { debugInfo ->
-                    Log.d("AUTH_REPO", "Debug info retrieved successfully")
-                    Result.success(debugInfo)
-                } ?: Result.failure(Exception("Empty response body"))
-            } else {
-                Log.e("AUTH_REPO", "Debug post failed with code: ${response.code()}")
-                Result.failure(Exception("Failed to debug post: ${response.code()}"))
-            }
-        } catch (e: Exception) {
-            Log.e("AUTH_REPO", "Debug post exception: ${e.message}", e)
-            Result.failure(e)
-        }
-    }
+
 } 
