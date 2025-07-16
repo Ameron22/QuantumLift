@@ -61,8 +61,8 @@ router.post('/invite', authenticateToken, async (req, res) => {
 
     // Check if already friends
     const existingConnection = await query(
-      'SELECT id FROM friend_connections WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)',
-      [senderId, recipient.id]
+      'SELECT id FROM friend_connections WHERE ((user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)) AND status = $3',
+      [senderId, recipient.id, 'ACCEPTED']
     );
 
     if (existingConnection.rows.length > 0) {
@@ -268,8 +268,8 @@ router.post('/accept/:invitationCode', authenticateToken, async (req, res) => {
 
     // Create friend connection
     await query(
-      'INSERT INTO friend_connections (user_id, friend_id) VALUES ($1, $2)',
-      [invitation.sender_id, userId]
+      'INSERT INTO friend_connections (user_id, friend_id, status) VALUES ($1, $2, $3)',
+      [invitation.sender_id, userId, 'ACCEPTED']
     );
 
     // Update invitation status
