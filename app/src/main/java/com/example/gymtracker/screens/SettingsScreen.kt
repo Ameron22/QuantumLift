@@ -68,6 +68,7 @@ fun SettingsScreen(
     var soundEnabled by remember { mutableStateOf(settings?.soundEnabled ?: true) }
     var vibrationEnabled by remember { mutableStateOf(settings?.vibrationEnabled ?: true) }
     var soundVolume by remember { mutableStateOf(settings?.soundVolume ?: 0.5f) }
+    var loadFromHistory by remember { mutableStateOf(settings?.loadFromHistory ?: true) }
     var showSavedMessage by remember { mutableStateOf(false) }
     
     // Track original values to detect changes
@@ -77,6 +78,7 @@ fun SettingsScreen(
     var originalSoundEnabled by remember { mutableStateOf(settings?.soundEnabled ?: true) }
     var originalVibrationEnabled by remember { mutableStateOf(settings?.vibrationEnabled ?: true) }
     var originalSoundVolume by remember { mutableStateOf(settings?.soundVolume ?: 0.5f) }
+    var originalLoadFromHistory by remember { mutableStateOf(settings?.loadFromHistory ?: true) }
     
     // State for number picker dialogs
     var showWorkTimePicker by remember { mutableStateOf(false) }
@@ -111,12 +113,14 @@ fun SettingsScreen(
             soundEnabled = it.soundEnabled
             vibrationEnabled = it.vibrationEnabled
             soundVolume = it.soundVolume
+            loadFromHistory = it.loadFromHistory
             originalWorkTime = it.defaultWorkTime
             originalBreakTime = it.defaultBreakTime
             originalPreSetBreakTime = it.defaultPreSetBreakTime ?: 10
             originalSoundEnabled = it.soundEnabled
             originalVibrationEnabled = it.vibrationEnabled
             originalSoundVolume = it.soundVolume
+            originalLoadFromHistory = it.loadFromHistory
         }
     }
     
@@ -155,7 +159,8 @@ fun SettingsScreen(
                preSetBreakTime != originalPreSetBreakTime ||
                soundEnabled != originalSoundEnabled || 
                vibrationEnabled != originalVibrationEnabled ||
-               soundVolume != originalSoundVolume
+               soundVolume != originalSoundVolume ||
+               loadFromHistory != originalLoadFromHistory
     }
 
     // Function to save settings
@@ -166,6 +171,7 @@ fun SettingsScreen(
         prefs.updateSoundEnabled(soundEnabled)
         prefs.updateVibrationEnabled(vibrationEnabled)
         prefs.updateSoundVolume(soundVolume)
+        prefs.updateLoadFromHistory(loadFromHistory)
         
         // Update original values after saving
         originalWorkTime = workTime
@@ -174,12 +180,13 @@ fun SettingsScreen(
         originalSoundEnabled = soundEnabled
         originalVibrationEnabled = vibrationEnabled
         originalSoundVolume = soundVolume
+        originalLoadFromHistory = loadFromHistory
         
         showSavedMessage = true
         
         // Verify the save by reading back the values
         val currentSettings = prefs.getCurrentSettings()
-        Log.d("SettingsScreen", "Settings after save - Work: ${currentSettings.defaultWorkTime}, Break: ${currentSettings.defaultBreakTime}, Sound: ${currentSettings.soundEnabled}, Vibration: ${currentSettings.vibrationEnabled}, Volume: ${currentSettings.soundVolume}")
+        Log.d("SettingsScreen", "Settings after save - Work: ${currentSettings.defaultWorkTime}, Break: ${currentSettings.defaultBreakTime}, Sound: ${currentSettings.soundEnabled}, Vibration: ${currentSettings.vibrationEnabled}, Volume: ${currentSettings.soundVolume}, LoadFromHistory: ${currentSettings.loadFromHistory}")
     }
     
     // Function to save privacy settings
@@ -896,6 +903,48 @@ fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Exercise Settings
+                    Text(
+                        "Exercise Settings:",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    // Load from History Setting
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = "Load from History",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "Automatically load previous sets, reps, and weights when starting an exercise",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Checkbox(
+                            checked = loadFromHistory,
+                            onCheckedChange = { loadFromHistory = it },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MaterialTheme.colorScheme.primary,
+                                uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
                     }
                     
                     Spacer(modifier = Modifier.height(16.dp))

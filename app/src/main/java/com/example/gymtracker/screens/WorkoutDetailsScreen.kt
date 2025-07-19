@@ -90,9 +90,12 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.CircularProgressIndicator
 import com.example.gymtracker.data.SessionEntityExercise
+import com.example.gymtracker.data.XPSystem
 import kotlinx.coroutines.flow.first
 import androidx.compose.ui.platform.LocalConfiguration
 
@@ -170,6 +173,10 @@ fun WorkoutDetailsScreen(
     // Other state variables
     var reorderedExercises by remember { mutableStateOf<List<WorkoutExerciseWithDetails>>(emptyList()) }
     var hasLoadedInitialData by remember { mutableStateOf(false) }
+    
+    // XP notification state
+    var showXPNotification by remember { mutableStateOf(false) }
+    var xpEarned by remember { mutableIntStateOf(0) }
 
     // Function to start countdown
     fun startCountdown() {
@@ -1098,6 +1105,30 @@ fun WorkoutDetailsScreen(
                         val totalWeight = completedExercises.sumOf { exercise ->
                             exercise.weight.filterNotNull().sum()
                         }.toDouble()
+
+                        // Award XP for workout completion
+                        val xpSystem = XPSystem(db.userXPDao())
+                        val durationMinutes = (duration / (1000 * 60)).toInt()
+                        val workoutXP = xpSystem.calculateWorkoutXP(durationMinutes, totalSets)
+                        
+                        // Use a default user ID for now (you can integrate with auth system later)
+                        val userId = "current_user"
+                        val xpAwarded = xpSystem.awardXP(
+                            userId = userId,
+                            xpAmount = workoutXP,
+                            source = "workout_completion",
+                            sourceId = sessionWorkout.sessionId.toString(),
+                            description = "Completed workout: ${sessionWorkout.workoutName} (${durationMinutes}min, ${totalSets} sets)"
+                        )
+                        
+                        if (xpAwarded) {
+                            Log.d("WorkoutDetailsScreen", "Awarded $workoutXP XP for workout completion")
+                            // Store XP earned for display
+                            showXPNotification = true
+                            xpEarned = workoutXP
+                        } else {
+                            Log.e("WorkoutDetailsScreen", "Failed to award XP for workout completion")
+                        }
 
                         val request = WorkoutCompletionRequest(
                             workoutId = currentWorkoutState.workoutId,
@@ -2897,6 +2928,55 @@ fun WorkoutDetailsScreen(
             onShare = { targetUserIds ->
                 shareWorkout(targetUserIds)
             }
+        )
+    }
+    
+    // XP Notification Dialog
+    if (showXPNotification) {
+        AlertDialog(
+            onDismissRequest = { showXPNotification = false },
+            title = {
+                Text(
+                    text = "Workout Completed!",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            },
+            text = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Great job! You've earned:",
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "+$xpEarned XP",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Keep up the great work!",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { 
+                        showXPNotification = false
+                        xpEarned = 0
+                    }
+                ) {
+                    Text("Continue")
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface
         )
     }
 }

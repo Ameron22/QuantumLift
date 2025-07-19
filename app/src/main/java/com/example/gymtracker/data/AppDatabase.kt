@@ -21,9 +21,11 @@ import kotlinx.coroutines.launch
         AchievementEntity::class,
         WorkoutExercise::class,
         PhysicalParameters::class,
-        BodyMeasurement::class
+        BodyMeasurement::class,
+        UserXP::class,
+        XPHistory::class
     ],
-    version = 40,  // Increment version number to add physical parameters tables
+    version = 41,  // Increment version number to add XP tables
     exportSchema = false
 )
 @TypeConverters(Converter::class)
@@ -31,6 +33,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun exerciseDao(): ExerciseDao
     abstract fun achievementDao(): AchievementDao
     abstract fun physicalParametersDao(): PhysicalParametersDao
+    abstract fun userXPDao(): UserXPDao
 
     companion object {
         @Volatile

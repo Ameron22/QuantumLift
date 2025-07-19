@@ -27,6 +27,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.gymtracker.viewmodels.GeneralViewModel
 import com.example.gymtracker.viewmodels.AuthViewModel
 import com.example.gymtracker.viewmodels.PhysicalParametersViewModel
+import com.example.gymtracker.data.XPSystem
+import com.example.gymtracker.data.UserXP
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -39,6 +41,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import android.util.Log
 
 
@@ -117,14 +121,43 @@ fun HomeScreen(
 
 @Composable
 fun WelcomeTab(paddingValues: PaddingValues) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
+    val context = LocalContext.current
+    val db = remember { AppDatabase.getDatabase(context) }
+    val xpSystem = remember { XPSystem(db.userXPDao()) }
+    val userId = "current_user" // Default user ID
+    
+    var userXP by remember { mutableStateOf<UserXP?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    
+    // Load user XP data
+    LaunchedEffect(Unit) {
+        try {
+            userXP = xpSystem.getUserXP(userId)
+            isLoading = false
+        } catch (e: Exception) {
+            Log.e("WelcomeTab", "Error loading user XP: ${e.message}")
+            isLoading = false
+        }
+    }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // XP Display Card
+        if (!isLoading && userXP != null) {
+            XPDisplayCard(userXP = userXP!!, xpSystem = xpSystem)
+        } else if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.padding(16.dp),
+                color = MaterialTheme.colorScheme.primary
+            )
+        } else {
+            // Show default welcome for new users
             Text(
                 text = "Welcome to Quantum Lift",
                 style = MaterialTheme.typography.headlineMedium,
@@ -138,15 +171,101 @@ fun WelcomeTab(paddingValues: PaddingValues) {
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
             )
+        }
         
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
         
         // Quick action cards
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Add quick action cards here in the future
+        }
+    }
+}
 
-
+@Composable
+fun XPDisplayCard(userXP: UserXP, xpSystem: XPSystem) {
+    val levelTitle = xpSystem.getLevelTitle(userXP.currentLevel)
+    val progressPercentage = if (userXP.xpToNextLevel > 0) {
+        val currentLevelXP = when {
+            userXP.currentLevel <= 10 -> (userXP.currentLevel - 1) * XPSystem.XP_LEVEL_1_10
+            userXP.currentLevel <= 25 -> 1000 + (userXP.currentLevel - 11) * XPSystem.XP_LEVEL_11_25
+            userXP.currentLevel <= 50 -> 5000 + (userXP.currentLevel - 26) * XPSystem.XP_LEVEL_26_50
+            userXP.currentLevel <= 75 -> 15000 + (userXP.currentLevel - 51) * XPSystem.XP_LEVEL_51_75
+            else -> 30000 + (userXP.currentLevel - 76) * XPSystem.XP_LEVEL_76_100
+        }
+        val levelTotalXP = when {
+            userXP.currentLevel < 10 -> userXP.currentLevel * XPSystem.XP_LEVEL_1_10
+            userXP.currentLevel < 25 -> 1000 + (userXP.currentLevel - 10) * XPSystem.XP_LEVEL_11_25
+            userXP.currentLevel < 50 -> 5000 + (userXP.currentLevel - 25) * XPSystem.XP_LEVEL_26_50
+            userXP.currentLevel < 75 -> 15000 + (userXP.currentLevel - 50) * XPSystem.XP_LEVEL_51_75
+            else -> 30000 + (userXP.currentLevel - 75) * XPSystem.XP_LEVEL_76_100
+        }
+        val levelProgress = userXP.totalXP - currentLevelXP
+        val levelTotal = levelTotalXP - currentLevelXP
+        if (levelTotal > 0) (levelProgress.toFloat() / levelTotal) else 1f
+    } else 1f
+    
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Level and Title
+            Text(
+                text = "Level ${userXP.currentLevel}",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.Bold
+            )
+            
+            Text(
+                text = levelTitle,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // XP Progress
+            Text(
+                text = "${userXP.totalXP} XP",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.Bold
+            )
+            
+            if (userXP.xpToNextLevel > 0) {
+                Text(
+                    text = "${userXP.xpToNextLevel} XP to next level",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Progress Bar
+            LinearProgressIndicator(
+                progress = { progressPercentage },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.3f)
+            )
         }
     }
 }

@@ -443,28 +443,42 @@ fun ExerciseScreen(
                             val latestSession = dao.getLatestExerciseSession(exercise.id.toLong())
                             if (latestSession != null) {
                                 Log.d("ExerciseScreen", "Loading from history: ${latestSession.weight}, ${latestSession.repsOrTime}")
+                                Log.d("ExerciseScreen", "Latest session details - Sets: ${latestSession.sets}, CompletedSets: ${latestSession.completedSets}, ExerciseId: ${latestSession.exerciseId}")
                                 
                                 // Calculate weighted average weight
                                 val avgWeight = calculateWeightedAverageWeight(latestSession.weight, latestSession.repsOrTime)
                                 // Calculate average reps/time
                                 val avgReps = calculateAverageReps(latestSession.repsOrTime)
                                 
-                                Log.d("ExerciseScreen", "Calculated from history - Weight: $avgWeight, Reps: $avgReps, Sets: ${latestSession.sets}")
+                                Log.d("ExerciseScreen", "Calculated from history - Weight: $avgWeight, Reps: $avgReps, CompletedSets: ${latestSession.completedSets}")
                                 
-                                // Initialize weights and reps for all sets with history values
-                                for (set in 1..workoutExercise.sets) {
-                                    setWeights[set] = avgWeight
-                                    setReps[set] = avgReps
-                                }
+                                Log.d("ExerciseScreen", "History loading - Template sets: ${workoutExercise.sets}, History completedSets: ${latestSession.completedSets}, Template weight: ${workoutExercise.weight}, Template reps: ${workoutExercise.reps}")
+                                Log.d("ExerciseScreen", "Sets comparison - Template: ${workoutExercise.sets}, History completedSets: ${latestSession.completedSets}, Will update: ${workoutExercise.sets != latestSession.completedSets}")
                                 
                                 // Update the workout exercise with history values
-                                exerciseWithDetails = foundExerciseWithDetails.copy(
+                                val updatedExerciseWithDetails = foundExerciseWithDetails.copy(
                                     workoutExercise = workoutExercise.copy(
                                         weight = avgWeight,
                                         reps = avgReps,
-                                        sets = latestSession.sets
+                                        sets = latestSession.completedSets
                                     )
                                 )
+                                
+                                // Assign to the mutable state
+                                exerciseWithDetails = updatedExerciseWithDetails
+                                
+                                // Get the updated workout exercise with history sets
+                                val updatedWorkoutExercise = updatedExerciseWithDetails.workoutExercise
+                                
+                                Log.d("ExerciseScreen", "After update - Updated sets: ${updatedWorkoutExercise.sets}, exerciseWithDetails sets: ${exerciseWithDetails?.workoutExercise?.sets}, Updated weight: ${updatedWorkoutExercise.weight}, Updated reps: ${updatedWorkoutExercise.reps}")
+                                
+                                // Initialize weights and reps for all sets with history values
+                                Log.d("ExerciseScreen", "Initializing sets with history values - avgWeight: $avgWeight, avgReps: $avgReps, sets: ${updatedWorkoutExercise.sets}")
+                                for (set in 1..updatedWorkoutExercise.sets) {
+                                    setWeights[set] = avgWeight
+                                    setReps[set] = avgReps
+                                    Log.d("ExerciseScreen", "Set $set - setWeights[$set]: ${setWeights[set]}, setReps[$set]: ${setReps[set]}")
+                                }
                             } else {
                                 Log.d("ExerciseScreen", "No history found, using template values")
                                 // Initialize weights and reps for all sets with template values
@@ -509,13 +523,16 @@ fun ExerciseScreen(
         // Ensure completedSet reflects the actual completed sets
         completedSet = minOf(completedSet, workoutExercise.sets)
         
-        val repsOrTimeList = (1..workoutExercise.sets).map { setReps[it] ?: workoutExercise.reps }
-        val weightList = (1..workoutExercise.sets).map { setWeights[it] ?: workoutExercise.weight }
+        // Get the actual number of sets from the current exerciseWithDetails (which may have been modified)
+        val actualSets = exerciseWithDetails?.workoutExercise?.sets ?: workoutExercise.sets
+        val repsOrTimeList = (1..actualSets).map { setReps[it] ?: workoutExercise.reps }
+        val weightList = (1..actualSets).map { setWeights[it] ?: workoutExercise.weight }
         val maxWeight = weightList.maxOrNull() ?: 0
+        Log.d("ExerciseScreen", "Saving exercise session - Template sets: ${workoutExercise.sets}, Actual sets: $actualSets, Completed sets: $completedSet, Will save completedSets: $completedSet")
         val exerciseSession = SessionEntityExercise(
             sessionId = workoutSessionId,
             exerciseId = exercise.id.toLong(),
-            sets = workoutExercise.sets,
+            sets = actualSets,
             repsOrTime = repsOrTimeList,
             weight = weightList,
             muscleGroup = exercise.muscle,
@@ -1209,7 +1226,6 @@ fun ExerciseScreen(
         ) {
             // Display exercise details
             exerciseWithDetails?.let { ex ->
-                val we = ex.workoutExercise
                 
                 // Break timer display
                 if (isBreakActive) {
@@ -1301,7 +1317,10 @@ fun ExerciseScreen(
                     label = "shine"
                 )
 
-                for (set in 1..we.sets) {
+                val currentSets = exerciseWithDetails?.workoutExercise?.sets ?: ex.workoutExercise.sets
+                Log.d("ExerciseScreen", "Rendering sets - Template sets: ${ex.workoutExercise.sets}, Current sets: $currentSets, exerciseWithDetails sets: ${exerciseWithDetails?.workoutExercise?.sets}, Template weight: ${ex.workoutExercise.weight}, Template reps: ${ex.workoutExercise.reps}")
+                Log.d("ExerciseScreen", "Rendering sets - exerciseWithDetails weight: ${exerciseWithDetails?.workoutExercise?.weight}, exerciseWithDetails reps: ${exerciseWithDetails?.workoutExercise?.reps}")
+                for (set in 1..currentSets) {
                         Log.d("ExerciseScreen", "Rendering set $set: activeSetIndex=$activeSetIndex, completedSet=$completedSet, isBreakRunning=$isBreakRunning, isTimerRunning=$isTimerRunning")
                         val animatedBorder by animateColorAsState(if (activeSetIndex == set && isTimerRunning && !isBreakRunning) Color.Green else Color.Gray)
                         val elevation = if (activeSetIndex == set && isTimerRunning) 8.dp else 2.dp
@@ -1378,7 +1397,7 @@ fun ExerciseScreen(
                                     },
                                     modifier = Modifier.weight(1f)
                                 )
-                            if (we.weight != 0 && !ex.exercise.useTime) {
+                            if (ex.workoutExercise.weight != 0 && !ex.exercise.useTime) {
                                 if (showWeightPicker && editingSetIndex == set) {
                                     AlertDialog(
                                         onDismissRequest = {
@@ -1400,10 +1419,10 @@ fun ExerciseScreen(
                                                 contentAlignment = Alignment.Center // Center the NumberPicker
                                             ) {
                                                 NumberPicker(
-                                                    value = setWeights[set] ?: we.weight,
+                                                    value = setWeights[set] ?: ex.workoutExercise.weight,
                                                     range = 0..200,
                                                     onValueChange = { weight ->
-                                                        for (i in set..we.sets) {
+                                                        for (i in set..(exerciseWithDetails?.workoutExercise?.sets ?: ex.workoutExercise.sets)) {
                                                             setWeights[i] = weight
                                                         }
                                                     },
@@ -1424,8 +1443,10 @@ fun ExerciseScreen(
                                     )
                                 }
 
+                                val displayWeight = setWeights[set] ?: ex.workoutExercise.weight
+                                Log.d("ExerciseScreen", "Set $set - Display weight: $displayWeight, setWeights[$set]: ${setWeights[set]}, template weight: ${ex.workoutExercise.weight}")
                                 Text(
-                                    text = "${setWeights[set] ?: we.weight} Kg",
+                                    text = "$displayWeight Kg",
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = when {
                                         set <= completedSet -> MaterialTheme.colorScheme.onSurface
@@ -1467,10 +1488,10 @@ fun ExerciseScreen(
                                                 contentAlignment = Alignment.Center // Center the NumberPicker
                                             ) {
                                                 NumberPicker(
-                                                    value = setReps[set] ?: we.reps,
+                                                    value = setReps[set] ?: ex.workoutExercise.reps,
                                                     range = 0..50,
                                                     onValueChange = { reps ->
-                                                        for (i in set..we.sets) {
+                                                        for (i in set..(exerciseWithDetails?.workoutExercise?.sets ?: ex.workoutExercise.sets)) {
                                                             setReps[i] = reps
                                                         }
                                                     },
@@ -1490,8 +1511,10 @@ fun ExerciseScreen(
                                         modifier = Modifier.background(Color.Transparent)
                                     )
                                 }
+                                val displayReps = setReps[set] ?: ex.workoutExercise.reps
+                                Log.d("ExerciseScreen", "Set $set - Display reps: $displayReps, setReps[$set]: ${setReps[set]}, template reps: ${ex.workoutExercise.reps}")
                                 Text(
-                                    text = "${setReps[set] ?: we.reps} Reps",
+                                    text = "$displayReps Reps",
                                     color = when {
                                         set <= completedSet -> MaterialTheme.colorScheme.onSurface
                                         isActiveSet -> MaterialTheme.colorScheme.onSurface
@@ -1537,7 +1560,7 @@ fun ExerciseScreen(
                                                     value = currentMinutes,
                                                     range = 0..59,
                                                     onValueChange = { newMinutes ->
-                                                        for (i in set..we.sets) {
+                                                        for (i in set..(exerciseWithDetails?.workoutExercise?.sets ?: ex.workoutExercise.sets)) {
                                                             setReps[i] = newMinutes * 60 + currentSeconds
                                                         }
                                                     },
@@ -1547,7 +1570,7 @@ fun ExerciseScreen(
                                                     value = currentSeconds,
                                                     range = 0..59,
                                                     onValueChange = { newSeconds ->
-                                                        for (i in set..we.sets) {
+                                                        for (i in set..(exerciseWithDetails?.workoutExercise?.sets ?: ex.workoutExercise.sets)) {
                                                             setReps[i] = currentMinutes * 60 + newSeconds
                                                         }
                                                     },
@@ -1608,14 +1631,14 @@ fun ExerciseScreen(
                                         }
                                     }
                                     // Show delete button only for the last set, if not completed, and not the active set during timer
-                                    set == we.sets && set > completedSet && !(isTimerRunning && activeSetIndex == set) -> {
+                                    set == (exerciseWithDetails?.workoutExercise?.sets ?: ex.workoutExercise.sets) && set > completedSet && !(isTimerRunning && activeSetIndex == set) -> {
                                         IconButton(
                                             onClick = {
                                                 setWeights.remove(set)
                                                 setReps.remove(set)
                                                 // Update the exerciseWithDetails with the new workoutExercise
                                                 exerciseWithDetails = exerciseWithDetails?.copy(
-                                                    workoutExercise = we.copy(sets = we.sets - 1)
+                                                    workoutExercise = ex.workoutExercise.copy(sets = (exerciseWithDetails?.workoutExercise?.sets ?: ex.workoutExercise.sets) - 1)
                                                 )
                                             }
                                         ) {
@@ -1638,8 +1661,8 @@ fun ExerciseScreen(
                     }
                     // Add break indicator after each set except the last one
                     // Don't show break indicator during pre-set break (before first set)
-                    if(set!= we.sets && isBreakRunning && activeSetIndex != null && set == completedSet)
-                    if (set != we.sets && isBreakRunning && activeSetIndex != null && set == activeSetIndex && !(activeSetIndex == 1 && completedSet == 0)) {
+                    if(set!= (exerciseWithDetails?.workoutExercise?.sets ?: ex.workoutExercise.sets) && isBreakRunning && activeSetIndex != null && set == completedSet)
+                    if (set != (exerciseWithDetails?.workoutExercise?.sets ?: ex.workoutExercise.sets) && isBreakRunning && activeSetIndex != null && set == activeSetIndex && !(activeSetIndex == 1 && completedSet == 0)) {
                         Log.d("ExerciseScreen", "Showing break indicator for set $set, activeSetIndex: $activeSetIndex, completedSet: $completedSet")
                         BreakIndicatorBar()
                     }
@@ -1654,12 +1677,13 @@ fun ExerciseScreen(
                     ) {
                         IconButton(
                             onClick = {
-                                val newSet = we.sets + 1
-                                setWeights[newSet] = we.weight
-                                setReps[newSet] = we.reps
+                                val currentSets = exerciseWithDetails?.workoutExercise?.sets ?: ex.workoutExercise.sets
+                                val newSet = currentSets + 1
+                                setWeights[newSet] = ex.workoutExercise.weight
+                                setReps[newSet] = ex.workoutExercise.reps
                                 // Update the exerciseWithDetails with the new workoutExercise
                                 exerciseWithDetails = exerciseWithDetails?.copy(
-                                    workoutExercise = we.copy(sets = newSet)
+                                    workoutExercise = ex.workoutExercise.copy(sets = newSet)
                                 )
                             },
                             modifier = Modifier
