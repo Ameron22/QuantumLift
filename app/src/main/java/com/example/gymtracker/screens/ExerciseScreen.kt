@@ -257,24 +257,15 @@ fun ExerciseScreen(
     // Track which set is currently being executed
     var completedSet by remember { mutableStateOf(0) }
 
-    // New state variables for muscle soreness tracking
-    var eccentricFactor by remember { mutableStateOf(1.0f) }
-    var noveltyFactor by remember { mutableStateOf(5) }
-    var adaptationLevel by remember { mutableStateOf(5) }
-    var rpe by remember { mutableStateOf(5) }
-    var subjectiveSoreness by remember { mutableStateOf(5) }
-    var showSorenessDialog by remember { mutableStateOf(false) }
+
 
     // Add new state variable for break time picker
     var showBreakTimePicker by remember { mutableStateOf(false) }
     var showSetTimePicker by remember { mutableStateOf(false) }
 
-    // Add this state variable with the other state variables
-    var showInfoDialog by remember { mutableStateOf<String?>(null) }
 
-    // Add new state variables at the top of ExerciseScreen composable
-    var hasProvidedSorenessData by remember { mutableStateOf(false) }
-    var defaultSorenessValues by remember { mutableStateOf(true) }  // Changed to true to make checkbox unchecked by default
+
+
 
 
     // Add state for back confirmation dialog
@@ -287,6 +278,31 @@ fun ExerciseScreen(
     // Load user settings
     val userSettings = remember { UserSettingsPreferences(context) }
     val settings by userSettings.settingsFlow.collectAsState(initial = null)
+    
+    // Helper function to calculate weighted average weight
+    fun calculateWeightedAverageWeight(weights: List<Int?>, reps: List<Int?>): Int {
+        if (weights.isEmpty() || reps.isEmpty()) return 0
+        
+        var totalWeightReps = 0
+        var totalReps = 0
+        
+        for (i in weights.indices) {
+            val weight = weights[i] ?: 0
+            val rep = reps[i] ?: 0
+            totalWeightReps += weight * rep
+            totalReps += rep
+        }
+        
+        return if (totalReps > 0) totalWeightReps / totalReps else 0
+    }
+    
+    // Helper function to calculate average reps/time
+    fun calculateAverageReps(reps: List<Int?>): Int {
+        if (reps.isEmpty()) return 0
+        
+        val validReps = reps.filterNotNull()
+        return if (validReps.isNotEmpty()) validReps.average().toInt() else 0
+    }
 
     // Clean up MediaPlayer when leaving the screen
     DisposableEffect(Unit) {
@@ -401,9 +417,9 @@ fun ExerciseScreen(
     }
     
     // Fetch exercise and workoutExercise data using the new structure
-    LaunchedEffect(exerciseId, workoutId) {
+    LaunchedEffect(exerciseId, workoutId, settings?.loadFromHistory) {
         try {
-            Log.d("ExerciseScreen", "Fetching exercise with ID: $exerciseId and workoutId: $workoutId")
+            Log.d("ExerciseScreen", "Fetching exercise with ID: $exerciseId and workoutId: $workoutId, loadFromHistory: ${settings?.loadFromHistory}")
             withContext(Dispatchers.IO) {
                 // Get exercises with workout data for this workout
                 val exercisesData = dao.getExercisesWithWorkoutData(workoutId)
@@ -421,10 +437,57 @@ fun ExerciseScreen(
                     val workoutExercise = foundExerciseWithDetails.workoutExercise
                     val exercise = foundExerciseWithDetails.exercise
                     
-                    // Initialize weights and reps for all sets
-                    for (set in 1..workoutExercise.sets) {
-                        setWeights[set] = workoutExercise.weight
-                        setReps[set] = workoutExercise.reps
+                    // Check if we should load from history
+                    if (settings?.loadFromHistory == true) {
+                        try {
+                            val latestSession = dao.getLatestExerciseSession(exercise.id.toLong())
+                            if (latestSession != null) {
+                                Log.d("ExerciseScreen", "Loading from history: ${latestSession.weight}, ${latestSession.repsOrTime}")
+                                
+                                // Calculate weighted average weight
+                                val avgWeight = calculateWeightedAverageWeight(latestSession.weight, latestSession.repsOrTime)
+                                // Calculate average reps/time
+                                val avgReps = calculateAverageReps(latestSession.repsOrTime)
+                                
+                                Log.d("ExerciseScreen", "Calculated from history - Weight: $avgWeight, Reps: $avgReps, Sets: ${latestSession.sets}")
+                                
+                                // Initialize weights and reps for all sets with history values
+                                for (set in 1..workoutExercise.sets) {
+                                    setWeights[set] = avgWeight
+                                    setReps[set] = avgReps
+                                }
+                                
+                                // Update the workout exercise with history values
+                                exerciseWithDetails = foundExerciseWithDetails.copy(
+                                    workoutExercise = workoutExercise.copy(
+                                        weight = avgWeight,
+                                        reps = avgReps,
+                                        sets = latestSession.sets
+                                    )
+                                )
+                            } else {
+                                Log.d("ExerciseScreen", "No history found, using template values")
+                                // Initialize weights and reps for all sets with template values
+                                for (set in 1..workoutExercise.sets) {
+                                    setWeights[set] = workoutExercise.weight
+                                    setReps[set] = workoutExercise.reps
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e("ExerciseScreen", "Error loading from history: ${e.message}")
+                            // Fallback to template values
+                            for (set in 1..workoutExercise.sets) {
+                                setWeights[set] = workoutExercise.weight
+                                setReps[set] = workoutExercise.reps
+                            }
+                        }
+                    } else {
+                        Log.d("ExerciseScreen", "Using template values")
+                        // Initialize weights and reps for all sets with template values
+                        for (set in 1..workoutExercise.sets) {
+                            setWeights[set] = workoutExercise.weight
+                            setReps[set] = workoutExercise.reps
+                        }
                     }
                 }
             }
@@ -459,11 +522,11 @@ fun ExerciseScreen(
             muscleParts = Converter().fromString(exercise.parts).joinToString(", "),
             completedSets = completedSet,
             notes = "",
-            eccentricFactor = eccentricFactor,
-            noveltyFactor = noveltyFactor,
-            adaptationLevel = adaptationLevel,
-            rpe = rpe,
-            subjectiveSoreness = subjectiveSoreness
+            eccentricFactor = 1.0f, // Default value since soreness tracking moved to WorkoutDetailsScreen
+            noveltyFactor = 5, // Default value since soreness tracking moved to WorkoutDetailsScreen
+            adaptationLevel = 5, // Default value since soreness tracking moved to WorkoutDetailsScreen
+            rpe = 5, // Default value since soreness tracking moved to WorkoutDetailsScreen
+            subjectiveSoreness = 5 // Default value since soreness tracking moved to WorkoutDetailsScreen
         )
 
         try {
@@ -571,7 +634,7 @@ fun ExerciseScreen(
                         // If this was the pre-set break before the first set, start the first set now
                         if (activeSetIndex == 1 && completedSet == 0) {
                             exerciseTime = if (exerciseWithDetails?.exercise?.useTime == true) {
-                                workoutExercise?.reps ?: 0
+                                setReps[activeSetIndex ?: 1] ?: (workoutExercise?.reps ?: 0)
                             } else {
                                 setTimeReps
                             }
@@ -588,7 +651,7 @@ fun ExerciseScreen(
                             activeSetIndex = activeSetIndex!! + 1
                             // Recalculate exercise time for the new set based on current setTimeReps
                             exerciseTime = if (exerciseWithDetails?.exercise?.useTime == true) {
-                                workoutExercise?.reps ?: 0
+                                setReps[activeSetIndex ?: 1] ?: (workoutExercise?.reps ?: 0)
                             } else {
                                 setTimeReps
                             }
@@ -651,7 +714,7 @@ fun ExerciseScreen(
                             // Start break time
                             isBreakRunning = true
                             remainingTime = breakTime
-                            Log.d("ExerciseScreen", "Starting break time: $breakTime seconds")
+                            Log.d("ExerciseScreen", "Starting break time: $breakTime seconds, activeSetIndex: $activeSetIndex, completedSet: $completedSet")
                             // Update floating timer immediately when switching to break mode
                             Log.d("ExerciseScreen", "Updating floating timer to BREAK mode: $remainingTime seconds")
                             updateTimerService(context, remainingTime, isBreakRunning, exerciseWithDetails?.exercise?.name ?: "Exercise", exerciseId, workoutSessionId, workoutId)
@@ -787,7 +850,7 @@ fun ExerciseScreen(
             
             activeSetIndex = setIndex
             exerciseTime = if (exerciseWithDetails?.exercise?.useTime == true) {
-                workoutExercise.reps
+                setReps[setIndex] ?: workoutExercise.reps
             } else {
                 setTimeReps
             }
@@ -860,7 +923,7 @@ fun ExerciseScreen(
                     isBreakRunning = false
                     // Calculate exercise time for first set
                     exerciseTime = if (exerciseWithDetails?.exercise?.useTime == true) {
-                        workoutExercise?.reps ?: 0
+                        setReps[activeSetIndex ?: 1] ?: (workoutExercise?.reps ?: 0)
                     } else {
                         setTimeReps
                     }
@@ -877,7 +940,7 @@ fun ExerciseScreen(
                     if (activeSetIndex != null && activeSetIndex!! <= (workoutExercise?.sets ?: 0)) {
                         // Recalculate exercise time for the new set based on current setTimeReps
                         exerciseTime = if (exerciseWithDetails?.exercise?.useTime == true) {
-                            workoutExercise?.reps ?: 0
+                            setReps[activeSetIndex ?: 1] ?: (workoutExercise?.reps ?: 0)
                         } else {
                             setTimeReps
                         }
@@ -1226,9 +1289,25 @@ fun ExerciseScreen(
                 }
 
                 // Display sets with weight and reps
+                // Shining effect animation - created once and reused
+                val infiniteTransition = rememberInfiniteTransition(label = "shining")
+                val shineOffset by infiniteTransition.animateFloat(
+                    initialValue = -200f,
+                    targetValue = 400f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1500, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "shine"
+                )
+
                 for (set in 1..we.sets) {
+                        Log.d("ExerciseScreen", "Rendering set $set: activeSetIndex=$activeSetIndex, completedSet=$completedSet, isBreakRunning=$isBreakRunning, isTimerRunning=$isTimerRunning")
                         val animatedBorder by animateColorAsState(if (activeSetIndex == set && isTimerRunning && !isBreakRunning) Color.Green else Color.Gray)
                         val elevation = if (activeSetIndex == set && isTimerRunning) 8.dp else 2.dp
+
+                    // Shining effect animation for active set
+                    val isActiveSet = activeSetIndex == set && isTimerRunning && !isBreakRunning
 
                     Card(
                         modifier = Modifier
@@ -1250,65 +1329,55 @@ fun ExerciseScreen(
                                     alpha = 0.9f
                                 )
 
-                                set == activeSetIndex && isTimerRunning -> MaterialTheme.colorScheme.background
+                                isActiveSet -> MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
                                 else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
                             }
                         )
                     ) {
-                        Row(
-                            modifier = Modifier
+                        Box {
+                            // Shining effect overlay
+                            if (isActiveSet) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .zIndex(1f)
+                                        .graphicsLayer {
+                                            translationX = shineOffset
+                                        }
+                                        .background(
+                                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                                colors = listOf(
+                                                    Color.Transparent,
+                                                    Color(0xFF8B5CF6).copy(alpha = 0.18f),
+                                                    Color(0xFF8B5CF6).copy(alpha = 0.32f),
+                                                    Color(0xFF8B5CF6).copy(alpha = 0.18f),
+                                                    Color.Transparent
+                                                ),
+                                                start = Offset(0f, 0f),
+                                                end = Offset(200f, 0f)
+                                            ),
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                )
+                            }
+                            Row(
+                                modifier = Modifier
                                     .padding(10.dp)
                                     .fillMaxWidth()
-                                    .height(40.dp)
-                                    .background(
-                                        brush = when {
-                                            set <= completedSet -> Brush.horizontalGradient(
-                                                colors = listOf(
-                                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-                                                )
-                                            )
-                                            set == activeSetIndex && isTimerRunning -> {
-                                                val infiniteTransition = rememberInfiniteTransition(label = "gradient")
-                                                val translateX by infiniteTransition.animateFloat(
-                                                    initialValue = 0f,
-                                                    targetValue = 1000f,
-                                                    animationSpec = infiniteRepeatable(
-                                                        animation = tween(2000, easing = LinearEasing),
-                                                        repeatMode = RepeatMode.Restart
-                                                    ),
-                                                    label = "gradientTranslation"
-                                                )
-                                                Brush.horizontalGradient(
-                                                    colors = listOf(
-                                                        MaterialTheme.colorScheme.surface,
-                                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                                                    ),
-                                                    startX = translateX,
-                                                    endX = translateX + 1000f
-                                                )
-                                            }
-                                            else -> Brush.horizontalGradient(
-                                                colors = listOf(
-                                                    MaterialTheme.colorScheme.background,
-                                                    MaterialTheme.colorScheme.background
-                                                )
-                                            )
-                                        }
-                                    ),
+                                    .height(40.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Set: $set",
-                                style = MaterialTheme.typography.bodyLarge,
+                            ) {
+                                Text(
+                                    text = "Set: $set",
+                                    style = MaterialTheme.typography.bodyLarge,
                                     color = when {
                                         set <= completedSet -> MaterialTheme.colorScheme.onSurface
-                                        set == activeSetIndex && isTimerRunning -> MaterialTheme.colorScheme.onSurface
+                                        isActiveSet -> MaterialTheme.colorScheme.onSurface
                                         else -> MaterialTheme.colorScheme.onSurfaceVariant
                                     },
                                     modifier = Modifier.weight(1f)
-                            )
+                                )
                             if (we.weight != 0 && !ex.exercise.useTime) {
                                 if (showWeightPicker && editingSetIndex == set) {
                                     AlertDialog(
@@ -1358,7 +1427,11 @@ fun ExerciseScreen(
                                 Text(
                                     text = "${setWeights[set] ?: we.weight} Kg",
                                     style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurface,
+                                    color = when {
+                                        set <= completedSet -> MaterialTheme.colorScheme.onSurface
+                                        isActiveSet -> MaterialTheme.colorScheme.onSurface
+                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
                                     modifier = Modifier
                                         .weight(1f)
                                         .clickable {
@@ -1419,7 +1492,11 @@ fun ExerciseScreen(
                                 }
                                 Text(
                                     text = "${setReps[set] ?: we.reps} Reps",
-                                        color = MaterialTheme.colorScheme.onSurface,
+                                    color = when {
+                                        set <= completedSet -> MaterialTheme.colorScheme.onSurface
+                                        isActiveSet -> MaterialTheme.colorScheme.onSurface
+                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
                                     style = MaterialTheme.typography.bodyLarge,
                                     modifier = Modifier
                                         .weight(1f)
@@ -1496,7 +1573,11 @@ fun ExerciseScreen(
                                             currentMinutes,
                                             currentSeconds
                                         ), // Display as mm:ss
-                                        color = MaterialTheme.colorScheme.onSurface,
+                                    color = when {
+                                        set <= completedSet -> MaterialTheme.colorScheme.onSurface
+                                        isActiveSet -> MaterialTheme.colorScheme.onSurface
+                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
                                     style = MaterialTheme.typography.bodyLarge,
                                     modifier = Modifier
                                         .weight(1f)
@@ -1551,15 +1632,18 @@ fun ExerciseScreen(
                                         Spacer(modifier = Modifier.size(48.dp))
                                     }
                                 }
-                            }
+                                }
                             }
                         }
-                        // Add break indicator after each set except the last one
-                        if (set != we.sets && isBreakRunning && set == completedSet) {
-                            BreakIndicatorBar()
-                        }
-
                     }
+                    // Add break indicator after each set except the last one
+                    // Don't show break indicator during pre-set break (before first set)
+                    if(set!= we.sets && isBreakRunning && activeSetIndex != null && set == completedSet)
+                    if (set != we.sets && isBreakRunning && activeSetIndex != null && set == activeSetIndex && !(activeSetIndex == 1 && completedSet == 0)) {
+                        Log.d("ExerciseScreen", "Showing break indicator for set $set, activeSetIndex: $activeSetIndex, completedSet: $completedSet")
+                        BreakIndicatorBar()
+                    }
+                }
 
                     // Add Set Button
                     Row(
@@ -1668,241 +1752,7 @@ fun ExerciseScreen(
                         }
                     }
 
-                    // Add Track Muscle Soreness card
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 16.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Track Muscle Soreness",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Checkbox(
-                                    checked = !defaultSorenessValues,
-                                    onCheckedChange = { checked ->
-                                        defaultSorenessValues = !checked
-                                        if (checked) {
-                                            // Reset to default values
-                                            eccentricFactor = 1.0f
-                                            noveltyFactor = 5
-                                            adaptationLevel = 5
-                                            rpe = 5
-                                            subjectiveSoreness = 5
-                                        }
-                                    }
-                                )
-                            }
 
-                            if (!defaultSorenessValues) {
-                                Spacer(modifier = Modifier.height(16.dp))
-                                
-                                // Exercise Factors section
-                                Text(
-                                    "Exercise Factors",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                // Eccentric Factor
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        "Eccentric Factor (1.0-2.0)",
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    IconButton(
-                                        onClick = { showInfoDialog = "eccentric" },
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Info,
-                                            contentDescription = "Eccentric Factor Info",
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Slider(
-                                        value = eccentricFactor,
-                                        onValueChange = { 
-                                            eccentricFactor = it
-                                            vibrateOnValueChange()
-                                        },
-                                        valueRange = 1f..2f,
-                                        steps = 9,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Text(
-                                        text = String.format("%.1f", eccentricFactor),
-                                        modifier = Modifier.padding(start = 8.dp)
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(16.dp))
-
-                                // Novelty Factor
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        "Novelty Factor (0-10)",
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    IconButton(
-                                        onClick = { showInfoDialog = "novelty" },
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Info,
-                                            contentDescription = "Novelty Factor Info",
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-                                SliderWithLabel(
-                                    value = noveltyFactor.toFloat(),
-                                    onValueChange = { 
-                                        noveltyFactor = it.toInt()
-                                        vibrateOnValueChange()
-                                    },
-                                    label = "",
-                                    valueRange = 0f..10f,
-                                    steps = 10
-                                )
-
-                                Spacer(modifier = Modifier.height(16.dp))
-
-                                // Adaptation Level
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        "Adaptation Level (0-10)",
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    IconButton(
-                                        onClick = { showInfoDialog = "adaptation" },
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Info,
-                                            contentDescription = "Adaptation Level Info",
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-                                SliderWithLabel(
-                                    value = adaptationLevel.toFloat(),
-                                    onValueChange = { 
-                                        adaptationLevel = it.toInt()
-                                        vibrateOnValueChange()
-                                    },
-                                    label = "",
-                                    valueRange = 0f..10f,
-                                    steps = 10
-                                )
-
-                                Spacer(modifier = Modifier.height(24.dp))
-
-                                // Perceived Exertion & Soreness section
-                                Text(
-                                    "Perceived Exertion & Soreness",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                // RPE
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        "Rate of Perceived Exertion (1-10)",
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    IconButton(
-                                        onClick = { showInfoDialog = "rpe" },
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Info,
-                                            contentDescription = "RPE Info",
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-                                SliderWithLabel(
-                                    value = rpe.toFloat(),
-                                    onValueChange = { 
-                                        rpe = it.toInt()
-                                        vibrateOnValueChange()
-                                    },
-                                    label = "",
-                                    valueRange = 1f..10f,
-                                    steps = 9
-                                )
-
-                                Spacer(modifier = Modifier.height(16.dp))
-
-                                // Subjective Soreness
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        "Subjective Soreness (1-10)",
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    IconButton(
-                                        onClick = { showInfoDialog = "soreness" },
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Info,
-                                            contentDescription = "Soreness Info",
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-                                SliderWithLabel(
-                                    value = subjectiveSoreness.toFloat(),
-                                    onValueChange = { 
-                                        subjectiveSoreness = it.toInt()
-                                        vibrateOnValueChange()
-                                    },
-                                    label = "",
-                                    valueRange = 1f..10f,
-                                    steps = 9
-                                )
-                            }
-                        }
-                    }
                 }
             }
 
@@ -2014,42 +1864,7 @@ fun ExerciseScreen(
                 )
             }
 
-            // Add Info Dialog
-            if (showInfoDialog != null) {
-                AlertDialog(
-                    onDismissRequest = { showInfoDialog = null },
-                    title = {
-                        Text(
-                            text = when (showInfoDialog) {
-                                "eccentric" -> "Eccentric Factor"
-                                "novelty" -> "Novelty Factor"
-                                "adaptation" -> "Adaptation Level"
-                                "rpe" -> "Rate of Perceived Exertion"
-                                "soreness" -> "Subjective Soreness"
-                                else -> ""
-                            }
-                        )
-                    },
-                    text = {
-                        Text(
-                            text = when (showInfoDialog) {
-                                "eccentric" -> "The degree of emphasis on the lowering (eccentric) phase of the movement. Higher values indicate slower, more controlled negatives."
-                                "novelty" -> "How new or different this exercise is from your usual routine. Higher values indicate more novel movements that may cause more soreness."
-                                "adaptation" -> "How well adapted your body is to this exercise. Higher values indicate better adaptation and potentially less soreness."
-                                "rpe" -> "How hard the exercise felt. 1 = Very easy, 5 = Moderate effort, 10 = Maximum effort possible."
-                                "soreness" -> "Current muscle soreness level. 1 = No soreness, 5 = Moderate discomfort, 10 = Severe pain/inability to move."
-                                else -> ""
-                            },
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { showInfoDialog = null }) {
-                            Text("OK")
-                        }
-                    }
-                )
-            }
+
 
                 // Show loading or error message
             if (exerciseWithDetails == null) {
@@ -2117,13 +1932,28 @@ private fun SliderWithLabel(
 private fun BreakIndicatorBar() {
     Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .height(2.dp)
-            .background(
-                color = Color.Red,
-                shape = RoundedCornerShape(1.dp)
+            .fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.5f)
+                .height(32.dp)
+                .background(
+                    color = Color(0xFF620202),
+                    shape = RoundedCornerShape(8.dp)
+                )
+                .border(1.dp, Color.Black, RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "BREAK",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
             )
-    )
+        }
+    }
 }
 
 @Composable

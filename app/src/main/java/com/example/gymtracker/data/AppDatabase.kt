@@ -19,15 +19,18 @@ import kotlinx.coroutines.launch
         SessionWorkoutEntity::class,
         SessionEntityExercise::class,
         AchievementEntity::class,
-        WorkoutExercise::class
+        WorkoutExercise::class,
+        PhysicalParameters::class,
+        BodyMeasurement::class
     ],
-    version = 39,  // Increment version number to force database recreation with equipment field
+    version = 40,  // Increment version number to add physical parameters tables
     exportSchema = false
 )
 @TypeConverters(Converter::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun exerciseDao(): ExerciseDao
     abstract fun achievementDao(): AchievementDao
+    abstract fun physicalParametersDao(): PhysicalParametersDao
 
     companion object {
         @Volatile

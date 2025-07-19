@@ -170,6 +170,65 @@
 
 ---
 
+## 28. Exercise History Loading Feature (2024-12-28)
+
+**Feature Request**: Implement a setting that allows workouts to load exercise details from the user's latest progress history instead of using template values.
+
+**Requirements**:
+1. Add a new checkbox setting "Load from History" in SettingsScreen
+2. When enabled, find the latest exercise session for each exercise
+3. Calculate weighted average weight: `(set1_weight*set1_reps + set2_weight*set2_reps + ... + setN_weight*setN_reps) / sum(sets_reps)`
+4. Calculate average reps/time for the exercise
+5. Use the number of sets from history
+6. Apply these calculated values instead of template values
+
+**Implementation**:
+
+1. **Updated UserSettings.kt**:
+   - Added `loadFromHistory: Boolean = false` field
+
+2. **Updated UserSettingsPreferences.kt**:
+   - Added `updateLoadFromHistory(enabled: Boolean)` method
+   - Updated `getCurrentSettings()` to include the new setting
+   - Added logging for the new setting
+
+3. **Updated ExerciseDao.kt**:
+   - Added `getLatestExerciseSession(exerciseId: Long): SessionEntityExercise?` method
+   - Query: `SELECT * FROM exercise_sessions WHERE exerciseId = :exerciseId ORDER BY exerciseSessionId DESC LIMIT 1`
+
+4. **Updated SettingsScreen.kt**:
+   - Added `loadFromHistory` state variable
+   - Added UI checkbox in Timer Settings section
+   - Updated `hasChanges()` and `saveSettings()` functions
+   - Added descriptive text: "Use your latest progress instead of template values"
+
+5. **Updated ExerciseScreen.kt**:
+   - Added helper functions:
+     - `calculateWeightedAverageWeight(weights: List<Int?>, reps: List<Int?>): Int`
+     - `calculateAverageReps(reps: List<Int?>): Int`
+   - Modified `LaunchedEffect` to check `settings?.loadFromHistory`
+   - When enabled, fetches latest session and calculates weighted averages
+   - Updates `exerciseWithDetails` with history values
+   - Falls back to template values if no history found or error occurs
+
+**Key Features**:
+- **Weighted Average Weight**: Calculates `(weight1*reps1 + weight2*reps2 + ...) / (reps1 + reps2 + ...)`
+- **Average Reps/Time**: Simple average of all sets
+- **Sets from History**: Uses the number of sets from the latest session
+- **Graceful Fallback**: If no history found or error occurs, uses template values
+- **User Control**: Toggle in settings to enable/disable the feature
+
+**Files Modified**:
+- `app/src/main/java/com/example/gymtracker/data/UserSettings.kt`
+- `app/src/main/java/com/example/gymtracker/data/UserSettingsPreferences.kt`
+- `app/src/main/java/com/example/gymtracker/data/ExerciseDao.kt`
+- `app/src/main/java/com/example/gymtracker/screens/SettingsScreen.kt`
+- `app/src/main/java/com/example/gymtracker/screens/ExerciseScreen.kt`
+
+**Status**: ✅ IMPLEMENTED AND TESTED
+
+---
+
 ## 27. Timer Architecture Unification (2024-12-19)
 
 **Issue**: Redundant and complex timer service architecture with multiple separate services and wrapper managers:

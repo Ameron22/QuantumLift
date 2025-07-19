@@ -20,6 +20,7 @@ sealed class Screen(val route: String) {
     object Settings : Screen("settings")
     object ChangePassword : Screen("change_password")
     object Feed : Screen("feed")
+    object AddMeasurement : Screen("add_measurement")
     
     // Helper object for parameterized routes
     object Routes {

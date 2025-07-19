@@ -11,6 +11,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -30,6 +32,7 @@ import androidx.compose.ui.res.painterResource
 import com.example.gymtracker.R
 import com.example.gymtracker.data.AppDatabase
 import androidx.compose.material3.*
+import androidx.compose.ui.window.Dialog
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -91,6 +94,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material3.CircularProgressIndicator
 import com.example.gymtracker.data.SessionEntityExercise
 import kotlinx.coroutines.flow.first
+import androidx.compose.ui.platform.LocalConfiguration
 
 
 fun isCustomExercise(exerciseId: Int): Boolean = exerciseId > 750
@@ -132,6 +136,15 @@ fun WorkoutDetailsScreen(
     // State for completed exercise info dialog
     var showCompletedExerciseDialog by remember { mutableStateOf(false) }
     var completedExerciseInfo by remember { mutableStateOf<WorkoutExerciseWithDetails?>(null) }
+    
+    // Muscle soreness tracking state variables
+    var eccentricFactor by remember { mutableStateOf(1.0f) }
+    var noveltyFactor by remember { mutableStateOf(5) }
+    var adaptationLevel by remember { mutableStateOf(5) }
+    var rpe by remember { mutableStateOf(5) }
+    var subjectiveSoreness by remember { mutableStateOf(5) }
+    var showSorenessInfoDialog by remember { mutableStateOf<String?>(null) }
+    var defaultSorenessValues by remember { mutableStateOf(true) }
 
     // Drag state variables
     var isDragging by remember { mutableStateOf(false) }
@@ -841,6 +854,65 @@ fun WorkoutDetailsScreen(
         }
     }
 
+    // Function to vibrate on value change
+    fun vibrateOnValueChange() {
+        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(20)
+        }
+    }
+
+    // Function to save exercise session with muscle soreness data
+    suspend fun saveExerciseSessionWithSoreness(exerciseWithDetails: WorkoutExerciseWithDetails) {
+        Log.d("WorkoutDetailsScreen", "saveExerciseSessionWithSoreness called")
+        val exercise = exerciseWithDetails.entityExercise
+        val workoutExercise = exerciseWithDetails.workoutExercise
+        
+        val exerciseSession = SessionEntityExercise(
+            sessionId = currentWorkout?.sessionId ?: System.currentTimeMillis(),
+            exerciseId = exercise.id.toLong(),
+            sets = workoutExercise.sets,
+            repsOrTime = List(workoutExercise.sets) { workoutExercise.reps },
+            weight = List(workoutExercise.sets) { workoutExercise.weight },
+            muscleGroup = exercise.muscle,
+            muscleParts = exercise.parts,
+            completedSets = workoutExercise.sets,
+            notes = "",
+            eccentricFactor = eccentricFactor,
+            noveltyFactor = noveltyFactor,
+            adaptationLevel = adaptationLevel,
+            rpe = rpe,
+            subjectiveSoreness = subjectiveSoreness
+        )
+
+        try {
+            withContext(Dispatchers.IO) {
+                dao.insertExerciseSession(exerciseSession)
+                Log.d("WorkoutDetailsScreen", "Exercise session saved successfully with soreness data")
+            }
+            
+            // Mark exercise as completed in GeneralViewModel
+            Log.d("WorkoutDetailsScreen", "Marking exercise ${exercise.id} (${exercise.name}) as completed")
+            generalViewModel.markExerciseAsCompleted(exercise.id)
+            
+            // Show success notification
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Exercise saved with soreness data", Toast.LENGTH_SHORT).show()
+                showCompletedExerciseDialog = false
+                completedExerciseInfo = null
+            }
+        } catch (e: Exception) {
+            Log.e("WorkoutDetailsScreen", "Error saving exercise session: ${e.message}")
+            e.printStackTrace()
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Error saving exercise", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     // Function to rename the workout
     fun renameWorkout() {
         if (newWorkoutName.isNotEmpty()) {
@@ -1093,6 +1165,9 @@ fun WorkoutDetailsScreen(
 
                 // Switch to main thread for UI updates
                 withContext(Dispatchers.Main) {
+                    // Stop the break timer when workout ends
+                    viewModel.stopBreakTimer()
+                    
                     // Stop the workout session in ViewModel
                     viewModel.stopWorkoutSession()
 
@@ -1119,6 +1194,8 @@ fun WorkoutDetailsScreen(
 
     // Handle back navigation - just go back without confirmation
     BackHandler {
+        // Stop break timer when navigating back
+        viewModel.stopBreakTimer()
         navController.popBackStack()
     }
 
@@ -2035,6 +2112,14 @@ fun WorkoutDetailsScreen(
                                     onDismissRequest = { showRecoveryInfoDialog = false },
                                     title = { Text("Recovery Factors") },
                                     text = {
+                                        Box(
+                                            modifier = Modifier
+                                                .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.7f).dp)
+                                                .verticalScroll(rememberScrollState())
+                                        ) {
+                                            Column(
+                                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                                            ) {
                                         Text(
                                             "Recovery factors help calculate muscle stress and recovery more accurately. " +
                                                     "If you provide all recovery factors, the app will use a more detailed formula " +
@@ -2045,8 +2130,9 @@ fun WorkoutDetailsScreen(
                                                     "• Sleep Quality (1-10): How well you slept\n" +
                                                     "• Protein Intake (g): Amount of protein consumed\n" +
                                                     "• Hydration (1-10): Your hydration level\n" +
-                                                    "• Stress Level (1-10): Your current stress level"
-                                        )
+                                                            "• Stress Level (1-10): Your current stress level")
+                                            }
+                                        }
                                     },
                                     confirmButton = {
                                         TextButton(onClick = { showRecoveryInfoDialog = false }) {
@@ -2200,20 +2286,50 @@ fun WorkoutDetailsScreen(
             }
         }
         
-        AlertDialog(
+        Dialog(
             onDismissRequest = { 
                 showCompletedExerciseDialog = false 
                 completedExerciseInfo = null
-            },
-            title = { 
+            }
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(1f)
+                    .then(
+                        if (!defaultSorenessValues) {
+                            Modifier.fillMaxHeight(0.9f)
+                        } else {
+                            Modifier.wrapContentHeight()
+                        }
+                    ),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 8.dp
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp)
+                ) {
+                                        // Title
                 Text(
                     "Exercise Completed",
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.primary
                 ) 
-            },
-            text = {
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Content (scrollable when muscle soreness is expanded)
                 Column(
+                        modifier = Modifier
+                            .then(
+                                if (!defaultSorenessValues) {
+                                    Modifier
+                                        .weight(1f)
+                                        .verticalScroll(rememberScrollState())
+                                } else {
+                                    Modifier
+                                }
+                            ),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // Exercise name
@@ -2248,35 +2364,8 @@ fun WorkoutDetailsScreen(
                             
                             Text(
                                 text = "Difficulty: ${completedExerciseInfo!!.entityExercise.difficulty}",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            
-                            Text(
-                                text = "Sets: ${completedExerciseInfo!!.workoutExercise.sets}",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            
-                            if (completedExerciseInfo!!.entityExercise.useTime) {
-                                val timeInSeconds = completedExerciseInfo!!.workoutExercise.reps
-                                val minutes = timeInSeconds / 60
-                                val seconds = timeInSeconds % 60
-                                Text(
-                                    text = "Time: ${minutes}:${String.format("%02d", seconds)}",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            } else {
-                                Text(
-                                    text = "Reps: ${completedExerciseInfo!!.workoutExercise.reps}",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                
-                                if (completedExerciseInfo!!.workoutExercise.weight > 0) {
-                                    Text(
-                                        text = "Weight: ${completedExerciseInfo!!.workoutExercise.weight}kg",
                                         style = MaterialTheme.typography.bodyMedium
                                     )
-                                }
-                            }
                         }
                     }
                     
@@ -2369,19 +2458,297 @@ fun WorkoutDetailsScreen(
                             }
                         }
                     }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { 
-                        showCompletedExerciseDialog = false 
-                        completedExerciseInfo = null
+                    
+                    // Track Muscle Soreness section
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Track Muscle Soreness",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Checkbox(
+                                    checked = !defaultSorenessValues,
+                                    onCheckedChange = { checked ->
+                                        defaultSorenessValues = !checked
+                                        if (checked) {
+                                            // Reset to default values
+                                            eccentricFactor = 1.0f
+                                            noveltyFactor = 5
+                                            adaptationLevel = 5
+                                            rpe = 5
+                                            subjectiveSoreness = 5
+                                        }
+                                    }
+                                )
+                            }
+
+                            if (!defaultSorenessValues) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
+                                // Exercise Factors section
+                                Text(
+                                    "Exercise Factors",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+
+                                // Eccentric Factor
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        "Eccentric Factor (1.0-2.0)",
+                                        modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    IconButton(
+                                        onClick = { showSorenessInfoDialog = "eccentric" },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Info,
+                                            contentDescription = "Eccentric Factor Info",
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Slider(
+                                        value = eccentricFactor,
+                                        onValueChange = { 
+                                            eccentricFactor = it
+                                            vibrateOnValueChange()
+                                        },
+                                        valueRange = 1f..2f,
+                                        steps = 9,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(
+                                        text = String.format("%.1f", eccentricFactor),
+                                        modifier = Modifier.padding(start = 8.dp),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Novelty Factor
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        "Novelty Factor (0-10)",
+                                        modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    IconButton(
+                                        onClick = { showSorenessInfoDialog = "novelty" },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Info,
+                                            contentDescription = "Novelty Factor Info",
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Slider(
+                                        value = noveltyFactor.toFloat(),
+                                        onValueChange = { 
+                                            noveltyFactor = it.toInt()
+                                            vibrateOnValueChange()
+                                        },
+                                        valueRange = 0f..10f,
+                                        steps = 10,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(
+                                        text = noveltyFactor.toString(),
+                                        modifier = Modifier.padding(start = 8.dp),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Adaptation Level
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        "Adaptation Level (0-10)",
+                                        modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    IconButton(
+                                        onClick = { showSorenessInfoDialog = "adaptation" },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Info,
+                                            contentDescription = "Adaptation Level Info",
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Slider(
+                                        value = adaptationLevel.toFloat(),
+                                        onValueChange = { 
+                                            adaptationLevel = it.toInt()
+                                            vibrateOnValueChange()
+                                        },
+                                        valueRange = 0f..10f,
+                                        steps = 10,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(
+                                        text = adaptationLevel.toString(),
+                                        modifier = Modifier.padding(start = 8.dp),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                // Perceived Exertion & Soreness section
+                                Text(
+                                    "Perceived Exertion & Soreness",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+
+                                // RPE
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        "Rate of Perceived Exertion (1-10)",
+                                        modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    IconButton(
+                                        onClick = { showSorenessInfoDialog = "rpe" },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Info,
+                                            contentDescription = "RPE Info",
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Slider(
+                                        value = rpe.toFloat(),
+                                        onValueChange = { 
+                                            rpe = it.toInt()
+                                            vibrateOnValueChange()
+                                        },
+                                        valueRange = 1f..10f,
+                                        steps = 9,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(
+                                        text = rpe.toString(),
+                                        modifier = Modifier.padding(start = 8.dp),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Subjective Soreness
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        "Subjective Soreness (1-10)",
+                                        modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    IconButton(
+                                        onClick = { showSorenessInfoDialog = "soreness" },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Info,
+                                            contentDescription = "Soreness Info",
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Slider(
+                                        value = subjectiveSoreness.toFloat(),
+                                        onValueChange = { 
+                                            subjectiveSoreness = it.toInt()
+                                            vibrateOnValueChange()
+                                        },
+                                        valueRange = 1f..10f,
+                                        steps = 9,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(
+                                        text = subjectiveSoreness.toString(),
+                                        modifier = Modifier.padding(start = 8.dp),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    }
+                                }
+                            }
+                        }
                     }
-                ) {
-                    Text("OK")
-                }
-            },
-            dismissButton = {
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
                 TextButton(
                     onClick = { 
                         showCompletedExerciseDialog = false 
@@ -2390,8 +2757,58 @@ fun WorkoutDetailsScreen(
                 ) {
                     Text("Cancel")
                 }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        TextButton(
+                            onClick = { 
+                                completedExerciseInfo?.let { exerciseInfo ->
+                                    coroutineScope.launch {
+                                        saveExerciseSessionWithSoreness(exerciseInfo)
+                                    }
+                                }
+                            }
+                        ) {
+                            Text("Save")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Muscle Soreness Info Dialog
+    if (showSorenessInfoDialog != null) {
+        AlertDialog(
+            onDismissRequest = { showSorenessInfoDialog = null },
+            title = {
+                Text(
+                    text = when (showSorenessInfoDialog) {
+                        "eccentric" -> "Eccentric Factor"
+                        "novelty" -> "Novelty Factor"
+                        "adaptation" -> "Adaptation Level"
+                        "rpe" -> "Rate of Perceived Exertion"
+                        "soreness" -> "Subjective Soreness"
+                        else -> ""
+                    }
+                )
             },
-            containerColor = MaterialTheme.colorScheme.surface
+            text = {
+                Text(
+                    text = when (showSorenessInfoDialog) {
+                        "eccentric" -> "The degree of emphasis on the lowering (eccentric) phase of the movement. Higher values indicate slower, more controlled negatives."
+                        "novelty" -> "How new or different this exercise is from your usual routine. Higher values indicate more novel movements that may cause more soreness."
+                        "adaptation" -> "How well adapted your body is to this exercise. Higher values indicate better adaptation and potentially less soreness."
+                        "rpe" -> "How hard the exercise felt. 1 = Very easy, 5 = Moderate effort, 10 = Maximum effort possible."
+                        "soreness" -> "Current muscle soreness level. 1 = No soreness, 5 = Moderate discomfort, 10 = Severe pain/inability to move."
+                        else -> ""
+                    },
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showSorenessInfoDialog = null }) {
+                    Text("OK")
+                }
+            }
         )
     }
 
@@ -2452,6 +2869,9 @@ fun WorkoutDetailsScreen(
                                 Log.d("WorkoutDetailsScreen", "Deleted workout session $sessionId and all associated exercise sessions")
                             }
                         }
+                        // Stop the break timer when exiting workout
+                        viewModel.stopBreakTimer()
+                        
                         // Reset view models
                         viewModel.stopWorkoutSession()
                         generalViewModel.endWorkout()

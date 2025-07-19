@@ -144,4 +144,8 @@ interface ExerciseDao {
     
     @Query("SELECT * FROM exercise_sessions WHERE sessionId = :sessionId")
     suspend fun getExerciseSessionsForSession(sessionId: Long): List<SessionEntityExercise>
+    
+    // Get the latest exercise session for a specific exercise
+    @Query("SELECT * FROM exercise_sessions WHERE exerciseId = :exerciseId ORDER BY exerciseSessionId DESC LIMIT 1")
+    suspend fun getLatestExerciseSession(exerciseId: Long): SessionEntityExercise?
 }

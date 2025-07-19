@@ -66,8 +66,8 @@
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="Pause/Play timer"
             android:padding="6dp"
-            android:clickable="false"
-            android:focusable="false" />
+            android:clickable="true"
+            android:focusable="true" />
 
     </LinearLayout>
 

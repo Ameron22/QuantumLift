@@ -8,6 +8,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -24,6 +26,7 @@ import com.example.gymtracker.components.WorkoutIndicator
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.gymtracker.viewmodels.GeneralViewModel
 import com.example.gymtracker.viewmodels.AuthViewModel
+import com.example.gymtracker.viewmodels.PhysicalParametersViewModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -36,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
+import android.util.Log
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,11 +52,25 @@ fun HomeScreen(
     val context = LocalContext.current
     val db = remember { AppDatabase.getDatabase(context) }
     val dao = remember { db.exerciseDao() }
+    val physicalParametersDao = remember { db.physicalParametersDao() }
+    val physicalParametersViewModel = remember { PhysicalParametersViewModel(physicalParametersDao) }
 
+    var selectedTabIndex by remember { mutableStateOf(0) }
+    val tabs = listOf("Welcome", "Body")
 
+    // Load physical parameters when Body tab is selected
+    LaunchedEffect(selectedTabIndex) {
+        if (selectedTabIndex == 1) {
+            Log.d("HomeScreen", "Body tab selected, loading physical parameters")
+            physicalParametersViewModel.debugCheckTable() // Debug table existence
+            physicalParametersViewModel.loadPhysicalParameters("current_user")
+            physicalParametersViewModel.loadAllBodyMeasurements("current_user")
+        }
+    }
 
     Scaffold(
         topBar = {
+            Column {
             TopAppBar(
                 title = { 
                     Text(
@@ -68,10 +86,32 @@ fun HomeScreen(
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
                 )
             )
+                
+                // Tab bar under TopAppBar
+                TabRow(selectedTabIndex = selectedTabIndex) {
+                    tabs.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTabIndex == index,
+                            onClick = { 
+                                Log.d("HomeScreen", "Tab clicked: $title (index: $index)")
+                                selectedTabIndex = index 
+                            },
+                            text = { Text(title) }
+                        )
+                    }
+                }
+            }
         },
         bottomBar = { BottomNavBar(navController) }
     ) { paddingValues ->
-        WelcomeTab(paddingValues = paddingValues)
+        // Tab Content
+        when (selectedTabIndex) {
+            0 -> WelcomeTab(paddingValues = paddingValues)
+            1 -> {
+                Log.d("HomeScreen", "Rendering BodyScreen")
+                BodyScreen(navController = navController, viewModel = physicalParametersViewModel, paddingValues = paddingValues)
+            }
+        }
     }
 }
 

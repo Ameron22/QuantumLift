@@ -30,6 +30,7 @@ import com.example.gymtracker.utils.ExerciseDataImporter
 import com.example.gymtracker.viewmodels.WorkoutDetailsViewModel
 import com.example.gymtracker.viewmodels.GeneralViewModel
 import com.example.gymtracker.viewmodels.AuthViewModel
+import com.example.gymtracker.viewmodels.PhysicalParametersViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -264,6 +265,12 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                         }
                         composable(Screen.Feed.route) {
                             FeedScreen(navController, authViewModel)
+                        }
+                        composable(Screen.AddMeasurement.route) {
+                            val database = AppDatabase.getDatabase(applicationContext)
+                            val physicalParametersDao = database.physicalParametersDao()
+                            val physicalParametersViewModel = PhysicalParametersViewModel(physicalParametersDao)
+                            AddMeasurementScreen(navController, physicalParametersViewModel)
                         }
                         composable(
                             Screen.Routes.WORKOUT_DETAILS,
