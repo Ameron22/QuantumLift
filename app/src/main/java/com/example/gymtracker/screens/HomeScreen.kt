@@ -35,10 +35,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import android.util.Log
+import com.google.android.filament.MaterialInstance
 import io.github.sceneview.Scene
 import io.github.sceneview.node.ModelNode
 import io.github.sceneview.math.Position
 import io.github.sceneview.math.Rotation
+import io.github.sceneview.node.CylinderNode
 
 import io.github.sceneview.rememberCameraManipulator
 import io.github.sceneview.rememberCameraNode
@@ -49,6 +51,7 @@ import io.github.sceneview.rememberMainLightNode
 import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
+import io.github.sceneview.rememberOnGestureListener
 import io.github.sceneview.rememberRenderer
 import io.github.sceneview.rememberScene
 import io.github.sceneview.rememberView
@@ -337,25 +340,29 @@ fun MusclesTab(paddingValues: PaddingValues) {
     val modelLoader = rememberModelLoader(engine)
     val materialLoader = rememberMaterialLoader(engine)
     val environmentLoader = rememberEnvironmentLoader(engine)
-    val cameraComponent = view.camera
-    /*LaunchedEffect(Unit) {
-        cameraComponent?.setLensProjection(
-            1.0,
-            1.0,
-            0.1,
-            1.0
-        )
-        Log.d("MusclesTab", "Camera lens projection set")
-    }*/
-    // Camera is positioned far away (z = 8.0f) for orthographic-like effect
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
-            .fillMaxSize(),
+            .fillMaxSize()
+            .padding(paddingValues)
+            .padding(2.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        val bicepsNode = remember { mutableStateOf<ModelNode?>(null) }
+
         LaunchedEffect(Unit) {
             scene.skybox = null
+            // Debug: Check if the model file exists
+            try {
+                val assets = context.assets
+                val files = assets.list("")
+                Log.d("MusclesTab", "Available assets: ${files?.joinToString(", ")}")
+                val modelExists = assets.list("")?.contains("front_muscles.glb") == true
+                Log.d("MusclesTab", "Model file exists: $modelExists")
+            } catch (e: Exception) {
+                Log.e("MusclesTab", "Error checking assets: ${e.message}")
+            }
         }
         Scene(
             modifier = Modifier.fillMaxSize(),
@@ -373,24 +380,84 @@ fun MusclesTab(paddingValues: PaddingValues) {
             },
             cameraNode = rememberCameraNode(engine) {
                 // Move camera far away
-                position = Position(z = 2.0f)
+                position = Position(x = 0f, y = 0f, z = 6.5f)
             },
             childNodes = rememberNodes {
                 add(
                     ModelNode(
                         modelInstance = modelLoader.createModelInstance(
-                            assetFileLocation = "front_muscles.glb"
+                            assetFileLocation = "manequin_model.glb"
                         ),
-                        scaleToUnits = 1.0f
+                        //scaleToUnits = 1.0f
                     ).apply {
                         transform(
-                            rotation = Rotation(y = 180f)
+                            position = Position(x = 0f, y = -2.4f, z = 0f), //change y here, if change camera it will jump
+                            rotation = Rotation(y = 15f)
                         )
                     }
                 )
-            }
-        )
+                add(
+                    ModelNode(
+                        modelInstance = modelLoader.createModelInstance(
+                            assetFileLocation = "untrainable.glb"
+                        ),
+                        //scaleToUnits = 1.0f
+                    ).apply {
+                        transform(
+                            position = Position(x = 0f, y = -2.4f, z = 0f),
+                            rotation = Rotation(y = 15f)
 
+                        )
+                    }
+                )
+
+                val node = ModelNode(
+                    modelInstance = modelLoader.createModelInstance(
+                        assetFileLocation = "biceps.glb"
+                    ),
+                    //scaleToUnits = 1.0f
+                ).apply {
+                    transform(
+                        position = Position(x = 0f, y = -2.4f, z = 0f),
+                        rotation = Rotation(y = 15f)
+                        )
+                }
+
+
+                bicepsNode.value = node
+
+                add(node)
+
+                add(
+                    CylinderNode(
+                        engine = engine,
+                        radius = 0.2f,
+                        height = 2.0f,
+                        // Simple colored material with physics properties
+                        materialInstance = materialLoader.createColorInstance(
+                            color = Color.Blue,
+                            metallic = 0.5f,
+                            roughness = 0.2f,
+                            reflectance = 0.4f
+                        )
+                ).apply {
+                        // Define the node position and rotation
+                        transform(
+                            position = Position(y = 1.0f),
+                            rotation = Rotation(x = 90.0f)
+                        )
+                })
+            },
+            // Handle user interactions
+            onGestureListener = rememberOnGestureListener(
+                onDoubleTapEvent = { event, tappedNode ->
+                    tappedNode?.let {
+                        //it.scale *= 1.1f
+                        it.isVisible = false
+                    }
+                }
+            ),
+        )
     }
 
 }
