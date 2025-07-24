@@ -1,7 +1,7 @@
 package com.example.gymtracker.screens
+import android.R
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -10,7 +10,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
-
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.runtime.*
@@ -23,7 +22,6 @@ import androidx.navigation.NavController
 import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.components.BottomNavBar
 import com.example.gymtracker.components.WorkoutIndicator
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.gymtracker.viewmodels.GeneralViewModel
 import com.example.gymtracker.viewmodels.AuthViewModel
 import com.example.gymtracker.viewmodels.PhysicalParametersViewModel
@@ -32,18 +30,29 @@ import com.example.gymtracker.data.UserXP
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import android.util.Log
+import io.github.sceneview.Scene
+import io.github.sceneview.node.ModelNode
+import io.github.sceneview.math.Position
+import io.github.sceneview.math.Rotation
+
+import io.github.sceneview.rememberCameraManipulator
+import io.github.sceneview.rememberCameraNode
+import io.github.sceneview.rememberCollisionSystem
+import io.github.sceneview.rememberEngine
+import io.github.sceneview.rememberEnvironmentLoader
+import io.github.sceneview.rememberMainLightNode
+import io.github.sceneview.rememberMaterialLoader
+import io.github.sceneview.rememberModelLoader
+import io.github.sceneview.rememberNodes
+import io.github.sceneview.rememberRenderer
+import io.github.sceneview.rememberScene
+import io.github.sceneview.rememberView
+import io.github.sceneview.utils.projectionTransform
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -60,7 +69,7 @@ fun HomeScreen(
     val physicalParametersViewModel = remember { PhysicalParametersViewModel(physicalParametersDao) }
 
     var selectedTabIndex by remember { mutableStateOf(0) }
-    val tabs = listOf("Welcome", "Body")
+    val tabs = listOf("Welcome", "Body", "Muscles")
 
     // Load physical parameters when Body tab is selected
     LaunchedEffect(selectedTabIndex) {
@@ -114,6 +123,10 @@ fun HomeScreen(
             1 -> {
                 Log.d("HomeScreen", "Rendering BodyScreen")
                 BodyScreen(navController = navController, viewModel = physicalParametersViewModel, paddingValues = paddingValues)
+            }
+            2 -> {
+                Log.d("HomeScreen", "Rendering MusclesTab")
+                MusclesTab(paddingValues = paddingValues)
             }
         }
     }
@@ -315,9 +328,69 @@ fun QuickActionCard(
     }
 }
 
+@Composable
+fun MusclesTab(paddingValues: PaddingValues) {
+    val engine = rememberEngine()
+    val view = rememberView(engine)
+    val renderer = rememberRenderer(engine)
+    val scene = rememberScene(engine)
+    val modelLoader = rememberModelLoader(engine)
+    val materialLoader = rememberMaterialLoader(engine)
+    val environmentLoader = rememberEnvironmentLoader(engine)
+    val cameraComponent = view.camera
+    /*LaunchedEffect(Unit) {
+        cameraComponent?.setLensProjection(
+            1.0,
+            1.0,
+            0.1,
+            1.0
+        )
+        Log.d("MusclesTab", "Camera lens projection set")
+    }*/
+    // Camera is positioned far away (z = 8.0f) for orthographic-like effect
 
+    Column(
+        modifier = Modifier
+            .fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        LaunchedEffect(Unit) {
+            scene.skybox = null
+        }
+        Scene(
+            modifier = Modifier.fillMaxSize(),
+            engine = engine,
+            view = view,
+            renderer = renderer,
+            scene = scene,
+            isOpaque = false,
+            modelLoader = modelLoader,
+            materialLoader = materialLoader,
+            environmentLoader = environmentLoader,
+            collisionSystem = rememberCollisionSystem(view),
+            mainLightNode = rememberMainLightNode(engine) {
+                intensity = 100_000.0f
+            },
+            cameraNode = rememberCameraNode(engine) {
+                // Move camera far away
+                position = Position(z = 2.0f)
+            },
+            childNodes = rememberNodes {
+                add(
+                    ModelNode(
+                        modelInstance = modelLoader.createModelInstance(
+                            assetFileLocation = "front_muscles.glb"
+                        ),
+                        scaleToUnits = 1.0f
+                    ).apply {
+                        transform(
+                            rotation = Rotation(y = 180f)
+                        )
+                    }
+                )
+            }
+        )
 
+    }
 
-
-
-
+}

@@ -1,9 +1,11 @@
 package com.example.gymtracker.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -134,7 +136,8 @@ fun LoadHistoryScreen(
                 GraphsTab(
                     workoutSessions = workoutSessions,
                     exerciseSessions = exerciseSessions,
-                    paddingValues = paddingValues
+                    paddingValues = paddingValues,
+                    viewModel = viewModel
                 )
             }
             2 -> {
@@ -202,21 +205,70 @@ fun WorkoutsTab(
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                     muscleSoreness.forEach { (muscle, soreness) ->
-                        Row(
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = when (soreness.sorenessLevel) {
+                                    "Very Sore" -> Color.Red.copy(alpha = 0.1f)
+                                    "Sore" -> Color(0xFFFF8C00).copy(alpha = 0.1f)
+                                    "Slightly Sore" -> Color.Yellow.copy(alpha = 0.1f)
+                                    else -> Color.Green.copy(alpha = 0.1f)
+                                }
+                            )
                         ) {
-                            Text(text = muscle)
+                            Column(
+                                modifier = Modifier.padding(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                        ) {
+                                    Text(
+                                        text = muscle,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium
+                                    )
                             Text(
                                 text = soreness.sorenessLevel,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
                                 color = when (soreness.sorenessLevel) {
                                     "Very Sore" -> Color.Red
+                                            "Sore" -> Color(0xFFFF8C00)
                                     "Slightly Sore" -> Color.Yellow
                                     else -> Color.Green
                                 }
                             )
+                                }
+                                
+                                // Show additional details
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Stress: ${soreness.totalStress.toInt()}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "RPE: ${soreness.averageRPE}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "Soreness: ${soreness.averageSubjectiveSoreness}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -237,26 +289,12 @@ fun WorkoutsTab(
 fun GraphsTab(
     workoutSessions: List<SessionWorkoutWithMuscles>,
     exerciseSessions: List<SessionEntityExercise>,
-    paddingValues: PaddingValues
+    paddingValues: PaddingValues,
+    viewModel: HistoryViewModel
 ) {
-    
-    // Calculate muscle group training frequency
-    val muscleGroupFrequency = workoutSessions
-        .flatMap { session -> session.muscleGroups.keys }
-        .groupingBy { it }
-        .eachCount()
-        .toList()
-        .sortedByDescending { it.second }
-    
-    // Calculate muscle parts training frequency from exercise sessions
-    val musclePartsFrequency = exerciseSessions
-        .flatMap { exercise -> 
-            exercise.muscleParts.split(", ").map { it.trim() }.filter { it.isNotEmpty() }
-        }
-        .groupingBy { it }
-        .eachCount()
-        .toList()
-        .sortedByDescending { it.second }
+    // Use the complete muscle frequency functions that include all muscles
+    val muscleGroupFrequency = viewModel.getCompleteMuscleGroupFrequency(workoutSessions)
+    val musclePartsFrequency = viewModel.getCompleteMusclePartsFrequency(exerciseSessions)
     
     Column(
         modifier = Modifier
@@ -265,13 +303,13 @@ fun GraphsTab(
             .padding(16.dp)
     ) {
         Text(
-            text = "Muscle Group Training Frequency",
+            text = "Muscle Training Analysis",
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 16.dp)
         )
         
-        if (muscleGroupFrequency.isEmpty()) {
+        if (workoutSessions.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -284,6 +322,12 @@ fun GraphsTab(
             }
         } else {
             CompactBarChart(
+                muscleGroupFrequency = muscleGroupFrequency,
+                musclePartsFrequency = musclePartsFrequency
+            )
+            
+            // Add undertrained muscles section
+            UndertrainedMusclesSection(
                 muscleGroupFrequency = muscleGroupFrequency,
                 musclePartsFrequency = musclePartsFrequency
             )
@@ -377,7 +421,13 @@ fun CompactBarItem(
 ) {
     val barHeight = 24.dp
     val maxBarWidth = 150.dp
-    val barWidth = (frequency.toFloat() / maxFrequency.toFloat() * maxBarWidth.value).dp
+    val barWidth = if (frequency > 0) {
+        (frequency.toFloat() / maxFrequency.toFloat() * maxBarWidth.value).dp
+    } else {
+        0.dp
+    }
+    
+    val isUndertrained = frequency <= 1
     
     Row(
         modifier = Modifier
@@ -389,7 +439,8 @@ fun CompactBarItem(
         Text(
             text = muscleGroup.replaceFirstChar { it.uppercase() },
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = if (isUndertrained) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+            fontWeight = if (isUndertrained) FontWeight.Medium else FontWeight.Normal,
             modifier = Modifier.width(60.dp)
         )
         
@@ -399,25 +450,33 @@ fun CompactBarItem(
                 .height(barHeight)
                 .padding(horizontal = 8.dp)
                 .background(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    color = if (isUndertrained) 
+                        MaterialTheme.colorScheme.error.copy(alpha = 0.1f) 
+                    else 
+                        MaterialTheme.colorScheme.surfaceVariant,
                     shape = RoundedCornerShape(2.dp)
                 )
         ) {
+            if (frequency > 0) {
             Box(
                 modifier = Modifier
                     .width(barWidth)
                     .height(barHeight)
                     .background(
-                        color = MaterialTheme.colorScheme.primary,
+                            color = if (isUndertrained) 
+                                MaterialTheme.colorScheme.error 
+                            else 
+                                MaterialTheme.colorScheme.primary,
                         shape = RoundedCornerShape(2.dp)
                     )
             )
+            }
         }
         
         Text(
             text = "$frequency",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
+            color = if (isUndertrained) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.width(30.dp),
             textAlign = TextAlign.End
@@ -1241,6 +1300,116 @@ fun VolumeProgressionTab(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun UndertrainedMusclesSection(
+    muscleGroupFrequency: List<Pair<String, Int>>,
+    musclePartsFrequency: List<Pair<String, Int>>
+) {
+    // Find muscles with 0 or very low training frequency
+    val undertrainedGroups = muscleGroupFrequency.filter { it.second <= 1 }
+    val undertrainedParts = musclePartsFrequency.filter { it.second <= 1 }
+    
+    if (undertrainedGroups.isNotEmpty() || undertrainedParts.isNotEmpty()) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f)
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    text = "Undertrained Muscles",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                
+                if (undertrainedGroups.isNotEmpty()) {
+                    Text(
+                        text = "Muscle Groups:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    ) {
+                        items(undertrainedGroups) { (muscle, count) ->
+                            UndertrainedMuscleChip(
+                                muscleName = muscle,
+                                count = count
+                            )
+                        }
+                    }
+                }
+                
+                if (undertrainedParts.isNotEmpty()) {
+                    Text(
+                        text = "Muscle Parts:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(undertrainedParts) { (muscle, count) ->
+                            UndertrainedMuscleChip(
+                                muscleName = muscle,
+                                count = count
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun UndertrainedMuscleChip(
+    muscleName: String,
+    count: Int
+) {
+    Box(
+        modifier = Modifier
+            .background(
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = muscleName,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = "$count times",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+            )
         }
     }
 }

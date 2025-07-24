@@ -575,7 +575,7 @@ fun ExerciseScreen(
                     stopTimerAndCleanup(context)
                 }
                 navController.previousBackStackEntry?.savedStateHandle?.set("exerciseCompleted", true)
-                // Navigate back after the notification timer expires
+                // Navigate back to WorkoutDetailsScreen
                 navController.popBackStack()
             }
         } catch (e: Exception) {
@@ -694,7 +694,7 @@ fun ExerciseScreen(
                                 }
                             } catch (e: Exception) {
                                 Log.e("ExerciseScreen", "Error saving exercise: ${e.message}")
-                                navController.popBackStack()
+                                // Don't navigate back here since saveExerciseSession() handles navigation
                             }
                         }
                     } else {
@@ -725,7 +725,7 @@ fun ExerciseScreen(
                                 }
                             } catch (e: Exception) {
                                 Log.e("ExerciseScreen", "Error saving exercise: ${e.message}")
-                                navController.popBackStack()
+                                // Don't navigate back here since saveExerciseSession() handles navigation
                             }
                         } else {
                             // Start break time
@@ -787,17 +787,36 @@ fun ExerciseScreen(
         return duration
     }
 
+    // Function to pause the timer
+    fun pauseTimer() {
+        if (isTimerRunning && !isPaused) {
+            isPaused = true 
+            pausedTime = System.currentTimeMillis()
+            // Pause timer service
+            pauseTimerService(context)
+        }
+    }
+
+    // Function to resume the timer
+    fun resumeTimer() {
+        if (isTimerRunning && isPaused) {
+            isPaused = false
+            // Resume timer service
+            resumeTimerService(context)
+        }
+    }
 
     // Handle back navigation
     BackHandler {
         if (isTimerRunning) {
-            stopTimer()
+            // Pause timer instead of stopping it
+            pauseTimer()
         }
-        // Only show confirmation dialog if at least one set is completed
-        if (completedSet > 0) {
+        // Show confirmation dialog if timer is running or at least one set is completed
+        if (isTimerRunning || completedSet > 0) {
             showBackConfirmationDialog = true
         } else {
-            // If no sets completed, just go back without confirmation
+            // If no timer running and no sets completed, just go back without confirmation
             navController.popBackStack()
         }
     }
@@ -805,25 +824,45 @@ fun ExerciseScreen(
     // Back confirmation dialog
     if (showBackConfirmationDialog) {
         AlertDialog(
-            onDismissRequest = { showBackConfirmationDialog = false },
-            title = { Text("Save Exercise?") },
-            text = { Text("Do you want to save this exercise before going back?") },
+            onDismissRequest = { 
+                // If timer was running, resume it when dialog is dismissed
+                if (isTimerRunning) {
+                    resumeTimer()
+                }
+                showBackConfirmationDialog = false 
+            },
+            title = { Text("Exit Exercise?") },
+             text = { Text("Do you want to save this exercise before going back?") },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showBackConfirmationDialog = false
-                        coroutineScope.launch {
-                            saveExerciseSession()
+                        // Stop timer if running
+                        if (isTimerRunning) {
+                            stopTimer()
+                        }
+                        // Save exercise if completed
+                        if (completedSet > 0) {
+                            coroutineScope.launch {
+                                saveExerciseSession()
+                            }
+                        } else {
+                            navController.popBackStack()
                         }
                     }
                 ) {
-                    Text("Save")
+                    Text("Yes")
                 }
             },
             dismissButton = {
                 TextButton(
                     onClick = {
                         showBackConfirmationDialog = false
+                        // Stop timer if running (user wants to exit without saving)
+                        if (isTimerRunning) {
+                            stopTimer()
+                        }
+                        // Navigate back without saving
                         navController.popBackStack()
                     }
                 ) {
@@ -902,26 +941,6 @@ fun ExerciseScreen(
             Log.d("ExerciseScreen", "Continuing timer without floating timer")
         }
     }
-
-    // Function to pause the timer
-    fun pauseTimer() {
-        if (isTimerRunning && !isPaused) {
-            isPaused = true
-            pausedTime = System.currentTimeMillis()
-            // Pause timer service
-            pauseTimerService(context)
-        }
-    }
-
-    // Function to resume the timer
-    fun resumeTimer() {
-        if (isTimerRunning && isPaused) {
-            isPaused = false
-            // Resume timer service
-            resumeTimerService(context)
-        }
-    }
-
     // Function to skip the current set
     fun skipSet() {
         Log.d("ExerciseScreen", "skipSet called")
@@ -1063,13 +1082,14 @@ fun ExerciseScreen(
                 navigationIcon = {
                     IconButton(onClick = { 
                         if (isTimerRunning) {
-                            stopTimer()
+                            // Pause timer instead of stopping it
+                            pauseTimer()
                         }
-                        // Only show confirmation dialog if at least one set is completed
-                        if (completedSet > 0) {
+                        // Show confirmation dialog if timer is running or at least one set is completed
+                        if (isTimerRunning || completedSet > 0) {
                             showBackConfirmationDialog = true
                         } else {
-                            // If no sets completed, just go back without confirmation
+                            // If no timer running and no sets completed, just go back without confirmation
                             navController.popBackStack()
                         }
                     }) {
@@ -1114,21 +1134,17 @@ fun ExerciseScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Timer text
-                                Text(
-                                text = if (isBreakRunning) "Break Time" else "Exercise Time",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-
+                            
                             Text(
                                 text = String.format(
                                     "%02d:%02d",
                                     remainingTime / 60,
                                     remainingTime % 60
                                 ),
-                                style = MaterialTheme.typography.titleLarge,
-                                color = MaterialTheme.colorScheme.onSurface
+                                style = MaterialTheme.typography.displayMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.fillMaxWidth(0.45f),
+                                textAlign = TextAlign.Center
                             )
 
                             // Pause/Resume button

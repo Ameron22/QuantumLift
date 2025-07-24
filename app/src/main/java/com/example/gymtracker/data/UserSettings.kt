@@ -7,5 +7,6 @@ data class UserSettings(
     val soundEnabled: Boolean = true,
     val vibrationEnabled: Boolean = true,
     val soundVolume: Float = 0.5f, // Volume level from 0.0f to 1.0f
-    val loadFromHistory: Boolean = true // Load exercise details from latest history instead of template
+    val loadFromHistory: Boolean = true, // Load exercise details from latest history instead of template
+    val notificationPermissionRequested: Boolean = false // Track if notification permission has been requested
 ) 

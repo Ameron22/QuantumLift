@@ -3,7 +3,6 @@
   <component name="CompilerConfiguration">
     <bytecodeTargetLevel>
       <module name="GymTracker.app" target="21" />
-      <module name="QuantumLift.app" target="21" />
     </bytecodeTargetLevel>
   </component>
 </project>

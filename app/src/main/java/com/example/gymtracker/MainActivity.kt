@@ -9,6 +9,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.NavType
@@ -40,6 +43,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleObserver
 import androidx.lifecycle.OnLifecycleEvent
 import com.example.gymtracker.services.TimerService
+import com.example.gymtracker.components.TopPermissionBanner
+import com.example.gymtracker.data.UserSettingsPreferences
 
 data class NotificationNavigation(
     val exerciseId: Int,
@@ -204,6 +209,20 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                             throw IllegalArgumentException("Unknown ViewModel class")
                         }
                     })
+                    
+                    // Permission request logic
+                    val userSettings = remember { UserSettingsPreferences(applicationContext) }
+                    val settings by userSettings.settingsFlow.collectAsState(initial = null)
+                    var showPermissionBanner by remember { mutableStateOf(false) }
+                    
+                    // Check if we should show permission banner for first-time users
+                    LaunchedEffect(settings) {
+                        settings?.let { userSettingsData ->
+                            if (!userSettingsData.notificationPermissionRequested) {
+                                showPermissionBanner = true
+                            }
+                        }
+                    }
 
                     // Handle navigation from floating timer and achievement notifications
                     LaunchedEffect(Unit) {
@@ -232,10 +251,25 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                         }
                     }
 
-                    NavHost(
-                        navController = navController,
-                        startDestination = if (authState.isLoggedIn) Screen.Home.route else Screen.Login.route
-                    ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        // Permission banner at the top
+                        if (showPermissionBanner) {
+                            TopPermissionBanner(
+                                onDismiss = {
+                                    showPermissionBanner = false
+                                    userSettings.updateNotificationPermissionRequested(true)
+                                },
+                                onPermissionGranted = {
+                                    showPermissionBanner = false
+                                    userSettings.updateNotificationPermissionRequested(true)
+                                }
+                            )
+                        }
+                        
+                        NavHost(
+                            navController = navController,
+                            startDestination = if (authState.isLoggedIn) Screen.Home.route else Screen.Login.route
+                        ) {
                         composable(Screen.Login.route) {
                             LoginScreen(navController, authViewModel)
                         }
@@ -316,6 +350,7 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                             )
                         }
                     }
+                }
                 }
             }
         }

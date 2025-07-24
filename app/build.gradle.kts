@@ -95,4 +95,10 @@ dependencies {
     implementation(libs.coil.gif)
     implementation(libs.android.gif.drawable)
     implementation(libs.material.icons.extended)
+
+    // SceneView for 3D model rendering (bundles Filament internally)
+    implementation("io.github.sceneview:sceneview:2.3.0")
+    
+    // Material Design support for SceneView
+    implementation("com.google.android.material:material:1.11.0")
 }
