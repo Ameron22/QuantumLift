@@ -55,7 +55,7 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
                     dao.getAllWorkoutSessionsFlow().collectLatest { workoutSessions ->
                         Log.d("HistoryViewModel", "Loaded ${workoutSessions.size} workout sessions")
 
-                    // Create a map to store aggregated results
+                                            // Create a map to store aggregated results
                     val sessionMap = mutableMapOf<Long, SessionWorkoutWithMuscles>()
                         val muscleDataMap = mutableMapOf<String, MuscleData>()
 
@@ -90,14 +90,22 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
                                 // Calculate muscle stress using the new formula
                                 val muscleStress = calculateMuscleStress(session)
                                 
-                                // Update muscle data
-                                val existingData = muscleDataMap[session.muscleGroup] ?: MuscleData()
-                                existingData.totalStress += muscleStress
-                                existingData.lastWorkoutTime = max(existingData.lastWorkoutTime, session.sessionId)
-                                existingData.exercises.add(session)
-                                muscleDataMap[session.muscleGroup] = existingData
+                                // Parse individual muscle parts from the session
+                                val muscleParts = session.muscleParts.split(", ").map { it.trim() }.filter { it.isNotEmpty() }
+                                
+                                // If no specific muscle parts are defined, fall back to muscle group
+                                val partsToProcess = if (muscleParts.isNotEmpty()) muscleParts else listOf(session.muscleGroup)
+                                
+                                // Update muscle data for each individual muscle part
+                                for (musclePart in partsToProcess) {
+                                    val existingData = muscleDataMap[musclePart] ?: MuscleData()
+                                    existingData.totalStress += muscleStress / partsToProcess.size // Distribute stress evenly
+                                    existingData.lastWorkoutTime = max(existingData.lastWorkoutTime, session.sessionId)
+                                    existingData.exercises.add(session)
+                                    muscleDataMap[musclePart] = existingData
+                                }
 
-                                // Add muscle group stress data
+                                // Add muscle group stress data (keep for backward compatibility)
                                 (existingSession.muscleGroups as MutableMap)[session.muscleGroup] =
                                     (existingSession.muscleGroups[session.muscleGroup] ?: 0) + muscleStress.toInt()
                             }
@@ -267,7 +275,7 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
 
     /**
      * Determines the soreness level based on various factors
-     * Improved algorithm with more sensitive thresholds
+     * Lowered thresholds for more sensitive soreness detection
      */
     private fun determineSorenessLevel(
         daysSinceLastWorkout: Long,
@@ -275,22 +283,22 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
         avgRPE: Int,
         avgSubjectiveSoreness: Int
     ): String {
-        // More sensitive thresholds for soreness detection
+        // Lowered thresholds for more sensitive soreness detection
         return when {
-            // Very Sore: High stress, recent workout, high RPE and soreness
-            daysSinceLastWorkout < 1 && totalStress > 30 && avgRPE > 6 && avgSubjectiveSoreness > 6 -> "Very Sore"
-            daysSinceLastWorkout < 1 && totalStress > 20 && avgRPE > 7 -> "Very Sore"
-            daysSinceLastWorkout < 1 && avgSubjectiveSoreness > 7 -> "Very Sore"
+            // Very Sore: Lowered thresholds for high stress, recent workout, high RPE and soreness
+            daysSinceLastWorkout < 1 && totalStress > 15 && avgRPE > 5 && avgSubjectiveSoreness > 5 -> "Very Sore"
+            daysSinceLastWorkout < 1 && totalStress > 10 && avgRPE > 6 -> "Very Sore"
+            daysSinceLastWorkout < 1 && avgSubjectiveSoreness > 6 -> "Very Sore"
             
-            // Sore: Moderate stress, recent workout, moderate RPE and soreness
-            daysSinceLastWorkout < 2 && totalStress > 15 && avgRPE > 5 && avgSubjectiveSoreness > 4 -> "Sore"
-            daysSinceLastWorkout < 2 && totalStress > 10 && avgRPE > 6 -> "Sore"
-            daysSinceLastWorkout < 2 && avgSubjectiveSoreness > 5 -> "Sore"
+            // Sore: Lowered thresholds for moderate stress, recent workout, moderate RPE and soreness
+            daysSinceLastWorkout < 2 && totalStress > 8 && avgRPE > 4 && avgSubjectiveSoreness > 3 -> "Sore"
+            daysSinceLastWorkout < 2 && totalStress > 5 && avgRPE > 5 -> "Sore"
+            daysSinceLastWorkout < 2 && avgSubjectiveSoreness > 4 -> "Sore"
             
-            // Slightly Sore: Low stress, recent workout, or moderate indicators
-            daysSinceLastWorkout < 3 && totalStress > 8 && avgRPE > 4 -> "Slightly Sore"
-            daysSinceLastWorkout < 3 && avgSubjectiveSoreness > 3 -> "Slightly Sore"
-            daysSinceLastWorkout < 1 && totalStress > 5 -> "Slightly Sore"
+            // Slightly Sore: Lowered thresholds for low stress, recent workout, or moderate indicators
+            daysSinceLastWorkout < 3 && totalStress > 3 && avgRPE > 3 -> "Slightly Sore"
+            daysSinceLastWorkout < 3 && avgSubjectiveSoreness > 2 -> "Slightly Sore"
+            daysSinceLastWorkout < 1 && totalStress > 2 -> "Slightly Sore"
             
             // Fresh: No recent stress or low indicators
             else -> "Fresh"
