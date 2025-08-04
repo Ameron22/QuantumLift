@@ -434,6 +434,11 @@ class TimerService : Service() {
                             val startTime = view.getTag(FLOATING_TIMER_TOUCH_START_TIME) as? Long ?: 0L
                             val duration = System.currentTimeMillis() - startTime
                             if (duration < 300) {
+                                // Prevent navigation if timer has completed
+                                if (remainingTime <= 0) {
+                                    Log.d(TAG, "Timer completed, preventing navigation on tap")
+                                    return@OnTouchListener true
+                                }
                                 view.animate().alpha(0.7f).setDuration(100).withEndAction {
                                     view.animate().alpha(1.0f).setDuration(100).start()
                                 }.start()
@@ -613,6 +618,12 @@ class TimerService : Service() {
             // Stop the floating timer when user taps it to navigate back to app
             stopFloatingTimer()
             
+            // Check if timer has completed (remainingTime <= 0) and prevent navigation
+            if (remainingTime <= 0) {
+                Log.d(TAG, "Timer completed, preventing navigation back to exercise screen")
+                return
+            }
+            
             val intent = Intent(this, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                 putExtra("from_floating_timer", true)
@@ -676,7 +687,7 @@ class TimerService : Service() {
             return NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle(title)
                 .setContentText(content)
-                .setSmallIcon(R.drawable.new_clock)
+                .setSmallIcon(R.drawable.timer_icon)
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .setSilent(true)
@@ -689,7 +700,7 @@ class TimerService : Service() {
             return NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("Timer")
                 .setContentText("Timer is running")
-                .setSmallIcon(R.drawable.new_clock)
+                .setSmallIcon(R.drawable.timer_icon)
                 .setOngoing(true)
                 .setSilent(true)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)

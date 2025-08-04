@@ -114,6 +114,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import kotlin.math.roundToInt
+import com.example.gymtracker.components.OverlayPermissionDialog
 
 // Helper functions for unified TimerService
 private fun startTimerService(context: Context, time: Int, isBreak: Boolean, exercise: String, exId: Int = 0, sessId: Long = 0L, wId: Int = 0) {
@@ -220,6 +221,17 @@ fun ExerciseScreen(
     viewModel: WorkoutDetailsViewModel = viewModel(),
     generalViewModel: GeneralViewModel
 ) {
+    // Add state to prevent screen reactivation after exercise completion
+    var isExerciseCompleted by remember { mutableStateOf(false) }
+    
+    // Prevent screen reactivation after exercise completion
+    if (isExerciseCompleted) {
+        Log.d("ExerciseScreen", "Exercise already completed, preventing reactivation")
+        LaunchedEffect(Unit) {
+            navController.popBackStack()
+        }
+        return
+    }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val db = remember { AppDatabase.getDatabase(context) }
@@ -271,6 +283,13 @@ fun ExerciseScreen(
     // Add state for back confirmation dialog
     var showBackConfirmationDialog by remember { mutableStateOf(false) }
 
+    // Add state to prevent multiple navigation calls
+    var isNavigatingBack by remember { mutableStateOf(false) }
+    
+    // Add state for overlay permission
+    var showOverlayPermissionDialog by remember { mutableStateOf(false) }
+    var hasOverlayPermission by remember { mutableStateOf(false) }
+
     // Add MediaPlayer instances
     val pingSound = remember { MediaPlayer.create(context, R.raw.ping) }
     val peeengSound = remember { MediaPlayer.create(context, R.raw.peeeng) }
@@ -303,12 +322,82 @@ fun ExerciseScreen(
         val validReps = reps.filterNotNull()
         return if (validReps.isNotEmpty()) validReps.average().toInt() else 0
     }
+    
+    // Helper function to check overlay permission
+    fun checkOverlayPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            android.provider.Settings.canDrawOverlays(context)
+        } else {
+            true // For older Android versions, overlay is enabled by default
+        }
+    }
+    
+    // Helper function to start timer without overlay permission check
+    fun startTimerWithoutOverlay(setIndex: Int) {
+        try {
+            Log.d("ExerciseScreen", "startTimerWithoutOverlay called with setIndex: $setIndex")
+            
+            // Stop break timer when starting an exercise
+            if (isBreakActive) {
+                Log.d("ExerciseScreen", "Stopping break timer - starting exercise")
+                viewModel.stopBreakTimer()
+            }
+            
+            val workoutExercise = exerciseWithDetails?.workoutExercise ?: return
+            
+            // Activate workout if not already active
+            if (!generalViewModel.isWorkoutActive()) {
+                Log.d("ExerciseScreen", "Activating workout at timer start")
+                generalViewModel.activateWorkout()
+            }
+
+            if (setIndex == 1 && completedSet == 0) {
+                // Pre-set break before first set
+                isBreakRunning = true
+                remainingTime = preSetBreakTime
+                activeSetIndex = setIndex
+                isTimerRunning = true
+                isPaused = false
+                pausedTime = 0L
+                Log.d("ExerciseScreen", "Starting pre-set break before first set: $preSetBreakTime seconds")
+                return
+            }
+            
+            activeSetIndex = setIndex
+            exerciseTime = if (exerciseWithDetails?.exercise?.useTime == true) {
+                setReps[setIndex] ?: workoutExercise.reps
+            } else {
+                setTimeReps
+            }
+            remainingTime = exerciseTime
+            isTimerRunning = true
+            isBreakRunning = false
+            isPaused = false
+            pausedTime = 0L
+            
+            // Don't start floating timer when in the app - it will start when app goes to background
+            Log.d("ExerciseScreen", "Timer started in app - floating timer will appear when app goes to background")
+            
+            Log.d("ExerciseScreen", "Timer started: exerciseTime=$exerciseTime, remainingTime=$remainingTime, sets=${workoutExercise.sets}")
+            
+            // Floating timer will be started when app goes to background
+            Log.d("ExerciseScreen", "Timer started - floating timer will appear when app goes to background")
+        } catch (e: Exception) {
+            Log.e("ExerciseScreen", "Error starting timer: ${e.message}")
+            e.printStackTrace()
+            // Continue without floating timer
+            Log.d("ExerciseScreen", "Continuing timer without floating timer")
+        }
+    }
 
     // Clean up MediaPlayer when leaving the screen
     DisposableEffect(Unit) {
         onDispose {
+            Log.d("ExerciseScreen", "Screen disposed - resetting isNavigatingBack flag")
             pingSound.release()
             peeengSound.release()
+            // Reset navigation flag when screen is disposed
+            isNavigatingBack = false
         }
     }
     
@@ -334,24 +423,33 @@ fun ExerciseScreen(
                     if (isTimerRunning) {
                         Log.d("ExerciseScreen", "App going to background - starting floating timer, isPaused: $isPaused")
                         
-                        // First, update the service with current state
-                        updateTimerService(context, remainingTime, isBreakRunning, exerciseWithDetails?.exercise?.name ?: "Exercise", exerciseId, workoutSessionId, workoutId)
-                        
-                        // Start floating timer
-                        startFloatingTimer(
-                            context,
-                            remainingTime,
-                            isBreakRunning,
-                            exerciseWithDetails?.exercise?.name ?: "Exercise",
-                            exerciseId,
-                            workoutSessionId,
-                            workoutId
-                        )
-                        
-                        // If the app timer was paused, update service pause state
-                        if (isPaused) {
-                            Log.d("ExerciseScreen", "App timer was paused, updating service pause state")
-                            pauseTimerService(context)
+                        // Check overlay permission before starting floating timer
+                        if (checkOverlayPermission()) {
+                            hasOverlayPermission = true
+                            // First, update the service with current state
+                            updateTimerService(context, remainingTime, isBreakRunning, exerciseWithDetails?.exercise?.name ?: "Exercise", exerciseId, workoutSessionId, workoutId)
+                            
+                            // Start floating timer
+                            startFloatingTimer(
+                                context,
+                                remainingTime,
+                                isBreakRunning,
+                                exerciseWithDetails?.exercise?.name ?: "Exercise",
+                                exerciseId,
+                                workoutSessionId,
+                                workoutId
+                            )
+                            
+                            // If the app timer was paused, update service pause state
+                            if (isPaused) {
+                                Log.d("ExerciseScreen", "App timer was paused, updating service pause state")
+                                pauseTimerService(context)
+                            }
+                        } else {
+                            // Don't show permission dialog when app goes to background if user already skipped
+                            // Just continue with timer without floating timer
+                            Log.d("ExerciseScreen", "Overlay permission not granted - continuing without floating timer")
+                            hasOverlayPermission = false
                         }
                     }
                 }
@@ -516,7 +614,14 @@ fun ExerciseScreen(
 
     // Function to save exercise session
     suspend fun saveExerciseSession() {
-        Log.d("ExerciseScreen", "saveExerciseSession called")
+        Log.d("ExerciseScreen", "saveExerciseSession called - isNavigatingBack: $isNavigatingBack")
+        
+        // Prevent multiple calls to saveExerciseSession
+        if (isNavigatingBack) {
+            Log.d("ExerciseScreen", "Already navigating back, skipping save")
+            return
+        }
+        
         val exercise = exerciseWithDetails?.exercise ?: return
         val workoutExercise = exerciseWithDetails?.workoutExercise ?: return
         
@@ -562,27 +667,47 @@ fun ExerciseScreen(
             
             // Show success notification and navigate back
             withContext(Dispatchers.Main) {
+                Log.d("ExerciseScreen", "About to navigate back - setting isNavigatingBack to true")
+                // Set navigation flag to prevent multiple calls
+                isNavigatingBack = true
+                isExerciseCompleted = true
+                
+                // Stop break timer immediately when navigation is initiated
+                viewModel.stopBreakTimer()
+                Log.d("ExerciseScreen", "Stopped break timer due to navigation")
+                
+                // Immediately stop all timers and prevent further processing
+                isTimerRunning = false
+                isPaused = false
+                isBreakRunning = false
+                remainingTime = 0
+                showCountdown = false
+                stopTimerAndCleanup(context)
+                Log.d("ExerciseScreen", "Stopped all timers due to navigation")
+                
                 showSaveNotification = true
                 delay(2000)
                 showSaveNotification = false
-                // Stop timer if still running when exercise is saved
-                if (isTimerRunning) {
-                    isTimerRunning = false
-                    isPaused = false
-                    isBreakRunning = false
-                    remainingTime = 0
-                    showCountdown = false
-                    stopTimerAndCleanup(context)
-                }
+                
+                Log.d("ExerciseScreen", "Setting exerciseCompleted flag and calling popBackStack")
                 navController.previousBackStackEntry?.savedStateHandle?.set("exerciseCompleted", true)
-                // Navigate back to WorkoutDetailsScreen
+                // Navigate back to WorkoutDetailsScreen and clear the back stack to prevent reactivation
                 navController.popBackStack()
+                Log.d("ExerciseScreen", "popBackStack called")
             }
         } catch (e: Exception) {
             Log.e("ExerciseScreen", "Error saving exercise session: ${e.message}")
             e.printStackTrace()
             withContext(Dispatchers.Main) {
-                navController.popBackStack()
+                Log.d("ExerciseScreen", "Error handling - isNavigatingBack: $isNavigatingBack")
+                // Only navigate if we haven't already started navigating
+                if (!isNavigatingBack) {
+                    Log.d("ExerciseScreen", "Navigating back due to error")
+                    isNavigatingBack = true
+                    navController.popBackStack()
+                } else {
+                    Log.d("ExerciseScreen", "Already navigating, skipping error navigation")
+                }
             }
         }
     }
@@ -591,8 +716,14 @@ fun ExerciseScreen(
     LaunchedEffect(isTimerRunning, isPaused) {
         Log.d("ExerciseScreen", "Timer LaunchedEffect started: isTimerRunning=$isTimerRunning, isPaused=$isPaused")
         
+        // Exit immediately if navigation is already initiated
+        if (isNavigatingBack) {
+            Log.d("ExerciseScreen", "Timer LaunchedEffect exiting due to navigation")
+            return@LaunchedEffect
+        }
+        
         // ExerciseScreen handles all countdown logic, service just displays
-        while (isTimerRunning) {
+        while (isTimerRunning && !isNavigatingBack) {
             // Check local pause state (floating timer is stopped when in app)
             if (!isPaused) {
                 if (remainingTime > 0) {
@@ -615,6 +746,34 @@ fun ExerciseScreen(
                             pingSound.seekTo(0)
                             pingSound.setVolume(settings?.soundVolume ?: 0.5f, settings?.soundVolume ?: 0.5f)
                             pingSound.start()
+                        }
+                    } else if (!isBreakRunning && remainingTime <= 3 && exerciseWithDetails?.exercise?.useTime == true) {
+                        // Countdown for exercise time (last 3 seconds)
+                        showCountdown = true
+                        countdownNumber = remainingTime
+                        // Vibrate and play sound when countdown number changes (check user preferences)
+                        if (settings?.vibrationEnabled == true) {
+                            val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
+                            } else {
+                                @Suppress("DEPRECATION")
+                                vibrator.vibrate(100)
+                            }
+                        }
+                        // Play countdown sounds (2 short + 1 long at the end)
+                        if (settings?.soundEnabled == true) {
+                            if (remainingTime == 3 || remainingTime == 2) {
+                                // Short sound for 3 and 2
+                                pingSound.seekTo(0)
+                                pingSound.setVolume(settings?.soundVolume ?: 0.5f, settings?.soundVolume ?: 0.5f)
+                                pingSound.start()
+                            } else if (remainingTime == 1) {
+                                // Long sound for 1
+                                peeengSound.seekTo(0)
+                                peeengSound.setVolume(settings?.soundVolume ?: 0.5f, settings?.soundVolume ?: 0.5f)
+                                peeengSound.start()
+                            }
                         }
                     } else {
                         showCountdown = false
@@ -679,7 +838,14 @@ fun ExerciseScreen(
                             updateTimerService(context, remainingTime, isBreakRunning, exerciseWithDetails?.exercise?.name ?: "Exercise", exerciseId, workoutSessionId, workoutId)
                         } else {
                             // All sets completed
-                            Log.d("ExerciseScreen", "All sets completed, saving exercise session")
+                            Log.d("ExerciseScreen", "All sets completed, saving exercise session - isNavigatingBack: $isNavigatingBack")
+                            
+                            // Prevent multiple completions
+                            if (isNavigatingBack) {
+                                Log.d("ExerciseScreen", "Already navigating, skipping exercise completion")
+                                break
+                            }
+                            
                             isTimerRunning = false
                             isPaused = false
                             isBreakRunning = false
@@ -689,6 +855,7 @@ fun ExerciseScreen(
                             stopTimerAndCleanup(context)
                             completedSet = workoutExercise?.sets ?: 0
                             try {
+                                Log.d("ExerciseScreen", "Launching saveExerciseSession coroutine")
                                 coroutineScope.launch {
                                     saveExerciseSession()
                                 }
@@ -710,7 +877,14 @@ fun ExerciseScreen(
                         val workoutExercise = exerciseWithDetails?.workoutExercise
                         if (activeSetIndex!! >= (workoutExercise?.sets ?: 0)) {
                             // All sets completed
-                            Log.d("ExerciseScreen", "All sets completed (exercise time), saving exercise session")
+                            Log.d("ExerciseScreen", "All sets completed (exercise time), saving exercise session - isNavigatingBack: $isNavigatingBack")
+                            
+                            // Prevent multiple completions
+                            if (isNavigatingBack) {
+                                Log.d("ExerciseScreen", "Already navigating, skipping exercise completion")
+                                break
+                            }
+                            
                             isTimerRunning = false
                             isPaused = false
                             isBreakRunning = false
@@ -720,6 +894,7 @@ fun ExerciseScreen(
                             stopTimerAndCleanup(context)
                             completedSet = workoutExercise?.sets ?: 0
                             try {
+                                Log.d("ExerciseScreen", "Launching saveExerciseSession coroutine (exercise time)")
                                 coroutineScope.launch {
                                     saveExerciseSession()
                                 }
@@ -808,15 +983,19 @@ fun ExerciseScreen(
 
     // Handle back navigation
     BackHandler {
+        Log.d("ExerciseScreen", "BackHandler triggered - isNavigatingBack: $isNavigatingBack, isTimerRunning: $isTimerRunning, completedSet: $completedSet")
         if (isTimerRunning) {
             // Pause timer instead of stopping it
             pauseTimer()
         }
         // Show confirmation dialog if timer is running or at least one set is completed
         if (isTimerRunning || completedSet > 0) {
+            Log.d("ExerciseScreen", "Showing back confirmation dialog")
             showBackConfirmationDialog = true
         } else {
             // If no timer running and no sets completed, just go back without confirmation
+            Log.d("ExerciseScreen", "Navigating back immediately")
+            isNavigatingBack = true
             navController.popBackStack()
         }
     }
@@ -834,35 +1013,41 @@ fun ExerciseScreen(
             title = { Text("Exit Exercise?") },
              text = { Text("Do you want to save this exercise before going back?") },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        showBackConfirmationDialog = false
-                        // Stop timer if running
-                        if (isTimerRunning) {
-                            stopTimer()
-                        }
-                        // Save exercise if completed
-                        if (completedSet > 0) {
-                            coroutineScope.launch {
-                                saveExerciseSession()
+                                    TextButton(
+                        onClick = {
+                            Log.d("ExerciseScreen", "Back confirmation - Yes clicked - isNavigatingBack: $isNavigatingBack, completedSet: $completedSet")
+                            showBackConfirmationDialog = false
+                            // Stop timer if running
+                            if (isTimerRunning) {
+                                stopTimer()
                             }
-                        } else {
-                            navController.popBackStack()
+                            // Save exercise if completed
+                            if (completedSet > 0) {
+                                Log.d("ExerciseScreen", "Saving exercise from back confirmation")
+                                coroutineScope.launch {
+                                    saveExerciseSession()
+                                }
+                            } else {
+                                Log.d("ExerciseScreen", "Navigating back from confirmation without saving")
+                                isNavigatingBack = true
+                                navController.popBackStack()
+                            }
                         }
+                    ) {
+                        Text("Yes")
                     }
-                ) {
-                    Text("Yes")
-                }
             },
             dismissButton = {
                 TextButton(
                     onClick = {
+                        Log.d("ExerciseScreen", "Back confirmation - No clicked - navigating back without saving")
                         showBackConfirmationDialog = false
                         // Stop timer if running (user wants to exit without saving)
                         if (isTimerRunning) {
                             stopTimer()
                         }
                         // Navigate back without saving
+                        isNavigatingBack = true
                         navController.popBackStack()
                     }
                 ) {
@@ -892,6 +1077,13 @@ fun ExerciseScreen(
                 generalViewModel.activateWorkout()
             }
 
+            // Check for overlay permission only for the first set
+            if (setIndex == 1 && completedSet == 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !android.provider.Settings.canDrawOverlays(context)) {
+                Log.d("ExerciseScreen", "Overlay permission not granted for first set - showing permission dialog")
+                showOverlayPermissionDialog = true
+                return
+            }
+
             if (setIndex == 1 && completedSet == 0) {
                 // Pre-set break before first set
                 isBreakRunning = true
@@ -915,17 +1107,6 @@ fun ExerciseScreen(
             isBreakRunning = false
             isPaused = false
             pausedTime = 0L
-            
-            // Check for overlay permission
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !android.provider.Settings.canDrawOverlays(context)) {
-                // Request overlay permission
-                val intent = Intent(
-                    android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    android.net.Uri.parse("package:${context.packageName}")
-                )
-                context.startActivity(intent)
-                return
-            }
             
             // Don't start floating timer when in the app - it will start when app goes to background
             Log.d("ExerciseScreen", "Timer started in app - floating timer will appear when app goes to background")
@@ -1231,7 +1412,6 @@ fun ExerciseScreen(
 
         }
     ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -1249,10 +1429,13 @@ fun ExerciseScreen(
                     
                     LaunchedEffect(isBreakActive, breakStartTime) {
                         Log.d("ExerciseScreen", "Break timer LaunchedEffect triggered - isBreakActive: $isBreakActive, breakStartTime: $breakStartTime")
-                        while (isBreakActive && breakStartTime > 0) {
+                        while (isBreakActive && breakStartTime > 0 && !isNavigatingBack) {
                             breakText = calculateBreakDuration()
                             Log.d("ExerciseScreen", "Break timer running - breakText: $breakText")
                             delay(1000) // Update every second
+                        }
+                        if (isNavigatingBack) {
+                            Log.d("ExerciseScreen", "Break timer stopped due to navigation")
                         }
                     }
                     
@@ -1628,10 +1811,9 @@ fun ExerciseScreen(
                                     textAlign = TextAlign.Center
                                 )
                             }
-                                                            // Action buttons area - always present for consistent alignment
+                                                            // Action buttons area - always close to the right side
                             Box(
                                 modifier = Modifier
-                                    .weight(1f)
                                     .padding(start = 4.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -1927,9 +2109,31 @@ fun ExerciseScreen(
                     navController.popBackStack()
                 }
             }
+            
+            // Overlay Permission Dialog
+            if (showOverlayPermissionDialog) {
+                OverlayPermissionDialog(
+                    onDismiss = {
+                        showOverlayPermissionDialog = false
+                    },
+                    onPermissionGranted = {
+                        showOverlayPermissionDialog = false
+                        hasOverlayPermission = true
+                        // User granted permission - settings will open, but timer doesn't start automatically
+                        // User needs to click start again after returning from settings
+                        Log.d("ExerciseScreen", "User granted overlay permission - settings opened, timer not started")
+                    },
+                    onSkip = {
+                        showOverlayPermissionDialog = false
+                        // User clicked Skip - start timer without floating timer functionality
+                        Log.d("ExerciseScreen", "User skipped overlay permission - starting timer without floating timer")
+                        // Start the timer normally but without overlay permission
+                        startTimerWithoutOverlay(1)
+                    }
+                )
+            }
         }
     }
-}
 
 /**
  * Composable function for a slider with a label

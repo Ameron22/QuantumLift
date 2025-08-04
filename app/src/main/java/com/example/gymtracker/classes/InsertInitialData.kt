@@ -28,6 +28,8 @@ class InsertInitialData {
                 val benchPressId = dao.insertExercise(
                     EntityExercise(
                         name = "Bench Press",
+                        description = "A compound exercise that primarily targets the chest muscles",
+                        category = "Strength",
                         muscle = "Chest",
                         parts = Converter().fromList(listOf("Upper Chest", "Middle Chest", "Front Deltoids")),
                         difficulty = "Intermediate"
@@ -36,6 +38,8 @@ class InsertInitialData {
                 val shoulderPressId = dao.insertExercise(
                     EntityExercise(
                         name = "Shoulder Press",
+                        description = "An overhead pressing movement that targets the shoulders",
+                        category = "Strength",
                         muscle = "Shoulders",
                         parts = Converter().fromList(listOf("Front Deltoids", "Middle Deltoids")),
                         difficulty = "Intermediate"
@@ -44,6 +48,8 @@ class InsertInitialData {
                 val tricepExtensionId = dao.insertExercise(
                     EntityExercise(
                         name = "Tricep Extension",
+                        description = "An isolation exercise for the triceps",
+                        category = "Strength",
                         muscle = "Arms",
                         parts = Converter().fromList(listOf("Triceps")),
                         difficulty = "Intermediate"
@@ -54,6 +60,8 @@ class InsertInitialData {
                 val latPulldownId = dao.insertExercise(
                     EntityExercise(
                         name = "Lat Pulldown",
+                        description = "A pulling exercise that targets the back muscles",
+                        category = "Strength",
                         muscle = "Back",
                         parts = Converter().fromList(listOf("Lats", "Upper Back")),
                         difficulty = "Intermediate"
@@ -62,6 +70,8 @@ class InsertInitialData {
                 val bicepCurlId = dao.insertExercise(
                     EntityExercise(
                         name = "Bicep Curl",
+                        description = "An isolation exercise for the biceps",
+                        category = "Strength",
                         muscle = "Arms",
                         parts = Converter().fromList(listOf("Biceps")),
                         difficulty = "Intermediate"
@@ -72,6 +82,8 @@ class InsertInitialData {
                 val squatId = dao.insertExercise(
                     EntityExercise(
                         name = "Barbell Squat",
+                        description = "A compound lower body exercise",
+                        category = "Strength",
                         muscle = "Legs",
                         parts = Converter().fromList(listOf("Quadriceps", "Glutes", "Hamstrings")),
                         difficulty = "Intermediate"
@@ -82,6 +94,8 @@ class InsertInitialData {
                 val plankId = dao.insertExercise(
                     EntityExercise(
                         name = "Plank",
+                        description = "A core stability exercise",
+                        category = "Strength",
                         muscle = "Core",
                         parts = Converter().fromList(listOf("Abs", "Lower Back")),
                         difficulty = "Beginner",
@@ -91,6 +105,8 @@ class InsertInitialData {
                 val hiitId = dao.insertExercise(
                     EntityExercise(
                         name = "HIIT Running",
+                        description = "High-intensity interval training for cardiovascular fitness",
+                        category = "Cardio",
                         muscle = "Cardio",
                         parts = Converter().fromList(listOf("Full Body")),
                         difficulty = "Advanced",

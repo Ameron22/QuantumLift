@@ -49,6 +49,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.gymtracker.viewmodels.WorkoutDetailsViewModel
 import com.example.gymtracker.viewmodels.GeneralViewModel
 import com.example.gymtracker.viewmodels.CurrentWorkoutState
+import com.example.gymtracker.viewmodels.XPBuffer
 import com.example.gymtracker.data.AchievementManager
 import com.example.gymtracker.data.ExerciseDao
 import java.util.Calendar
@@ -177,6 +178,8 @@ fun WorkoutDetailsScreen(
     // XP notification state
     var showXPNotification by remember { mutableStateOf(false) }
     var xpEarned by remember { mutableIntStateOf(0) }
+    
+
 
     // Function to start countdown
     fun startCountdown() {
@@ -872,33 +875,56 @@ fun WorkoutDetailsScreen(
         }
     }
 
+    // Function to vibrate only when value actually changes
+    fun vibrateOnValueChangeIfDifferent(oldValue: Float, newValue: Float) {
+        if (oldValue != newValue) {
+            vibrateOnValueChange()
+        }
+    }
+
     // Function to save exercise session with muscle soreness data
     suspend fun saveExerciseSessionWithSoreness(exerciseWithDetails: WorkoutExerciseWithDetails) {
         Log.d("WorkoutDetailsScreen", "saveExerciseSessionWithSoreness called")
         val exercise = exerciseWithDetails.entityExercise
         val workoutExercise = exerciseWithDetails.workoutExercise
         
-        val exerciseSession = SessionEntityExercise(
-            sessionId = currentWorkout?.sessionId ?: System.currentTimeMillis(),
-            exerciseId = exercise.id.toLong(),
-            sets = workoutExercise.sets,
-            repsOrTime = List(workoutExercise.sets) { workoutExercise.reps },
-            weight = List(workoutExercise.sets) { workoutExercise.weight },
-            muscleGroup = exercise.muscle,
-            muscleParts = exercise.parts,
-            completedSets = workoutExercise.sets,
-            notes = "",
-            eccentricFactor = eccentricFactor,
-            noveltyFactor = noveltyFactor,
-            adaptationLevel = adaptationLevel,
-            rpe = rpe,
-            subjectiveSoreness = subjectiveSoreness
-        )
-
         try {
             withContext(Dispatchers.IO) {
-                dao.insertExerciseSession(exerciseSession)
-                Log.d("WorkoutDetailsScreen", "Exercise session saved successfully with soreness data")
+                // Check if session data already exists for this exercise
+                val existingSessionData = getCompletedExerciseSessionData(exercise.id)
+                
+                if (existingSessionData != null) {
+                    // Update existing session with new soreness factors
+                    val updatedSession = existingSessionData.copy(
+                        eccentricFactor = eccentricFactor,
+                        noveltyFactor = noveltyFactor,
+                        adaptationLevel = adaptationLevel,
+                        rpe = rpe,
+                        subjectiveSoreness = subjectiveSoreness
+                    )
+                    dao.updateExerciseSession(updatedSession)
+                    Log.d("WorkoutDetailsScreen", "Updated existing exercise session with new soreness data")
+                } else {
+                    // Create new session with soreness factors
+                    val exerciseSession = SessionEntityExercise(
+                        sessionId = currentWorkout?.sessionId ?: System.currentTimeMillis(),
+                        exerciseId = exercise.id.toLong(),
+                        sets = workoutExercise.sets,
+                        repsOrTime = List(workoutExercise.sets) { workoutExercise.reps },
+                        weight = List(workoutExercise.sets) { workoutExercise.weight },
+                        muscleGroup = exercise.muscle,
+                        muscleParts = exercise.parts,
+                        completedSets = workoutExercise.sets,
+                        notes = "",
+                        eccentricFactor = eccentricFactor, // Individual soreness factor for this exercise
+                        noveltyFactor = noveltyFactor, // Individual soreness factor for this exercise
+                        adaptationLevel = adaptationLevel, // Individual soreness factor for this exercise
+                        rpe = rpe, // Individual soreness factor for this exercise
+                        subjectiveSoreness = subjectiveSoreness // Individual soreness factor for this exercise
+                    )
+                    dao.insertExerciseSession(exerciseSession)
+                    Log.d("WorkoutDetailsScreen", "Created new exercise session with soreness data")
+                }
             }
             
             // Mark exercise as completed in GeneralViewModel
@@ -1113,6 +1139,13 @@ fun WorkoutDetailsScreen(
                         
                         // Use a default user ID for now (you can integrate with auth system later)
                         val userId = "current_user"
+                        
+                        // Get current user XP to calculate level changes
+                        val currentUserXP = xpSystem.getUserXP(userId)
+                        val previousTotalXP = currentUserXP?.totalXP ?: 0
+                        val previousLevel = currentUserXP?.currentLevel ?: 1
+                        
+                        // Award XP to database
                         val xpAwarded = xpSystem.awardXP(
                             userId = userId,
                             xpAmount = workoutXP,
@@ -1123,9 +1156,25 @@ fun WorkoutDetailsScreen(
                         
                         if (xpAwarded) {
                             Log.d("WorkoutDetailsScreen", "Awarded $workoutXP XP for workout completion")
-                            // Store XP earned for display
-                            showXPNotification = true
-                            xpEarned = workoutXP
+                            
+                            // Get updated user XP to calculate new level
+                            val updatedUserXP = xpSystem.getUserXP(userId)
+                            val newTotalXP = updatedUserXP?.totalXP ?: previousTotalXP
+                            val newLevel = updatedUserXP?.currentLevel ?: previousLevel
+                            
+                            // Always show XP gain dialog, regardless of level increase
+                            Log.d("WorkoutDetailsScreen", "XP gained: $workoutXP (Level: $previousLevel -> $newLevel)")
+                            
+                            // Store in XP buffer for level-up dialog
+                            val xpBuffer = XPBuffer(
+                                xpGained = workoutXP,
+                                previousLevel = previousLevel,
+                                newLevel = newLevel,
+                                previousTotalXP = previousTotalXP,
+                                newTotalXP = newTotalXP,
+                                timestamp = System.currentTimeMillis()
+                            )
+                            generalViewModel.setXPBuffer(xpBuffer)
                         } else {
                             Log.e("WorkoutDetailsScreen", "Failed to award XP for workout completion")
                         }
@@ -1257,9 +1306,10 @@ fun WorkoutDetailsScreen(
                     currentRecoveryFactor.contains("Protein") -> {
                         SliderWithLabel(
                             value = recoveryFactors.proteinIntake.toFloat(),
-                            onValueChange = {
-                                vibrateOnValueChange()
-                                viewModel.updateRecoveryFactors(proteinIntake = it.toInt())
+                            onValueChange = { newValue ->
+                                val oldValue = recoveryFactors.proteinIntake.toFloat()
+                                vibrateOnValueChangeIfDifferent(oldValue, newValue)
+                                viewModel.updateRecoveryFactors(proteinIntake = newValue.toInt())
                             },
                             label = "",
                             valueRange = 0f..300f,
@@ -1275,17 +1325,23 @@ fun WorkoutDetailsScreen(
                                 currentRecoveryFactor.contains("Stress") -> recoveryFactors.stressLevel
                                 else -> 5
                             }.toFloat(),
-                            onValueChange = {
-                                vibrateOnValueChange()
+                            onValueChange = { newValue ->
+                                val oldValue = when {
+                                    currentRecoveryFactor.contains("Sleep") -> recoveryFactors.sleepQuality
+                                    currentRecoveryFactor.contains("Hydration") -> recoveryFactors.hydration
+                                    currentRecoveryFactor.contains("Stress") -> recoveryFactors.stressLevel
+                                    else -> 5
+                                }.toFloat()
+                                vibrateOnValueChangeIfDifferent(oldValue, newValue)
                                 when {
                                     currentRecoveryFactor.contains("Sleep") ->
-                                        viewModel.updateRecoveryFactors(sleepQuality = it.toInt())
+                                        viewModel.updateRecoveryFactors(sleepQuality = newValue.toInt())
 
                                     currentRecoveryFactor.contains("Hydration") ->
-                                        viewModel.updateRecoveryFactors(hydration = it.toInt())
+                                        viewModel.updateRecoveryFactors(hydration = newValue.toInt())
 
                                     currentRecoveryFactor.contains("Stress") ->
-                                        viewModel.updateRecoveryFactors(stressLevel = it.toInt())
+                                        viewModel.updateRecoveryFactors(stressLevel = newValue.toInt())
                                 }
                             },
                             label = "",
@@ -1451,6 +1507,8 @@ fun WorkoutDetailsScreen(
                                 WorkoutExerciseWithDetails(workoutExercise, exercise),
                                 index
                             )
+                            // Vibrate when card gets selected (changes color)
+                            vibrateOnValueChange()
                             Log.d("DRAG_DEBUG", "Long press detected - starting drag")
                         },
                         onDragEnd = {
@@ -2096,6 +2154,87 @@ fun WorkoutDetailsScreen(
                         }
                     }
                 }
+                
+                // Test XP Button
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .clickable {
+                                coroutineScope.launch {
+                                    val xpSystem = XPSystem(db.userXPDao())
+                                    val userId = "current_user"
+                                    
+                                    // Get current user XP to calculate level changes
+                                    val currentUserXP = xpSystem.getUserXP(userId)
+                                    val previousTotalXP = currentUserXP?.totalXP ?: 0
+                                    val previousLevel = currentUserXP?.currentLevel ?: 1
+                                    
+                                    // Award 200 XP
+                                    val xpAwarded = xpSystem.awardXP(
+                                        userId = userId,
+                                        xpAmount = 266,
+                                        source = "test_button",
+                                        sourceId = "test_${System.currentTimeMillis()}",
+                                        description = "Test XP award: 266 XP"
+                                    )
+                                    
+                                    if (xpAwarded) {
+                                        // Get updated user XP to calculate new level
+                                        val updatedUserXP = xpSystem.getUserXP(userId)
+                                        val newTotalXP = updatedUserXP?.totalXP ?: previousTotalXP
+                                        val newLevel = updatedUserXP?.currentLevel ?: previousLevel
+                                        
+                                        // Store in XP buffer for level-up dialog
+                                        val xpBuffer = XPBuffer(
+                                            xpGained = 266,
+                                            previousLevel = previousLevel,
+                                            newLevel = newLevel,
+                                            previousTotalXP = previousTotalXP,
+                                            newTotalXP = newTotalXP,
+                                            timestamp = System.currentTimeMillis()
+                                        )
+                                        generalViewModel.setXPBuffer(xpBuffer)
+                                        
+                                        Toast.makeText(context, "Awarded 266 XP!", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "Failed to award XP", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                            .border(
+                                width = 1.dp,
+                                color = Color.Red.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(12.dp)
+                            ),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.plus_icon),
+                                contentDescription = "Test XP",
+                                tint = Color.Red,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Test: Award 266 XP",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.Red
+                            )
+                        }
+                    }
+                }
                 // Recovery Factors Section
                 item {
                     Card(
@@ -2313,6 +2452,79 @@ fun WorkoutDetailsScreen(
                 Log.d("WorkoutDetailsScreen", "Current workout state: $currentWorkout")
                 exerciseSessionData = getCompletedExerciseSessionData(exerciseInfo.entityExercise.id)
                 Log.d("WorkoutDetailsScreen", "Session data result: $exerciseSessionData")
+                
+                // Load saved soreness factors for this specific exercise with fallback logic
+                if (exerciseSessionData != null) {
+                    // Check if current session has non-default soreness factors
+                    val currentSession = exerciseSessionData!!
+                    val hasCurrentSorenessFactors = currentSession.eccentricFactor != 1.0f || 
+                                                   currentSession.noveltyFactor != 5 || 
+                                                   currentSession.adaptationLevel != 5 || 
+                                                   currentSession.rpe != 5 || 
+                                                   currentSession.subjectiveSoreness != 5
+                    
+                    if (hasCurrentSorenessFactors) {
+                        // Use current session's soreness factors
+                        eccentricFactor = currentSession.eccentricFactor
+                        noveltyFactor = currentSession.noveltyFactor
+                        adaptationLevel = currentSession.adaptationLevel
+                        rpe = currentSession.rpe
+                        subjectiveSoreness = currentSession.subjectiveSoreness
+                        defaultSorenessValues = false
+                        Log.d("WorkoutDetailsScreen", "Loaded soreness factors from current session for exercise ${exerciseInfo.entityExercise.id}: eccentric=$eccentricFactor, novelty=$noveltyFactor, adaptation=$adaptationLevel, rpe=$rpe, soreness=$subjectiveSoreness")
+                    } else {
+                        // Current session has default values, try to find previous session with soreness factors
+                        val previousSessionWithSoreness = withContext(Dispatchers.IO) {
+                            dao.getLatestExerciseSessionWithSorenessFactors(exerciseInfo.entityExercise.id.toLong())
+                        }
+                        
+                        if (previousSessionWithSoreness != null) {
+                            // Use previous session's soreness factors
+                            eccentricFactor = previousSessionWithSoreness.eccentricFactor
+                            noveltyFactor = previousSessionWithSoreness.noveltyFactor
+                            adaptationLevel = previousSessionWithSoreness.adaptationLevel
+                            rpe = previousSessionWithSoreness.rpe
+                            subjectiveSoreness = previousSessionWithSoreness.subjectiveSoreness
+                            defaultSorenessValues = false
+                            Log.d("WorkoutDetailsScreen", "Loaded soreness factors from previous session for exercise ${exerciseInfo.entityExercise.id}: eccentric=$eccentricFactor, novelty=$noveltyFactor, adaptation=$adaptationLevel, rpe=$rpe, soreness=$subjectiveSoreness")
+                        } else {
+                            // No previous soreness factors found, use defaults
+                            eccentricFactor = 1.0f
+                            noveltyFactor = 5
+                            adaptationLevel = 5
+                            rpe = 5
+                            subjectiveSoreness = 5
+                            defaultSorenessValues = true
+                            Log.d("WorkoutDetailsScreen", "No previous soreness factors found for exercise ${exerciseInfo.entityExercise.id}, using defaults")
+                        }
+                    }
+                } else {
+                    // No current session data, try to find previous session with soreness factors
+                    val previousSessionWithSoreness = withContext(Dispatchers.IO) {
+                        dao.getLatestExerciseSessionWithSorenessFactors(exerciseInfo.entityExercise.id.toLong())
+                    }
+                    
+                    if (previousSessionWithSoreness != null) {
+                        // Use previous session's soreness factors
+                        eccentricFactor = previousSessionWithSoreness.eccentricFactor
+                        noveltyFactor = previousSessionWithSoreness.noveltyFactor
+                        adaptationLevel = previousSessionWithSoreness.adaptationLevel
+                        rpe = previousSessionWithSoreness.rpe
+                        subjectiveSoreness = previousSessionWithSoreness.subjectiveSoreness
+                        defaultSorenessValues = false
+                        Log.d("WorkoutDetailsScreen", "Loaded soreness factors from previous session for exercise ${exerciseInfo.entityExercise.id}: eccentric=$eccentricFactor, novelty=$noveltyFactor, adaptation=$adaptationLevel, rpe=$rpe, soreness=$subjectiveSoreness")
+                    } else {
+                        // No previous soreness factors found, use defaults
+                        eccentricFactor = 1.0f
+                        noveltyFactor = 5
+                        adaptationLevel = 5
+                        rpe = 5
+                        subjectiveSoreness = 5
+                        defaultSorenessValues = true
+                        Log.d("WorkoutDetailsScreen", "No previous soreness factors found for exercise ${exerciseInfo.entityExercise.id}, using defaults")
+                    }
+                }
+                
                 isLoadingSessionData = false
             }
         }
@@ -2567,9 +2779,10 @@ fun WorkoutDetailsScreen(
                                 ) {
                                     Slider(
                                         value = eccentricFactor,
-                                        onValueChange = { 
-                                            eccentricFactor = it
-                                            vibrateOnValueChange()
+                                        onValueChange = { newValue -> 
+                                            val oldValue = eccentricFactor
+                                            eccentricFactor = newValue
+                                            vibrateOnValueChangeIfDifferent(oldValue, newValue)
                                         },
                                         valueRange = 1f..2f,
                                         steps = 9,
@@ -2612,9 +2825,10 @@ fun WorkoutDetailsScreen(
                                 ) {
                                     Slider(
                                         value = noveltyFactor.toFloat(),
-                                        onValueChange = { 
-                                            noveltyFactor = it.toInt()
-                                            vibrateOnValueChange()
+                                        onValueChange = { newValue -> 
+                                            val oldValue = noveltyFactor.toFloat()
+                                            noveltyFactor = newValue.toInt()
+                                            vibrateOnValueChangeIfDifferent(oldValue, newValue)
                                         },
                                         valueRange = 0f..10f,
                                         steps = 10,
@@ -2657,9 +2871,10 @@ fun WorkoutDetailsScreen(
                                 ) {
                                     Slider(
                                         value = adaptationLevel.toFloat(),
-                                        onValueChange = { 
-                                            adaptationLevel = it.toInt()
-                                            vibrateOnValueChange()
+                                        onValueChange = { newValue -> 
+                                            val oldValue = adaptationLevel.toFloat()
+                                            adaptationLevel = newValue.toInt()
+                                            vibrateOnValueChangeIfDifferent(oldValue, newValue)
                                         },
                                         valueRange = 0f..10f,
                                         steps = 10,
@@ -2709,9 +2924,10 @@ fun WorkoutDetailsScreen(
                                 ) {
                                     Slider(
                                         value = rpe.toFloat(),
-                                        onValueChange = { 
-                                            rpe = it.toInt()
-                                            vibrateOnValueChange()
+                                        onValueChange = { newValue -> 
+                                            val oldValue = rpe.toFloat()
+                                            rpe = newValue.toInt()
+                                            vibrateOnValueChangeIfDifferent(oldValue, newValue)
                                         },
                                         valueRange = 1f..10f,
                                         steps = 9,
@@ -2754,9 +2970,10 @@ fun WorkoutDetailsScreen(
                                 ) {
                                     Slider(
                                         value = subjectiveSoreness.toFloat(),
-                                        onValueChange = { 
-                                            subjectiveSoreness = it.toInt()
-                                            vibrateOnValueChange()
+                                        onValueChange = { newValue -> 
+                                            val oldValue = subjectiveSoreness.toFloat()
+                                            subjectiveSoreness = newValue.toInt()
+                                            vibrateOnValueChangeIfDifferent(oldValue, newValue)
                                         },
                                         valueRange = 1f..10f,
                                         steps = 9,
@@ -2931,54 +3148,7 @@ fun WorkoutDetailsScreen(
         )
     }
     
-    // XP Notification Dialog
-    if (showXPNotification) {
-        AlertDialog(
-            onDismissRequest = { showXPNotification = false },
-            title = {
-                Text(
-                    text = "Workout Completed!",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            },
-            text = {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "Great job! You've earned:",
-                        style = MaterialTheme.typography.bodyLarge,
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = "+$xpEarned XP",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Keep up the great work!",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { 
-                        showXPNotification = false
-                        xpEarned = 0
-                    }
-                ) {
-                    Text("Continue")
-                }
-            },
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    }
+
 }
 
 private suspend fun calculateWorkoutStreak(dao: ExerciseDao): Int {

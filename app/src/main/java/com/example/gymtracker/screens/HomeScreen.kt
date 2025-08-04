@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.gymtracker.data.AppDatabase
 import com.example.gymtracker.components.BottomNavBar
@@ -73,6 +74,9 @@ import android.os.VibratorManager
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.ui.graphics.Color
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -313,6 +317,7 @@ fun WelcomeTabWithMuscles(navController: NavController, selectedTabIndex: Int, p
         val targetYOffset = when (zoomType) {
             "upper" -> 3.5f
             "lower" -> 0.1f
+            "lower_back" -> 0.5f  // Lower Y offset for back view to show lower body better
             else -> 0f
         }
         
@@ -912,34 +917,28 @@ fun applySorenessBasedColors(modelViewer: ModelViewer, muscleSoreness: Map<Strin
                                 "Adductor" to "Adductor",
                                 "Biceps" to "Biceps",
                                 "Calves" to "Calves",
-                                "Calf" to "Calves",
+                                "Calves" to "Calves",
                                 "Chest" to "Chest",
-                                "Deltoid_Shoulder" to "Deltoid_Shoulder",
-                                "Deltoids" to "Deltoid_Shoulder",
-                                "Forearm" to "Wrist",
+                                "Deltoids" to "Deltoid_Shoulder",                               
                                 "Forearms" to "Wrist",
                                 "Glutes" to "Glutes",
-                                "Latissimus_dorsi" to "Latissimus_dorsi",
-                                "Latissimus Dorsi" to "Latissimus_dorsi",
-                                "Lower Back" to "Trapezius",
+                                "Lats" to "Latissimus_dorsi",
+                                "Lower Back" to "Lower_Back",
                                 "Neck" to "Neck",
                                 "Obliques" to "Obliques",
-                                "Pectorals" to "Chest",
-                                "Quands" to "Quands",
-                                "Quadriceps" to "Quands",
-                                "Trapezius" to "Trapezius",
-                                "Triceps" to "Triceps",
-                                "Wrist" to "Wrist",
-                                // Additional mappings for more specific muscle parts
-                                "Upper Chest" to "Chest",
-                                "Middle Chest" to "Chest",
-                                "Lower Chest" to "Chest",
-                                "Front Deltoids" to "Deltoid_Shoulder",
-                                "Middle Deltoids" to "Deltoid_Shoulder",
-                                "Rear Deltoids" to "Deltoid_Shoulder",
-                                "Lats" to "Latissimus_dorsi",
+                                "Quandriceps" to "Quands",
                                 "Upper Back" to "Trapezius",
-                                "Hamstrings" to "Quands"
+                                "Triceps" to "Triceps",
+                                "Hamstrings" to "Hamstrings",
+                                "Upper Traps" to "Upper_traps",
+                                "Upper Trapezius" to "Upper_traps",
+                                // Additional mappings for more specific muscle parts
+                                //"Upper Chest" to "Chest",
+                                //"Middle Chest" to "Chest",
+                                //"Lower Chest" to "Chest",
+                                //"Front Deltoids" to "Deltoid_Shoulder",
+                                //"Middle Deltoids" to "Deltoid_Shoulder",
+                                //"Rear Deltoids" to "Deltoid_Shoulder"
                             )
 
                             // Color mapping based on soreness levels
@@ -1274,28 +1273,8 @@ fun applySorenessBasedColors(modelViewer: ModelViewer, muscleSoreness: Map<Strin
                             Log.d("MODEL_LIFECYCLE", "=== shouldShowModel is false - skipping surface callbacks ===")
                         }
                         
-                        // Re-enable touch controls but add our own camera positioning
-                        setOnTouchListener { _, event ->
-                            Log.d("MUSCLES_DEBUG", "=== Touch event: ${event.action} at (${event.x}, ${event.y}) ===")
-                            // Pass touch events to viewer but also apply our camera positioning
-                            viewer.onTouchEvent(event)
-                            true
-                        }
-                        
-                        // Add lifecycle listener to track when view is attached/detached
-                        addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
-                            override fun onViewAttachedToWindow(v: android.view.View) {
-                                Log.d("MODEL_LIFECYCLE", "=== View attached to window - resuming processing ===")
-                                isRenderingActive = true
-                                isAnimationActive = true
-                            }
-                            
-                            override fun onViewDetachedFromWindow(v: android.view.View) {
-                                Log.d("MODEL_LIFECYCLE", "=== View detached from window - pausing processing ===")
-                                isRenderingActive = false
-                                isAnimationActive = false
-                            }
-                        })
+                        // Disable touch controls since we control the model with buttons
+                        // setOnTouchListener removed to prevent finger camera controls
 
                     } catch (e: Exception) {
                         Log.e("MUSCLES_DEBUG", "=== FAILED to load model ===", e)
@@ -1334,52 +1313,52 @@ fun applySorenessBasedColors(modelViewer: ModelViewer, muscleSoreness: Map<Strin
             delay(500)
             
             // Group-based fade animation with smooth transitions
-            // Group A fades out over 0.3 seconds with bubble vibrations
-            repeat(30) { // 30 steps of 10ms each = 0.3 seconds
+            // Group A fades out over 0.2 seconds with bubble vibrations (reduced from 0.3s)
+            repeat(20) { // 20 steps of 10ms each = 0.2 seconds
                 if (!showLoadingCover) return@LaunchedEffect // Stop if composable is disposed
                 delay(10)
-                animationProgress += 0.033f // 1/30 = 0.033
-                // Bubble vibration every 3 steps (every 30ms)
-                if (it % 3 == 0) {
+                animationProgress += 0.05f // 1/20 = 0.05
+                // Bubble vibration every 2 steps (every 20ms)
+                if (it % 2 == 0) {
                     vibrator.vibrate(VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE))
                 }
             }
             if (!showLoadingCover) return@LaunchedEffect // Stop if composable is disposed
             currentGroup = "B"
             
-            // Group B fades out over 0.3 seconds with bubble vibrations
-            repeat(30) {
+            // Group B fades out over 0.2 seconds with bubble vibrations (reduced from 0.3s)
+            repeat(20) {
                 if (!showLoadingCover) return@LaunchedEffect // Stop if composable is disposed
                 delay(10)
-                animationProgress += 0.033f
-                // Bubble vibration every 3 steps (every 30ms)
-                if (it % 3 == 0) {
+                animationProgress += 0.05f
+                // Bubble vibration every 2 steps (every 20ms)
+                if (it % 2 == 0) {
                     vibrator.vibrate(VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE))
                 }
             }
             if (!showLoadingCover) return@LaunchedEffect // Stop if composable is disposed
             currentGroup = "C"
             
-            // Group C fades out over 0.3 seconds with bubble vibrations
-            repeat(30) {
+            // Group C fades out over 0.2 seconds with bubble vibrations (reduced from 0.3s)
+            repeat(20) {
                 if (!showLoadingCover) return@LaunchedEffect // Stop if composable is disposed
                 delay(10)
-                animationProgress += 0.033f
-                // Bubble vibration every 3 steps (every 30ms)
-                if (it % 3 == 0) {
+                animationProgress += 0.05f
+                // Bubble vibration every 2 steps (every 20ms)
+                if (it % 2 == 0) {
                     vibrator.vibrate(VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE))
                 }
             }
             if (!showLoadingCover) return@LaunchedEffect // Stop if composable is disposed
             currentGroup = "D"
             
-            // Group D fades out over 0.3 seconds with bubble vibrations
-            repeat(30) {
+            // Group D fades out over 0.2 seconds with bubble vibrations (reduced from 0.3s)
+            repeat(20) {
                 if (!showLoadingCover) return@LaunchedEffect // Stop if composable is disposed
                 delay(10)
-                animationProgress += 0.033f
-                // Bubble vibration every 3 steps (every 30ms)
-                if (it % 3 == 0) {
+                animationProgress += 0.05f
+                // Bubble vibration every 2 steps (every 20ms)
+                if (it % 2 == 0) {
                     vibrator.vibrate(VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE))
                 }
             }
@@ -1429,7 +1408,7 @@ fun applySorenessBasedColors(modelViewer: ModelViewer, muscleSoreness: Map<Strin
                         .width(if (isPanelExpanded) 175.dp else 48.dp)
                         .wrapContentHeight()
                         .background(
-                            MaterialTheme.colorScheme.surface.copy(alpha = 0.4f),
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
                             shape = RoundedCornerShape(16.dp)
                         )
                         .padding(8.dp),
@@ -1466,6 +1445,9 @@ fun applySorenessBasedColors(modelViewer: ModelViewer, muscleSoreness: Map<Strin
                     
                     // Only show cards when expanded
                     if (isPanelExpanded) {
+                        // Track which card is expanded
+                        var expandedCard by remember { mutableStateOf<String?>(null) }
+                        
                         // Upper Body Front Card
                         Card(
                             modifier = Modifier
@@ -1482,6 +1464,7 @@ fun applySorenessBasedColors(modelViewer: ModelViewer, muscleSoreness: Map<Strin
                                     previousZoomType = zoomType  // Store previous zoom type
                                     isZoomedIn = true  // Enable zoom effect
                                     zoomType = "upper"  // Set zoom type for upper body
+                                    expandedCard = if (expandedCard == "upper_front") null else "upper_front"
                                     Log.d("MODEL_LIFECYCLE", "=== Current angle: $currentAngle, Target: $targetRotation, Zoom: $isZoomedIn, Type: $zoomType ===")
                                 },
                             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -1490,21 +1473,92 @@ fun applySorenessBasedColors(modelViewer: ModelViewer, muscleSoreness: Map<Strin
                                 containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)
                             )
                         ) {
-                            Box(
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(12.dp),
-                                contentAlignment = Alignment.Center
+                                    .padding(12.dp)
                             ) {
-                                Text(
-                                    text = "Upper Body Front",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    textAlign = TextAlign.Center,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Upper Body Front",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Icon(
+                                        imageVector = if (expandedCard == "upper_front") Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = if (expandedCard == "upper_front") "Collapse" else "Expand",
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                
+                                // Show muscle parts when expanded
+                                if (expandedCard == "upper_front") {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    
+                                    // Get muscle soreness data from HistoryViewModel
+                                    val muscleSoreness by historyViewModel.muscleSoreness.collectAsState()
+                                    
+                                    Column {
+                                        // Neck
+                                        MuscleRecoveryItem(
+                                            muscleName = "Neck",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Neck")
+                                        )
+                                        
+                                        // Chest
+                                        MuscleRecoveryItem(
+                                            muscleName = "Chest",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Chest", "Pectorals")
+                                        )
+                                        
+                                        // Deltoids
+                                        MuscleRecoveryItem(
+                                            muscleName = "Deltoids",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Deltoids", "Deltoid_Shoulder")
+                                        )
+                                        
+                                        // Biceps
+                                        MuscleRecoveryItem(
+                                            muscleName = "Biceps",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Biceps")
+                                        )
+                                        
+                                        // Wrists
+                                        MuscleRecoveryItem(
+                                            muscleName = "Wrists",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Wrist", "Forearm", "Forearms")
+                                        )
+                                        
+                                        // Abs
+                                        MuscleRecoveryItem(
+                                            muscleName = "Abs",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Abs")
+                                        )
+                                        
+                                        // Obliques
+                                        MuscleRecoveryItem(
+                                            muscleName = "Obliques",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Obliques")
+                                        )
+                                    }
+                                }
                             }
                         }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
                         
                         // Lower Body Front Card
                         Card(
@@ -1522,6 +1576,7 @@ fun applySorenessBasedColors(modelViewer: ModelViewer, muscleSoreness: Map<Strin
                                     previousZoomType = zoomType  // Store previous zoom type
                                     isZoomedIn = true  // Enable zoom effect
                                     zoomType = "lower"  // Set zoom type for lower body
+                                    expandedCard = if (expandedCard == "lower_front") null else "lower_front"
                                     Log.d("MODEL_LIFECYCLE", "=== Current angle: $currentAngle, Target: $targetRotation, Zoom: $isZoomedIn, Type: $zoomType ===")
                                 },
                             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -1530,75 +1585,260 @@ fun applySorenessBasedColors(modelViewer: ModelViewer, muscleSoreness: Map<Strin
                                 containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)
                             )
                         ) {
-                            Box(
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(12.dp),
-                                contentAlignment = Alignment.Center
+                                    .padding(12.dp)
                             ) {
-                                Text(
-                                    text = "Lower Body Front",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    textAlign = TextAlign.Center,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Lower Body Front",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Icon(
+                                        imageVector = if (expandedCard == "lower_front") Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = if (expandedCard == "lower_front") "Collapse" else "Expand",
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                
+                                // Show muscle parts when expanded
+                                if (expandedCard == "lower_front") {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    
+                                    // Get muscle soreness data from HistoryViewModel
+                                    val muscleSoreness by historyViewModel.muscleSoreness.collectAsState()
+                                    
+                                    Column {
+                                        // Quadriceps
+                                        MuscleRecoveryItem(
+                                            muscleName = "Quadriceps",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Quadriceps", "Quands")
+                                        )
+                                        
+                                        // Adductors
+                                        MuscleRecoveryItem(
+                                            muscleName = "Adductors",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Adductor")
+                                        )
+                                        
+                                        // Calves
+                                        MuscleRecoveryItem(
+                                            muscleName = "Calves",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Calves", "Calf")
+                                        )
+                                    }
+                                }
                             }
                         }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
                         
                         // Upper Body Back Card
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .wrapContentHeight(),
+                                .wrapContentHeight()
+                                .clickable {
+                                    Log.d("MODEL_LIFECYCLE", "=== Upper Body Back card clicked - rotating to show back ===")
+                                    // Calculate the nearest 180-degree position (show back)
+                                    val currentAngle = theta
+                                    val nearestBack = (currentAngle / (2 * Math.PI)).toInt() * 2 * Math.PI + Math.PI
+                                    targetRotation = nearestBack
+                                    isRotatingToTarget = true
+                                    shouldStopRotation = false  // Reset stop state to allow rotation
+                                    previousZoomType = zoomType  // Store previous zoom type
+                                    isZoomedIn = true  // Enable zoom effect
+                                    zoomType = "upper"  // Set zoom type for upper body
+                                    expandedCard = if (expandedCard == "upper_back") null else "upper_back"
+                                    Log.d("MODEL_LIFECYCLE", "=== Current angle: $currentAngle, Target: $targetRotation, Zoom: $isZoomedIn, Type: $zoomType ===")
+                                },
                             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                             shape = RoundedCornerShape(12.dp),
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)
                             )
                         ) {
-                            Box(
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(12.dp),
-                                contentAlignment = Alignment.Center
+                                    .padding(12.dp)
                             ) {
-                                Text(
-                                    text = "Upper Body Back",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    textAlign = TextAlign.Center,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Upper Body Back",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Icon(
+                                        imageVector = if (expandedCard == "upper_back") Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = if (expandedCard == "upper_back") "Collapse" else "Expand",
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                
+                                // Show muscle parts when expanded
+                                if (expandedCard == "upper_back") {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    
+                                    // Get muscle soreness data from HistoryViewModel
+                                    val muscleSoreness by historyViewModel.muscleSoreness.collectAsState()
+                                    
+                                    Column {
+                                        // Upper Trapezius
+                                        MuscleRecoveryItem(
+                                            muscleName = "Upper Trapezius",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Trapezius")
+                                        )
+                                        
+                                        // Trapezius
+                                        MuscleRecoveryItem(
+                                            muscleName = "Trapezius",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Trapezius")
+                                        )
+                                        
+                                        // Latissimus Dorsi
+                                        MuscleRecoveryItem(
+                                            muscleName = "Latissimus Dorsi",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Latissimus Dorsi", "Latissimus_dorsi", "Lats")
+                                        )
+                                        
+                                        // Triceps
+                                        MuscleRecoveryItem(
+                                            muscleName = "Triceps",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Triceps")
+                                        )
+                                        
+                                        // Wrist
+                                        MuscleRecoveryItem(
+                                            muscleName = "Wrist",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Wrist", "Forearm", "Forearms")
+                                        )
+                                        
+                                        // Lower Back
+                                        MuscleRecoveryItem(
+                                            muscleName = "Lower Back",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Lower Back")
+                                        )
+                                    }
+                                }
                             }
                         }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
                         
                         // Lower Body Back Card
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .wrapContentHeight(),
+                                .wrapContentHeight()
+                                .clickable {
+                                    Log.d("MODEL_LIFECYCLE", "=== Lower Body Back card clicked - rotating to show back ===")
+                                    // Calculate the nearest 180-degree position (show back)
+                                    val currentAngle = theta
+                                    val nearestBack = (currentAngle / (2 * Math.PI)).toInt() * 2 * Math.PI + Math.PI
+                                    targetRotation = nearestBack
+                                    isRotatingToTarget = true
+                                    shouldStopRotation = false  // Reset stop state to allow rotation
+                                    previousZoomType = zoomType  // Store previous zoom type
+                                    isZoomedIn = true  // Enable zoom effect
+                                    zoomType = "lower_back"  // Set zoom type for lower body back view
+                                    expandedCard = if (expandedCard == "lower_back") null else "lower_back"
+                                    Log.d("MODEL_LIFECYCLE", "=== Current angle: $currentAngle, Target: $targetRotation, Zoom: $isZoomedIn, Type: $zoomType ===")
+                                },
                             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                             shape = RoundedCornerShape(12.dp),
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)
                             )
                         ) {
-                            Box(
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(12.dp),
-                                contentAlignment = Alignment.Center
+                                    .padding(12.dp)
                             ) {
-                                Text(
-                                    text = "Lower Body Back",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    textAlign = TextAlign.Center,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Lower Body Back",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Icon(
+                                        imageVector = if (expandedCard == "lower_back") Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = if (expandedCard == "lower_back") "Collapse" else "Expand",
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                
+                                // Show muscle parts when expanded
+                                if (expandedCard == "lower_back") {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    
+                                    // Get muscle soreness data from HistoryViewModel
+                                    val muscleSoreness by historyViewModel.muscleSoreness.collectAsState()
+                                    
+                                    Column {
+                                        // Glutes
+                                        MuscleRecoveryItem(
+                                            muscleName = "Glutes",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Glutes")
+                                        )
+                                        
+                                        // Hamstrings
+                                        MuscleRecoveryItem(
+                                            muscleName = "Hamstrings",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Hamstrings")
+                                        )
+                                        
+                                        // Adductors
+                                        MuscleRecoveryItem(
+                                            muscleName = "Adductors",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Adductor")
+                                        )
+                                        
+                                        // Calves
+                                        MuscleRecoveryItem(
+                                            muscleName = "Calves",
+                                            muscleSoreness = muscleSoreness,
+                                            historyNames = listOf("Calves", "Calf")
+                                        )
+                                    }
+                                }
                             }
                         }
+                        
+                        // Muscle Recovery Status Card - REMOVED, integrated into muscle group cards above
                     }
                 }
             }
@@ -1971,6 +2211,81 @@ fun ModernLevelBar(userXP: UserXP, xpSystem: XPSystem) {
                             )
                         )
                     )
+            )
+        }
+    }
+}
+
+@Composable
+fun MuscleRecoveryItem(
+    muscleName: String,
+    muscleSoreness: Map<String, MuscleSorenessData>,
+    historyNames: List<String>
+) {
+    // Find matching muscle data from history
+    val matchingData = muscleSoreness.entries.find { (muscle, _) ->
+        historyNames.any { historyName -> muscle.equals(historyName, ignoreCase = true) }
+    }
+    
+    val sorenessData = matchingData?.value
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = muscleName,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (sorenessData != null) {
+                    when (sorenessData.sorenessLevel) {
+                        "Very Sore" -> Color.Red
+                        "Sore" -> Color(0xFFFF8C00)
+                        "Slightly Sore" -> Color.Yellow
+                        else -> Color.Green
+                    }
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant // Grey for undertrained
+                },
+                fontWeight = FontWeight.Medium
+            )
+            
+            Text(
+                text = if (sorenessData != null) {
+                    sorenessData.sorenessLevel
+                } else {
+                    "Undertrained"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = if (sorenessData != null) {
+                    when (sorenessData.sorenessLevel) {
+                        "Very Sore" -> Color.Red
+                        "Sore" -> Color(0xFFFF8C00)
+                        "Slightly Sore" -> Color.Yellow
+                        else -> Color.Green
+                    }
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                fontWeight = FontWeight.Bold
+            )
+        }
+        
+        // Show additional details if available
+        if (sorenessData != null) {
+            val lastTrainingDate = java.text.SimpleDateFormat("MMM dd", java.util.Locale.getDefault())
+                .format(java.util.Date(sorenessData.lastWorkoutTime))
+            
+            Text(
+                text = "Last: $lastTrainingDate",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 10.sp
             )
         }
     }

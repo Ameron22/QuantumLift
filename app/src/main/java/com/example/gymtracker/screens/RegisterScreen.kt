@@ -23,13 +23,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.gymtracker.navigation.Screen
-import com.example.gymtracker.viewmodels.AuthViewModel
+import com.example.gymtracker.viewmodels.LoginAuthViewModel
 import androidx.compose.material.icons.filled.Error
 
 @Composable
 fun RegisterScreen(
     navController: NavController,
-    authViewModel: AuthViewModel
+    authViewModel: LoginAuthViewModel
 ) {
     var username by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -56,9 +56,8 @@ fun RegisterScreen(
     
     LaunchedEffect(authState.isLoggedIn) {
         if (authState.isLoggedIn) {
-            navController.navigate(Screen.Home.route) {
-                popUpTo(Screen.Register.route) { inclusive = true }
-            }
+            // Navigate to MainActivity instead of Home route
+            // This will be handled by LoginActivity
         }
     }
     

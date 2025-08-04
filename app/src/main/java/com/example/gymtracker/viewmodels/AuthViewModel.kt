@@ -54,12 +54,16 @@ class AuthViewModel(private val context: Context) : ViewModel() {
     
     private fun checkLoginStatus() {
         viewModelScope.launch {
+            _authState.value = _authState.value.copy(isLoading = true)
             val isLoggedIn = authRepository.isLoggedIn()
             if (isLoggedIn) {
                 // Load user profile if logged in
                 loadUserProfile()
             }
-            _authState.value = _authState.value.copy(isLoggedIn = isLoggedIn)
+            _authState.value = _authState.value.copy(
+                isLoading = false,
+                isLoggedIn = isLoggedIn
+            )
         }
     }
     

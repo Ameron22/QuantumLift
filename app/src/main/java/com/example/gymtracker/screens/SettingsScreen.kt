@@ -43,9 +43,17 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material3.Icon
 import com.example.gymtracker.components.LoadingSpinner
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.text.style.TextOverflow
 import com.example.gymtracker.data.WorkoutPrivacySettings
 import com.example.gymtracker.data.UpdateWorkoutPrivacySettingsRequest
 import com.example.gymtracker.services.AuthRepository
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.content.Context
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -80,6 +88,10 @@ fun SettingsScreen(
     var originalSoundVolume by remember { mutableStateOf(settings?.soundVolume ?: 0.5f) }
     var originalLoadFromHistory by remember { mutableStateOf(settings?.loadFromHistory ?: true) }
     
+    // Track original privacy settings to detect changes
+    var originalAutoShareWorkouts by remember { mutableStateOf(true) }
+    var originalDefaultPrivacy by remember { mutableStateOf("FRIENDS") }
+    
     // State for number picker dialogs
     var showWorkTimePicker by remember { mutableStateOf(false) }
     var showBreakTimePicker by remember { mutableStateOf(false) }
@@ -99,11 +111,20 @@ fun SettingsScreen(
     var autoShareWorkouts by remember { mutableStateOf(true) }
     var defaultPrivacy by remember { mutableStateOf("FRIENDS") }
     var isLoadingPrivacySettings by remember { mutableStateOf(true) }
-    var isSavingPrivacySettings by remember { mutableStateOf(false) }
-    var showPrivacySuccessMessage by remember { mutableStateOf(false) }
     var privacyErrorMessage by remember { mutableStateOf<String?>(null) }
     
-    val privacyOptions = listOf("PUBLIC", "FRIENDS", "PRIVATE")
+    val privacyOptions = listOf("PUBLIC", "FRIENDS")
+
+    // Vibration function for slider changes
+    fun vibrateOnValueChange() {
+        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(20)
+        }
+    }
 
     LaunchedEffect(settings) {
         settings?.let {
@@ -132,6 +153,9 @@ fun SettingsScreen(
                 onSuccess = { settings ->
                     autoShareWorkouts = settings.autoShareWorkouts
                     defaultPrivacy = settings.defaultPostPrivacy
+                    // Set original values for change detection
+                    originalAutoShareWorkouts = settings.autoShareWorkouts
+                    originalDefaultPrivacy = settings.defaultPostPrivacy
                 },
                 onFailure = { exception ->
                     privacyErrorMessage = "Error loading settings: ${exception.message}"
@@ -144,13 +168,7 @@ fun SettingsScreen(
         }
     }
     
-    // Auto-clear privacy success message
-    LaunchedEffect(showPrivacySuccessMessage) {
-        if (showPrivacySuccessMessage) {
-            kotlinx.coroutines.delay(3000)
-            showPrivacySuccessMessage = false
-        }
-    }
+
 
     // Function to check if there are any changes
     fun hasChanges(): Boolean {
@@ -160,7 +178,9 @@ fun SettingsScreen(
                soundEnabled != originalSoundEnabled || 
                vibrationEnabled != originalVibrationEnabled ||
                soundVolume != originalSoundVolume ||
-               loadFromHistory != originalLoadFromHistory
+               loadFromHistory != originalLoadFromHistory ||
+               autoShareWorkouts != originalAutoShareWorkouts ||
+               defaultPrivacy != originalDefaultPrivacy
     }
 
     // Function to save settings
@@ -173,6 +193,19 @@ fun SettingsScreen(
         prefs.updateSoundVolume(soundVolume)
         prefs.updateLoadFromHistory(loadFromHistory)
         
+        // Save privacy settings
+        scope.launch {
+            try {
+                val request = UpdateWorkoutPrivacySettingsRequest(
+                    autoShareWorkouts = autoShareWorkouts,
+                    defaultPostPrivacy = defaultPrivacy
+                )
+                authRepository.updateWorkoutPrivacySettings(request)
+            } catch (e: Exception) {
+                Log.e("SettingsScreen", "Error saving privacy settings: ${e.message}")
+            }
+        }
+        
         // Update original values after saving
         originalWorkTime = workTime
         originalBreakTime = breakTime
@@ -181,6 +214,8 @@ fun SettingsScreen(
         originalVibrationEnabled = vibrationEnabled
         originalSoundVolume = soundVolume
         originalLoadFromHistory = loadFromHistory
+        originalAutoShareWorkouts = autoShareWorkouts
+        originalDefaultPrivacy = defaultPrivacy
         
         showSavedMessage = true
         
@@ -189,34 +224,7 @@ fun SettingsScreen(
         Log.d("SettingsScreen", "Settings after save - Work: ${currentSettings.defaultWorkTime}, Break: ${currentSettings.defaultBreakTime}, Sound: ${currentSettings.soundEnabled}, Vibration: ${currentSettings.vibrationEnabled}, Volume: ${currentSettings.soundVolume}, LoadFromHistory: ${currentSettings.loadFromHistory}")
     }
     
-    // Function to save privacy settings
-    fun savePrivacySettings() {
-        scope.launch {
-            isSavingPrivacySettings = true
-            privacyErrorMessage = null
-            
-            try {
-                val request = UpdateWorkoutPrivacySettingsRequest(
-                    autoShareWorkouts = autoShareWorkouts,
-                    defaultPostPrivacy = defaultPrivacy
-                )
-                
-                val result = authRepository.updateWorkoutPrivacySettings(request)
-                result.fold(
-                    onSuccess = {
-                        showPrivacySuccessMessage = true
-                    },
-                    onFailure = { exception ->
-                        privacyErrorMessage = "Error saving settings: ${exception.message}"
-                    }
-                )
-            } catch (e: Exception) {
-                privacyErrorMessage = "Error saving settings: ${e.message}"
-            } finally {
-                isSavingPrivacySettings = false
-            }
-        }
-    }
+
 
     // Function to handle navigation with change detection
     fun handleNavigation(route: String) {
@@ -239,7 +247,52 @@ fun SettingsScreen(
             TopAppBar(
                 title = { Text("Settings") },
                 actions = {
-                    WorkoutIndicator(generalViewModel = generalViewModel, navController = navController)
+                    // Custom WorkoutIndicator that handles change detection
+                    val currentWorkout by generalViewModel.currentWorkout.collectAsState()
+                    val isWorkoutActive = currentWorkout?.isActive == true
+                    val workoutName = currentWorkout?.workoutName ?: ""
+                    
+                    if (isWorkoutActive && workoutName.isNotEmpty()) {
+                        val scale by animateFloatAsState(
+                            targetValue = 1.0f,
+                            animationSpec = tween(200),
+                            label = "scale"
+                        )
+                        
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 16.dp)
+                                .background(
+                                    color = Color(0xFF2E7D32),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .scale(scale)
+                                .clickable {
+                                    // Check for changes before navigating
+                                    if (hasChanges()) {
+                                        pendingNavigationRoute = Screen.Routes.workoutDetails(currentWorkout?.workoutId ?: 0)
+                                        showBackConfirmationDialog = true
+                                    } else {
+                                        // Navigate directly if no changes
+                                        val workoutId = currentWorkout?.workoutId
+                                        if (workoutId != null && workoutId > 0) {
+                                            navController.navigate(Screen.Routes.workoutDetails(workoutId))
+                                        }
+                                    }
+                                }
+                                .padding(horizontal = 16.dp, vertical = 10.dp)
+                        ) {
+                            // Simple text display for the workout indicator
+                            Text(
+                                text = "$workoutName →",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.width(150.dp)
+                            )
+                        }
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
@@ -247,73 +300,13 @@ fun SettingsScreen(
             )
         },
         bottomBar = { 
-            // Custom bottom navigation that checks for changes
-            val items = listOf(
-                Screen.Home,
-                Screen.LoadWorkout,
-                Screen.LoadHistory,
-                Screen.Feed,
-                Screen.Achievements,
-                Screen.Settings
-            )
-            
-            NavigationBar(
-                modifier = Modifier.height(72.dp)
-            ) {
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentRoute = navBackStackEntry?.destination?.route
-                
-                items.forEach { screen ->
-                    NavigationBarItem(
-                        icon = { 
-                            when(screen) {
-                                Screen.Home -> Icon(
-                                    painter = painterResource(id = R.drawable.home_icon),
-                                    contentDescription = "Home",
-                                    modifier = Modifier.size(36.dp)
-                                )
-                                Screen.LoadWorkout -> Icon(
-                                    painter = painterResource(id = R.drawable.dumbell_icon2),
-                                    contentDescription = "Workouts",
-                                    modifier = Modifier.size(44.dp)
-                                )
-                                Screen.LoadHistory -> Icon(
-                                    painter = painterResource(id = R.drawable.history_icon),
-                                    contentDescription = "History",
-                                    modifier = Modifier.size(36.dp)
-                                )
-                                Screen.Achievements -> Icon(
-                                    painter = painterResource(id = R.drawable.trophy),
-                                    contentDescription = "Achievements",
-                                    modifier = Modifier.size(40.dp)
-                                )
-                                Screen.Feed -> Icon(
-                                    imageVector = Icons.Default.People,
-                                    contentDescription = "Feed",
-                                    modifier = Modifier.size(36.dp)
-                                )
-                                Screen.Settings -> Icon(
-                                    painter = painterResource(id = R.drawable.settings_svgrepo_com),
-                                    contentDescription = "Settings",
-                                    modifier = Modifier.size(26.dp)
-                                )
-                                else -> Icon(
-                                    imageVector = Icons.Default.People,
-                                    contentDescription = screen.route,
-                                    modifier = Modifier.size(40.dp)
-                                )
-                            }
-                        },
-                        label = { },
-                        selected = currentRoute == screen.route,
-                        onClick = {
-                            if (currentRoute != screen.route) {
-                                handleNavigation(screen.route)
-                            }
-                        }
-                    )
+            // Use the reusable BottomNavBar component with custom navigation handling
+            BottomNavBar(
+                navController = navController,
+                onNavigationClick = { route ->
+                    handleNavigation(route)
                 }
-            }
+            )
         }
     ) { paddingValues ->
         if (authState.isLoading) {
@@ -596,7 +589,7 @@ fun SettingsScreen(
                                 
                                 // Default privacy level
                                 Text(
-                                    text = "Default Privacy Level",
+                                    text = "Privacy Level",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
@@ -624,7 +617,7 @@ fun SettingsScreen(
                                                 text = when (option) {
                                                     "PUBLIC" -> "Public"
                                                     "FRIENDS" -> "Friends"
-                                                    "PRIVATE" -> "Private"
+                                                    //"PRIVATE" -> "Private"
                                                     else -> option
                                                 },
                                                 fontWeight = FontWeight.Medium
@@ -633,7 +626,7 @@ fun SettingsScreen(
                                                 text = when (option) {
                                                     "PUBLIC" -> "Everyone can see your posts"
                                                     "FRIENDS" -> "Only your friends can see your posts"
-                                                    "PRIVATE" -> "Only you can see your posts"
+                                                    //"PRIVATE" -> "Only you can see your posts"
                                                     else -> ""
                                                 },
                                                 fontSize = 12.sp,
@@ -643,73 +636,9 @@ fun SettingsScreen(
                                     }
                                 }
                                 
-                                // Save privacy settings button
-                                Button(
-                                    onClick = { savePrivacySettings() },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    enabled = !isSavingPrivacySettings
-                                ) {
-                                    if (isSavingPrivacySettings) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(20.dp),
-                                            strokeWidth = 2.dp
-                                        )
-                                    } else {
-                                        Text("Save Privacy Settings")
-                                    }
-                                }
+
                                 
-                                // Privacy success message
-                                if (showPrivacySuccessMessage) {
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                                        )
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(12.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(
-                                                imageVector = androidx.compose.material.icons.Icons.Default.Check,
-                                                contentDescription = "Success",
-                                                tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                text = "Privacy settings saved successfully!",
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                                            )
-                                        }
-                                    }
-                                }
-                                
-                                // Privacy error message
-                                privacyErrorMessage?.let { error ->
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = MaterialTheme.colorScheme.errorContainer
-                                        )
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(12.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(
-                                                imageVector = androidx.compose.material.icons.Icons.Default.Error,
-                                                contentDescription = "Error",
-                                                tint = MaterialTheme.colorScheme.onErrorContainer
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                text = error,
-                                                color = MaterialTheme.colorScheme.onErrorContainer
-                                            )
-                                        }
-                                    }
-                                }
+
                             }
                         }
                     }
@@ -720,10 +649,10 @@ fun SettingsScreen(
                     Button(
                         onClick = {
                             authViewModel.logout()
-                            navController.navigate(Screen.Login.route) {
-                                popUpTo(0) { inclusive = true }
-                                launchSingleTop = true
-                            }
+                            // Start LoginActivity and clear the activity stack
+                            val intent = android.content.Intent(context, com.example.gymtracker.LoginActivity::class.java)
+                            intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+                            context.startActivity(intent)
                         },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(
@@ -1020,7 +949,10 @@ fun SettingsScreen(
                         ) {
                             Slider(
                                 value = soundVolume,
-                                onValueChange = { soundVolume = it },
+                                onValueChange = { 
+                                    soundVolume = it
+                                    vibrateOnValueChange()
+                                },
                                 valueRange = 0f..1f,
                                 steps = 9,
                                 modifier = Modifier.weight(1f)

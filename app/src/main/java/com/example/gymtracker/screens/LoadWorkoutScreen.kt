@@ -37,6 +37,20 @@ import com.example.gymtracker.components.LoadingSpinner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.gymtracker.viewmodels.GeneralViewModel
 import com.example.gymtracker.components.WorkoutIndicator
+import android.util.Log
+import com.example.gymtracker.components.LevelUpDialog
+import com.example.gymtracker.data.XPSystem
+
+// Data class for level-up information
+data class LevelUpData(
+    val xpGained: Int,
+    val currentLevel: Int,
+    val newLevel: Int,
+    val currentXP: Int,
+    val xpForNextLevel: Int,
+    val previousLevelXP: Int
+)
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +76,11 @@ fun LoadWorkoutScreen(
     // State for filter dialog
     var showFilterDialog by remember { mutableStateOf(false) }
     var selectedMuscleGroup by remember { mutableStateOf<String?>(null) }
+    
+    // State for level-up dialog
+    var showLevelUpDialog by remember { mutableStateOf(false) }
+    var levelUpData by remember { mutableStateOf<LevelUpData?>(null) }
+
 
     // Load workouts with exercises
     LaunchedEffect(Unit) {
@@ -77,6 +96,33 @@ fun LoadWorkoutScreen(
                 filteredWorkouts.value = workouts.value
                 isLoading = false
             }
+        }
+    }
+    
+    // Check for level-up using XP buffer
+    val xpBuffer by generalViewModel.xpBuffer.collectAsState()
+    
+    LaunchedEffect(xpBuffer) {
+        if (xpBuffer != null) {
+            Log.d("LoadWorkoutScreen", "XP buffer detected: ${xpBuffer}")
+            
+            // Use XPSystem utility functions for consistent calculations
+            val xpSystem = XPSystem(AppDatabase.getDatabase(context).userXPDao())
+            
+            // Calculate XP for next level
+            val xpForNextLevel = xpSystem.getXPNeededForLevel(xpBuffer!!.newLevel)
+            
+            // Show level-up dialog
+            levelUpData = LevelUpData(
+                xpGained = xpBuffer!!.xpGained,
+                currentLevel = xpBuffer!!.previousLevel,
+                newLevel = xpBuffer!!.newLevel,
+                currentXP = xpBuffer!!.newTotalXP,
+                xpForNextLevel = xpForNextLevel,
+                previousLevelXP = xpBuffer!!.previousTotalXP  // Use actual XP before gain, not level start
+            )
+            showLevelUpDialog = true
+            Log.d("LoadWorkoutScreen", "Level-up dialog triggered from XP buffer")
         }
     }
 
@@ -246,65 +292,66 @@ fun LoadWorkoutScreen(
                     .padding(paddingValues),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-            // New Workout Button at the top
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 2.dp)
-                        .clickable { showCreateWorkoutDialog = true },
-                    shape = RoundedCornerShape(12.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-                    )
-                ) {
-                    Row(
+                // New Workout Button at the top
+                item {
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 16.dp, vertical = 2.dp)
+                            .clickable { showCreateWorkoutDialog = true },
+                        shape = RoundedCornerShape(12.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                        )
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Add Workout",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "New Workout",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Add Workout",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "New Workout",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
                     }
                 }
-            }
 
-            // Spacer between New Workout button and workout cards
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
-            }
+                // Spacer between New Workout button and workout cards
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
 
-            // Existing workout cards
-            items(filteredWorkouts.value) { workoutWithExercises ->
-                val currentWorkout by generalViewModel.currentWorkout.collectAsState()
-                val isActive = currentWorkout?.workoutId == workoutWithExercises.workout.id && currentWorkout?.isActive == true
-                
-                WorkoutCard(
-                    workout = workoutWithExercises.workout,
-                    muscleGroups = workoutWithExercises.exercises.map { it.muscle }.distinct(),
-                    onClick = {
-                        navController.navigate(
-                            Screen.Routes.workoutDetails(
-                                workoutWithExercises.workout.id
+                // Existing workout cards
+                items(filteredWorkouts.value) { workoutWithExercises ->
+                    val currentWorkout by generalViewModel.currentWorkout.collectAsState()
+                    val isActive = currentWorkout?.workoutId == workoutWithExercises.workout.id && currentWorkout?.isActive == true
+                    
+                    WorkoutCard(
+                        workout = workoutWithExercises.workout,
+                        muscleGroups = workoutWithExercises.exercises.map { it.muscle }.distinct(),
+                        onClick = {
+                            navController.navigate(
+                                Screen.Routes.workoutDetails(
+                                    workoutWithExercises.workout.id
+                                )
                             )
-                        )
-                    },
-                    onDelete = { showDeleteConfirmation(workoutWithExercises.workout) },
-                    isActive = isActive
-                )
+                        },
+                        onDelete = { showDeleteConfirmation(workoutWithExercises.workout) },
+                        isActive = isActive
+                    )
+                }
             }
         }
     }
@@ -429,5 +476,26 @@ fun LoadWorkoutScreen(
             }
         )
     }
-}
+    
+    // Level Up Dialog
+    if (showLevelUpDialog && levelUpData != null) {
+        Log.d("LoadWorkoutScreen", "Rendering LevelUpDialog - showLevelUpDialog: $showLevelUpDialog, levelUpData: $levelUpData")
+        LevelUpDialog(
+            onDismiss = {
+                Log.d("LoadWorkoutScreen", "LevelUpDialog dismissed")
+                showLevelUpDialog = false
+                levelUpData = null
+                // Clear the XP buffer to prevent showing dialog again
+                generalViewModel.clearXPBuffer()
+            },
+            xpGained = levelUpData!!.xpGained,
+            currentLevel = levelUpData!!.currentLevel,
+            newLevel = levelUpData!!.newLevel,
+            currentXP = levelUpData!!.currentXP,
+            xpForNextLevel = levelUpData!!.xpForNextLevel,
+            previousLevelXP = levelUpData!!.previousLevelXP
+        )
+    } else {
+        Log.d("LoadWorkoutScreen", "LevelUpDialog condition not met - showLevelUpDialog: $showLevelUpDialog, levelUpData: $levelUpData")
+    }
 }

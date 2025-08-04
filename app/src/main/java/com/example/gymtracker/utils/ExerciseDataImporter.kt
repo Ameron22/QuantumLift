@@ -77,7 +77,7 @@ class ExerciseDataImporter(private val context: Context, private val dao: Exerci
         val exercises = mutableListOf<CsvExercise>()
         try {
             Log.d(TAG, "Opening CSV file")
-            val csvFileName = "exercises_english_manual.csv"
+            val csvFileName = "exercises.csv"
             val files = context.assets.list("")
             Log.d(TAG, "Available files in assets: ${files?.joinToString()}")
             
@@ -100,7 +100,7 @@ class ExerciseDataImporter(private val context: Context, private val dao: Exerci
                         val parts = parseCsvLine(line!!)
                         Log.d(TAG, "Parsed parts for line $lineCount: ${parts.joinToString(" | ")}")
                         
-                        if (parts.size >= 9) {
+                        if (parts.size >= 10) {
                             try {
                                 val id = parts[0].toIntOrNull() ?: continue
                                 val title = parts[1]
@@ -109,12 +109,11 @@ class ExerciseDataImporter(private val context: Context, private val dao: Exerci
                                 val muscles = parts[4].trim().split(", ").map { it.trim() }
                                 val equipment = parts[5].trim().split(", ").map { it.trim() }.joinToString(", ")
                                 val difficulty = parts[6]
-                                // Construct GIF filename using ID and title
-                                val gifFilename = String.format("%04d_%s.gif", id, title.replace(" ", "_"))
-                                val gifPath = "exercise_gifs/$gifFilename"
-                                // Parse use_time column (last column)
-                                val useTime = parts.getOrNull(8)?.trim()?.lowercase() == "true"
-                                Log.d(TAG, "Processing exercise $lineCount: ID=$id, Title=$title, Category=$category, MuscleGroup=$muscleGroup, Muscles=$muscles, Equipment=$equipment, Difficulty=$difficulty, UseTime=$useTime")
+                                val gifUrl = parts[7]
+                                // Parse use_time column
+                                val useTime = parts[8].trim().lowercase() == "true"
+                                val description = parts[9]
+                                Log.d(TAG, "Processing exercise $lineCount: ID=$id, Title=$title, Category=$category, MuscleGroup=$muscleGroup, Muscles=$muscles, Equipment=$equipment, Difficulty=$difficulty, UseTime=$useTime, Description=$description")
                                 val exercise = CsvExercise(
                                     id = id,
                                     title = title,
@@ -123,8 +122,9 @@ class ExerciseDataImporter(private val context: Context, private val dao: Exerci
                                     muscles = muscles,
                                     equipment = equipment,
                                     difficulty = difficulty,
-                                    gifUrl = gifPath,
-                                    useTime = useTime
+                                    gifUrl = gifUrl,
+                                    useTime = useTime,
+                                    description = description
                                 )
                                 exercises.add(exercise)
                                 Log.d(TAG, "Difficulty - Successfully parsed exercise: ${exercise.title} with difficulty: ${exercise.difficulty} useTime: ${exercise.useTime}")
@@ -134,7 +134,7 @@ class ExerciseDataImporter(private val context: Context, private val dao: Exerci
                                 Log.e(TAG, "Parsed parts: ${parts.joinToString(" | ")}")
                             }
                         } else {
-                            Log.e(TAG, "Invalid line format at line $lineCount: ${parts.size} parts found, expected 9")
+                            Log.e(TAG, "Invalid line format at line $lineCount: ${parts.size} parts found, expected 10")
                             Log.e(TAG, "Line content: $line")
                             Log.e(TAG, "Parsed parts: ${parts.joinToString(" | ")}")
                         }
@@ -171,6 +171,14 @@ class ExerciseDataImporter(private val context: Context, private val dao: Exerci
         }
     }
 
+    private fun generateGifPath(id: Int, title: String): String {
+        // Convert title to the format used in file names (replace spaces with underscores)
+        val formattedTitle = title.replace(" ", "_")
+        // Format ID with leading zeros (4 digits)
+        val formattedId = String.format("%04d", id)
+        return "exercise_gifs/${formattedId}_${formattedTitle}.gif"
+    }
+
     private suspend fun insertExercisesToDatabase(exercises: List<CsvExercise>) = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "Starting database insertion")
@@ -202,11 +210,13 @@ class ExerciseDataImporter(private val context: Context, private val dao: Exerci
                     
                     val exercise = EntityExercise(
                         name = csvExercise.title,
+                        description = csvExercise.description,
+                        category = csvExercise.category,
                         muscle = csvExercise.muscleGroup,
                         parts = Converter().fromList(csvExercise.muscles),
                         equipment = csvExercise.equipment,
                         difficulty = convertedDifficulty,
-                        gifUrl = csvExercise.gifUrl,
+                        gifUrl = generateGifPath(csvExercise.id, csvExercise.title),
                         useTime = csvExercise.useTime
                     )
                     

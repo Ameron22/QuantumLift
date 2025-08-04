@@ -10,6 +10,7 @@ data class EntityExercise(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val name: String,
     val description: String = "",
+    val category: String = "", // Exercise category (e.g., Strength, Stretching, etc.)
     val muscle: String, // Primary muscle group
     val parts: String, // JSON string of specific parts of the muscle
     val equipment: String = "", // Equipment required for the exercise

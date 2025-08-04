@@ -65,7 +65,13 @@ fun FilterChipFlowRow(
         FilterChip(
             selected = selectedItems.isEmpty(),
             onClick = onAllClick,
-            label = { Text("All", maxLines = 1) },
+            label = { 
+                Text(
+                    "All", 
+                    maxLines = 1,
+                    color = Color(0xFF2196F3) // Blue color for the first "All"
+                ) 
+            },
         )
         items.forEach { item ->
             FilterChip(
@@ -119,6 +125,18 @@ fun AddExerciseToWorkoutScreen(
     // Create a single interaction source for all cards
     val interactionSource = remember { MutableInteractionSource() }
 
+    // Use the same muscle parts map as CreateExerciseScreen
+    val musclePartsMap = mapOf(
+        "All" to listOf(" "), // "All" for showing all exercises
+        "Neck" to listOf("Neck", "Upper Traps"),
+        "Chest" to listOf("Chest"),
+        "Shoulders" to listOf("Deltoids"),
+        "Arms" to listOf("Biceps", "Triceps", "Forearms"),
+        "Core" to listOf("Abs", "Obliques", "Lower Back"),
+        "Back" to listOf("Upper Back", "Lats", "Lower Back"),
+        "Legs" to listOf("Quadriceps", "Hamstrings", "Adductors", "Glutes", "Calves")
+    )
+
     // Load all exercises
     LaunchedEffect(Unit) {
         try {
@@ -137,35 +155,91 @@ fun AddExerciseToWorkoutScreen(
         }
     }
 
-    // Get unique muscle groups, difficulties, and equipment
-    val muscleGroups = exercises.map { it.muscle }.distinct().sorted()
-    val difficulties = listOf("Beginner", "Intermediate", "Advanced")
-    val equipmentList = exercises.flatMap { exercise ->
+    // Get muscle groups from the musclePartsMap
+    val muscleGroups = musclePartsMap.keys.toList()
+    
+    // Filter exercises based on all current selections for dynamic filtering
+    val filteredExercisesForOptions = exercises.filter { exercise ->
+        // Muscle group filtering
+        val matchesMuscleGroup = if (selectedMuscleGroups.isEmpty()) {
+            true
+        } else {
+            val exerciseMuscleGroup = when (exercise.muscle) {
+                "Neck" -> "Neck"
+                "Chest" -> "Chest"
+                "Shoulder" -> "Shoulders"
+                "Arms" -> "Arms"
+                "Core" -> "Core"
+                "Back" -> "Back"
+                "Legs" -> "Legs"
+                else -> exercise.muscle
+            }
+            
+            if (selectedMuscleGroups.contains("All")) {
+                // When "All" is selected, show only exercises with muscle="All"
+                exercise.muscle == "All"
+            } else {
+                selectedMuscleGroups.contains(exerciseMuscleGroup)
+            }
+        }
+        
+        // Difficulty filtering
+        val matchesDifficulty = selectedDifficulties.isEmpty() || selectedDifficulties.contains(exercise.difficulty)
+        
+        // Equipment filtering
+        val matchesEquipment = selectedEquipment.isEmpty() || run {
+            val exerciseEquipment = if (exercise.equipment.isNotBlank()) {
+                exercise.equipment.split(",").map { it.trim() }
+            } else {
+                listOf("None")
+            }
+            selectedEquipment.any { selected -> exerciseEquipment.contains(selected) }
+        }
+        
+        matchesMuscleGroup && matchesDifficulty && matchesEquipment
+    }
+    
+    // Dynamic equipment list based on filtered exercises
+    val equipmentList = filteredExercisesForOptions.flatMap { exercise ->
         if (exercise.equipment.isNotBlank()) {
             exercise.equipment.split(",").map { it.trim() }
         } else {
             listOf("None")
         }
-    }.distinct().sorted()
+    }.distinct().let { equipment ->
+        // Put "None" and "Other" at the top of the list
+        val noneAndOther = equipment.filter { it in listOf("None", "Other") }
+        val others = equipment.filter { it !in listOf("None", "Other") }.sorted()
+        noneAndOther + others
+    }
+    
+    // Dynamic difficulties list based on filtered exercises
+    val difficulties = filteredExercisesForOptions.map { it.difficulty }.distinct().sorted()
     
     // Filter muscle parts based on selected muscle groups
     val availableMuscleParts = if (selectedMuscleGroups.isEmpty()) {
-        exercises.flatMap { Converter().fromString(it.parts) }.filter { it.isNotBlank() }.distinct().sorted()
+        // Show all muscle parts when no muscle group is selected
+        musclePartsMap.values.flatten().filter { it.isNotBlank() && it != " " }.distinct().sorted()
+    } else if (selectedMuscleGroups.contains("All")) {
+        // Show no muscle parts when "All" is selected
+        emptyList()
     } else {
-        exercises.filter { it.muscle in selectedMuscleGroups }
-            .flatMap { Converter().fromString(it.parts) }
-            .filter { it.isNotBlank() }
-            .distinct()
-            .sorted()
+        // Show only muscle parts from selected muscle groups
+        selectedMuscleGroups.flatMap { muscleGroup ->
+            musclePartsMap[muscleGroup] ?: emptyList()
+        }.filter { it.isNotBlank() && it != " " }.distinct().sorted()
     }
     
     // Clear muscle parts when muscle groups change
     LaunchedEffect(selectedMuscleGroups) {
-        if (selectedMuscleGroups.isNotEmpty()) {
-            val validMuscleParts = exercises.filter { it.muscle in selectedMuscleGroups }
-                .flatMap { Converter().fromString(it.parts) }
-                .distinct()
+        if (selectedMuscleGroups.isNotEmpty() && !selectedMuscleGroups.contains("All")) {
+            val validMuscleParts = selectedMuscleGroups.flatMap { muscleGroup ->
+                musclePartsMap[muscleGroup] ?: emptyList()
+            }.filter { it.isNotBlank() && it != " " }
             selectedMuscleParts = selectedMuscleParts.filter { it in validMuscleParts }
+        } else if (selectedMuscleGroups.contains("All")) {
+            // Clear muscle parts when "All" is selected
+            selectedMuscleParts = emptyList()
         }
     }
 
@@ -178,9 +252,37 @@ fun AddExerciseToWorkoutScreen(
             val exerciseNameLower = exercise.name.lowercase()
             searchTerms.all { term -> exerciseNameLower.contains(term) }
         }
-        val matchesMuscle = selectedMuscleGroups.isEmpty() || selectedMuscleGroups.contains(exercise.muscle)
+        
+        // TODO: REMOVE THIS MAPPING ONCE CSV FILE IS UPDATED WITH NEW MUSCLE GROUP NAMES
+        // This mapping is needed for backward compatibility with old exercise data
+        // that uses "Shoulder" instead of "Shoulders"
+        val exerciseMuscleGroup = when (exercise.muscle) {
+            "Neck" -> "Neck"
+            "Chest" -> "Chest"
+            "Shoulder" -> "Shoulders"
+            "Arms" -> "Arms"
+            "Core" -> "Core"
+            "Back" -> "Back"
+            "Legs" -> "Legs"
+            else -> exercise.muscle // Fallback for any other muscle groups
+        }
+        
+        // Handle "All" filter: when selected shows only exercises with muscle="All"
+        val matchesMuscle = if (selectedMuscleGroups.isEmpty()) {
+            true // Show all exercises when no filter is selected
+        } else if (selectedMuscleGroups.contains("All")) {
+            // When "All" is selected, show only exercises with muscle="All"
+            exercise.muscle == "All"
+        } else {
+            selectedMuscleGroups.contains(exerciseMuscleGroup)
+        }
+        
         val matchesDifficulty = selectedDifficulties.isEmpty() || selectedDifficulties.contains(exercise.difficulty)
-        val matchesMusclePart = selectedMuscleParts.isEmpty() || Converter().fromString(exercise.parts).any { it in selectedMuscleParts }
+        val matchesMusclePart = selectedMuscleParts.isEmpty() || Converter().fromString(exercise.parts).any { exercisePart -> 
+            selectedMuscleParts.any { selectedPart -> 
+                exercisePart.equals(selectedPart, ignoreCase = true) 
+            }
+        }
         val matchesEquipment = selectedEquipment.isEmpty() || run {
             val exerciseEquipment = if (exercise.equipment.isNotBlank()) {
                 exercise.equipment.split(",").map { it.trim() }

@@ -15,13 +15,42 @@ data class CurrentWorkoutState(
     val completedExercises: Set<Int> = emptySet()
 )
 
+// XP Buffer data class to store newly earned XP
+data class XPBuffer(
+    val xpGained: Int,
+    val previousLevel: Int,
+    val newLevel: Int,
+    val previousTotalXP: Int,
+    val newTotalXP: Int,
+    val timestamp: Long
+)
+
 class GeneralViewModel : ViewModel() {
     // Current workout management
     private val _currentWorkout = MutableStateFlow<CurrentWorkoutState?>(null)
     val currentWorkout: StateFlow<CurrentWorkoutState?> = _currentWorkout.asStateFlow()
 
+    // XP Buffer for newly earned XP
+    private val _xpBuffer = MutableStateFlow<XPBuffer?>(null)
+    val xpBuffer: StateFlow<XPBuffer?> = _xpBuffer.asStateFlow()
+
     // General app state can be added here in the future
     // For example: user preferences, app settings, etc.
+
+    // XP Buffer management methods
+    fun setXPBuffer(xpBuffer: XPBuffer) {
+        Log.d("GeneralViewModel", "Setting XP buffer: $xpBuffer")
+        _xpBuffer.value = xpBuffer
+    }
+
+    fun clearXPBuffer() {
+        Log.d("GeneralViewModel", "Clearing XP buffer")
+        _xpBuffer.value = null
+    }
+
+    fun getXPBuffer(): XPBuffer? {
+        return _xpBuffer.value
+    }
 
     // Workout management methods
     fun startWorkout(workoutId: Int, workoutName: String) {

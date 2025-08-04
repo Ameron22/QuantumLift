@@ -23,22 +23,10 @@ class SplashActivity : ComponentActivity() {
             // Keep splash screen on screen until we're ready to show our animation
             splashScreen.setKeepOnScreenCondition { true }
             
-            // Check authentication status
-            CoroutineScope(Dispatchers.IO).launch {
-                val authRepository = AuthRepository(this@SplashActivity)
-                val isLoggedIn = authRepository.isLoggedIn()
-                
-                runOnUiThread {
-                    if (isLoggedIn) {
-                        Log.d(TAG, "User is logged in, starting BicepAnimationActivity")
-                        startActivity(Intent(this@SplashActivity, BicepAnimationActivity::class.java))
-                    } else {
-                        Log.d(TAG, "User is not logged in, starting MainActivity")
-                        startActivity(Intent(this@SplashActivity, MainActivity::class.java))
-                    }
-                    finish()
-                }
-            }
+            // Always start with BicepAnimationActivity, authentication check will happen during animation
+            Log.d(TAG, "Starting BicepAnimationActivity")
+            startActivity(Intent(this@SplashActivity, BicepAnimationActivity::class.java))
+            finish()
         } catch (e: Exception) {
             Log.e(TAG, "Error in SplashActivity", e)
             startActivity(Intent(this, MainActivity::class.java))

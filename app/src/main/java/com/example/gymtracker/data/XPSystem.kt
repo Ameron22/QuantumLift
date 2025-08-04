@@ -31,7 +31,14 @@ class XPSystem(private val userXPDao: UserXPDao) {
         val setsXP = totalSets * XP_PER_SET
         
         val totalXP = baseXP + durationXP + setsXP
-        Log.d("XPSystem", "Workout XP calculation: base=$baseXP, duration=$durationXP, sets=$setsXP, total=$totalXP")
+        Log.d("XPSystem", "=== WORKOUT XP CALCULATION ===")
+        Log.d("XPSystem", "Duration minutes: $durationMinutes")
+        Log.d("XPSystem", "Total sets: $totalSets")
+        Log.d("XPSystem", "Base XP: $baseXP")
+        Log.d("XPSystem", "Duration XP: $durationXP")
+        Log.d("XPSystem", "Sets XP: $setsXP")
+        Log.d("XPSystem", "Total XP: $totalXP")
+        Log.d("XPSystem", "=== END WORKOUT XP ===")
         
         return totalXP
     }
@@ -40,19 +47,28 @@ class XPSystem(private val userXPDao: UserXPDao) {
      * Calculate level from total XP
      */
     fun calculateLevel(totalXP: Int): Int {
-        return when {
+        val level = when {
             totalXP < 1000 -> (totalXP / XP_LEVEL_1_10) + 1
             totalXP < 5000 -> 10 + ((totalXP - 1000) / XP_LEVEL_11_25) + 1
             totalXP < 15000 -> 25 + ((totalXP - 5000) / XP_LEVEL_26_50) + 1
             totalXP < 30000 -> 50 + ((totalXP - 15000) / XP_LEVEL_51_75) + 1
             else -> 75 + ((totalXP - 30000) / XP_LEVEL_76_100) + 1
         }.coerceAtMost(100) // Cap at level 100
+        
+        Log.d("XPSystem", "Level calculation: totalXP=$totalXP, calculatedLevel=$level")
+        
+        return level
     }
     
     /**
      * Calculate XP needed for next level
      */
     fun calculateXPToNextLevel(currentLevel: Int, totalXP: Int): Int {
+        // If at max level, return 0 (no more levels to gain)
+        if (currentLevel >= 100) {
+            return 0
+        }
+        
         val xpForCurrentLevel = when {
             currentLevel <= 10 -> (currentLevel - 1) * XP_LEVEL_1_10
             currentLevel <= 25 -> 1000 + (currentLevel - 11) * XP_LEVEL_11_25
@@ -69,7 +85,10 @@ class XPSystem(private val userXPDao: UserXPDao) {
             else -> 30000 + (currentLevel - 75) * XP_LEVEL_76_100
         }
         
-        return xpForNextLevel - totalXP
+        val xpNeeded = xpForNextLevel - totalXP
+        Log.d("XPSystem", "XP calculation: level=$currentLevel, totalXP=$totalXP, xpForNext=$xpForNextLevel, xpNeeded=$xpNeeded")
+        
+        return xpNeeded
     }
     
     /**
@@ -138,6 +157,49 @@ class XPSystem(private val userXPDao: UserXPDao) {
                 null
             }
         }
+    }
+    
+    /**
+     * Calculate XP needed to start a level
+     */
+    fun getLevelStartXP(level: Int): Int {
+        return when {
+            level <= 10 -> (level - 1) * 100
+            level <= 25 -> 1000 + (level - 11) * 200
+            level <= 50 -> 5000 + (level - 26) * 300
+            level <= 75 -> 15000 + (level - 51) * 400
+            else -> 30000 + (level - 76) * 500
+        }
+    }
+    
+    /**
+     * Calculate XP needed to complete a level
+     */
+    fun getLevelEndXP(level: Int): Int {
+        return when {
+            level < 10 -> level * 100
+            level < 25 -> 1000 + (level - 10) * 200
+            level < 50 -> 5000 + (level - 25) * 300
+            level < 75 -> 15000 + (level - 50) * 400
+            else -> 30000 + (level - 75) * 500
+        }
+    }
+    
+    /**
+     * Calculate XP within a level (how much XP you have in the current level)
+     */
+    fun getXPWithinLevel(totalXP: Int, level: Int): Int {
+        val levelStartXP = getLevelStartXP(level)
+        return totalXP - levelStartXP
+    }
+    
+    /**
+     * Calculate XP needed to complete the current level
+     */
+    fun getXPNeededForLevel(level: Int): Int {
+        val levelStartXP = getLevelStartXP(level)
+        val levelEndXP = getLevelEndXP(level)
+        return levelEndXP - levelStartXP
     }
     
     /**

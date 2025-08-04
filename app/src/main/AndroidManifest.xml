@@ -42,6 +42,12 @@
         </activity>
 
         <activity
+            android:name=".LoginActivity"
+            android:exported="false"
+            android:theme="@style/Theme.QuantumLift"
+            android:screenOrientation="portrait" />
+
+        <activity
             android:name=".MainActivity"
             android:exported="false"
             android:theme="@style/Theme.QuantumLift"

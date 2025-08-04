@@ -11,6 +11,10 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
+import com.example.gymtracker.services.AuthRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlin.math.sin
 
 private const val TAG = "BicepAnimation"
@@ -29,6 +33,8 @@ class BicepAnimationActivity : ComponentActivity() {
     private var currentFrame = 0
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var imageView: ImageView
+    private var isLoggedIn = false
+    private var authCheckCompleted = false
 
     private val animationRunnable = object : Runnable {
         override fun run() {
@@ -42,11 +48,22 @@ class BicepAnimationActivity : ComponentActivity() {
                 handler.postDelayed(this, FRAME_DURATION)
             } else {
                 Log.d(TAG, "Animation complete")
-                // Add a small delay before transitioning to MainActivity
-                handler.postDelayed({
-                    startActivity(Intent(this@BicepAnimationActivity, MainActivity::class.java))
-                    finish()
-                }, 300) // 300ms pause at the end
+                // Wait for auth check to complete before navigating
+                if (authCheckCompleted) {
+                    navigateToNextScreen()
+                } else {
+                    // If auth check is still pending, wait a bit more
+                    handler.postDelayed({
+                        if (authCheckCompleted) {
+                            navigateToNextScreen()
+                        } else {
+                            // Force navigation after timeout
+                            Log.d(TAG, "Auth check timeout, navigating to login")
+                            startActivity(Intent(this@BicepAnimationActivity, LoginActivity::class.java))
+                            finish()
+                        }
+                    }, 500)
+                }
             }
         }
     }
@@ -157,6 +174,32 @@ class BicepAnimationActivity : ComponentActivity() {
         // Smooth settling function
         return 1f - (1f - progress) * (1f - progress) * (1f - progress)
     }
+    
+    private fun checkAuthentication() {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val authRepository = AuthRepository(this@BicepAnimationActivity)
+                isLoggedIn = authRepository.isLoggedIn()
+                authCheckCompleted = true
+                Log.d(TAG, "Auth check completed: isLoggedIn = $isLoggedIn")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error checking authentication", e)
+                isLoggedIn = false
+                authCheckCompleted = true
+            }
+        }
+    }
+    
+    private fun navigateToNextScreen() {
+        if (isLoggedIn) {
+            Log.d(TAG, "User is logged in, navigating to MainActivity")
+            startActivity(Intent(this@BicepAnimationActivity, MainActivity::class.java))
+        } else {
+            Log.d(TAG, "User is not logged in, navigating to LoginActivity")
+            startActivity(Intent(this@BicepAnimationActivity, LoginActivity::class.java))
+        }
+        finish()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         try {
@@ -188,6 +231,9 @@ class BicepAnimationActivity : ComponentActivity() {
             container.addView(imageView)
             setContentView(container)
 
+            // Start authentication check immediately
+            checkAuthentication()
+            
             // Start animation after a delay
             handler.postDelayed({
                 Log.d(TAG, "Animation started at ${System.currentTimeMillis()}")

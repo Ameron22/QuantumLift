@@ -12,6 +12,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.NavType
@@ -64,13 +67,13 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
             }
         }
     }
-    
+
     // Navigation state for notification
     private var navigationFromNotification: NotificationNavigation? = null
 
     private fun checkAchievements(dao: ExerciseDao) {
         val achievementManager = AchievementManager.getInstance()
-        
+
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 // Check total workout count
@@ -102,7 +105,7 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
         for (i in 1 until workoutDates.size) {
             val nextDate = workoutDates[i]
             val daysBetween = TimeUnit.MILLISECONDS.toDays(currentDate - nextDate)
-            
+
             if (daysBetween == 1L) {
                 streak++
                 currentDate = nextDate
@@ -113,7 +116,7 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
 
         return streak
     }
-    
+
     private fun hideDeleteZone() {
         val intent = Intent(this, TimerService::class.java).apply {
             action = "HIDE_DELETE_ZONE"
@@ -126,25 +129,25 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
         Log.d("MainActivity", "App paused - hiding delete zone")
         hideDeleteZone()
     }
-    
+
     @OnLifecycleEvent(Lifecycle.Event.ON_STOP)
     fun onAppStop() {
         Log.d("MainActivity", "App stopped - hiding delete zone")
         hideDeleteZone()
     }
-    
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleNavigationIntent(intent)
     }
-    
+
     private fun handleNavigationIntent(intent: Intent?) {
         intent?.let { intentData ->
             if (intentData.getBooleanExtra("from_floating_timer", false)) {
                 Log.d("MainActivity", "App brought to foreground from floating timer")
                 // Just bring the app to foreground, no specific navigation needed
             }
-            
+
             // Handle timer notification intent
             if (intentData.getBooleanExtra("from_notification", false)) {
                 Log.d("MainActivity", "App opened from timer notification")
@@ -154,7 +157,7 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                     workoutId = intentData.getIntExtra("workout_id", 0)
                 )
             }
-            
+
             // Handle achievement notification intent
             if (intentData.getBooleanExtra("open_achievements", false)) {
                 Log.d("MainActivity", "Opening achievements screen from notification")
@@ -166,10 +169,10 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
+
         // Add lifecycle observer to hide delete zone when app goes to background
         lifecycle.addObserver(this)
-        
+
         // Initialize AchievementManager
         AchievementManager.initialize(applicationContext)
 
@@ -189,7 +192,7 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                 Log.e("MainActivity", "Error during initialization", e)
             }
         }
-        
+
         // Handle navigation intent from floating timer
         handleNavigationIntent(intent)
 
@@ -200,21 +203,22 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                     // Create shared ViewModel instances
                     val workoutDetailsViewModel = viewModel<WorkoutDetailsViewModel>()
                     val generalViewModel = viewModel<GeneralViewModel>()
-                    val authViewModel: AuthViewModel = viewModel(factory = object : ViewModelProvider.Factory {
-                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            if (modelClass.isAssignableFrom(AuthViewModel::class.java)) {
-                                @Suppress("UNCHECKED_CAST")
-                                return AuthViewModel(applicationContext) as T
+                    val authViewModel: AuthViewModel =
+                        viewModel(factory = object : ViewModelProvider.Factory {
+                            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                                if (modelClass.isAssignableFrom(AuthViewModel::class.java)) {
+                                    @Suppress("UNCHECKED_CAST")
+                                    return AuthViewModel(applicationContext) as T
+                                }
+                                throw IllegalArgumentException("Unknown ViewModel class")
                             }
-                            throw IllegalArgumentException("Unknown ViewModel class")
-                        }
-                    })
-                    
+                        })
+
                     // Permission request logic
                     val userSettings = remember { UserSettingsPreferences(applicationContext) }
                     val settings by userSettings.settingsFlow.collectAsState(initial = null)
                     var showPermissionBanner by remember { mutableStateOf(false) }
-                    
+
                     // Check if we should show permission banner for first-time users
                     LaunchedEffect(settings) {
                         settings?.let { userSettingsData ->
@@ -230,10 +234,13 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                         if (intent?.getBooleanExtra("open_achievements", false) == true) {
                             navController.navigate(Screen.Achievements.route)
                         }
-                        
+
                         // Check if we should navigate to exercise from timer notification
                         navigationFromNotification?.let { navData ->
-                            Log.d("MainActivity", "Navigating to exercise from notification: exerciseId=${navData.exerciseId}, sessionId=${navData.sessionId}, workoutId=${navData.workoutId}")
+                            Log.d(
+                                "MainActivity",
+                                "Navigating to exercise from notification: exerciseId=${navData.exerciseId}, sessionId=${navData.sessionId}, workoutId=${navData.workoutId}"
+                            )
                             navController.navigate("exercise/${navData.exerciseId}/${navData.sessionId}/${navData.workoutId}") {
                                 popUpTo(Screen.Home.route) { inclusive = false }
                             }
@@ -241,118 +248,128 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                         }
                     }
 
-                    // Check authentication state and navigate accordingly
-                    val authState by authViewModel.authState.collectAsState()
-                    LaunchedEffect(authState.isLoggedIn) {
-                        if (!authState.isLoggedIn) {
-                            navController.navigate(Screen.Login.route) {
-                                popUpTo(0) { inclusive = true }
+                                        // MainActivity only shows content for authenticated users
+                    // Authentication is handled by SplashActivity
+
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            // Permission banner at the top
+                            if (showPermissionBanner) {
+                                TopPermissionBanner(
+                                    onDismiss = {
+                                        showPermissionBanner = false
+                                        userSettings.updateNotificationPermissionRequested(true)
+                                    },
+                                    onPermissionGranted = {
+                                        showPermissionBanner = false
+                                        userSettings.updateNotificationPermissionRequested(true)
+                                    }
+                                )
+                            }
+
+                                                         NavHost(
+                                 navController = navController,
+                                 startDestination = Screen.Home.route // MainActivity is only for authenticated users
+                                                          ) {
+                                                                 composable(Screen.Home.route) {
+                                     HomeScreen(navController, generalViewModel, authViewModel)
+                                 }
+                                                                 composable(Screen.LoadWorkout.route) {
+                                     LoadWorkoutScreen(navController, generalViewModel)
+                                 }
+                                                                 composable(Screen.LoadHistory.route) {
+                                     LoadHistoryScreen(
+                                         navController,
+                                         viewModel,
+                                         generalViewModel
+                                     )
+                                 }
+                                                                 composable(Screen.Achievements.route) {
+                                     AchievementsScreen(navController, generalViewModel)
+                                 }
+                                                                 composable(Screen.CreateExercise.route) {
+                                     CreateExerciseScreen(navController)
+                                 }
+                                                                 composable(Screen.Settings.route) {
+                                     SettingsScreen(
+                                         navController,
+                                         generalViewModel,
+                                         authViewModel
+                                     )
+                                 }
+                                                                 composable(Screen.ChangePassword.route) {
+                                     ChangePasswordScreen(navController, authViewModel)
+                                 }
+                                                                 composable(Screen.Feed.route) {
+                                     FeedScreen(navController, authViewModel)
+                                 }
+                                                                 composable(Screen.AddMeasurement.route) {
+                                     val database = AppDatabase.getDatabase(applicationContext)
+                                     val physicalParametersDao = database.physicalParametersDao()
+                                     val physicalParametersViewModel =
+                                         PhysicalParametersViewModel(physicalParametersDao)
+                                     AddMeasurementScreen(
+                                         navController,
+                                         physicalParametersViewModel
+                                     )
+                                 }
+                                                                 composable(
+                                     Screen.Routes.WORKOUT_DETAILS,
+                                     arguments = listOf(navArgument("workoutId") {
+                                         type = NavType.IntType
+                                     })
+                                 ) { backStackEntry ->
+                                     val workoutId =
+                                         backStackEntry.arguments?.getInt("workoutId") ?: 0
+                                     WorkoutDetailsScreen(
+                                         workoutId = workoutId,
+                                         navController = navController,
+                                         viewModel = workoutDetailsViewModel,
+                                         generalViewModel = generalViewModel
+                                     )
+                                 }
+                                                                 composable(
+                                     Screen.Exercise.route,
+                                     arguments = listOf(
+                                         navArgument("exerciseId") { type = NavType.IntType },
+                                         navArgument("sessionId") { type = NavType.LongType },
+                                         navArgument("workoutId") { type = NavType.IntType }
+                                     )
+                                 ) { backStackEntry ->
+                                     val exerciseId =
+                                         backStackEntry.arguments?.getInt("exerciseId") ?: 0
+                                     val workoutSessionId =
+                                         backStackEntry.arguments?.getLong("sessionId") ?: 0L
+                                     val workoutId =
+                                         backStackEntry.arguments?.getInt("workoutId") ?: 0
+                                     ExerciseScreen(
+                                         exerciseId = exerciseId,
+                                         workoutSessionId = workoutSessionId,
+                                         workoutId = workoutId,
+                                         navController = navController,
+                                         viewModel = workoutDetailsViewModel,
+                                         generalViewModel = generalViewModel
+                                     )
+                                 }
+                                                                 composable(
+                                     Screen.AddExerciseToWorkout.route,
+                                     arguments = listOf(navArgument("workoutId") {
+                                         type = NavType.IntType
+                                     })
+                                 ) { backStackEntry ->
+                                     val workoutId =
+                                         backStackEntry.arguments?.getInt("workoutId") ?: 0
+                                     AddExerciseToWorkoutScreen(
+                                         workoutId = workoutId,
+                                         navController = navController,
+                                         detailsViewModel = workoutDetailsViewModel
+                                     )
+                                 }
                             }
                         }
                     }
-
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        // Permission banner at the top
-                        if (showPermissionBanner) {
-                            TopPermissionBanner(
-                                onDismiss = {
-                                    showPermissionBanner = false
-                                    userSettings.updateNotificationPermissionRequested(true)
-                                },
-                                onPermissionGranted = {
-                                    showPermissionBanner = false
-                                    userSettings.updateNotificationPermissionRequested(true)
-                                }
-                            )
-                        }
-                        
-                        NavHost(
-                            navController = navController,
-                            startDestination = if (authState.isLoggedIn) Screen.Home.route else Screen.Login.route
-                        ) {
-                        composable(Screen.Login.route) {
-                            LoginScreen(navController, authViewModel)
-                        }
-                        composable(Screen.Register.route) {
-                            RegisterScreen(navController, authViewModel)
-                        }
-                        composable(Screen.Home.route) {
-                            HomeScreen(navController, generalViewModel, authViewModel)
-                        }
-                        composable(Screen.LoadWorkout.route) {
-                            LoadWorkoutScreen(navController, generalViewModel)
-                        }
-                        composable(Screen.LoadHistory.route) {
-                            LoadHistoryScreen(navController, viewModel, generalViewModel)
-                        }
-                        composable(Screen.Achievements.route) {
-                            AchievementsScreen(navController, generalViewModel)
-                        }
-                        composable(Screen.CreateExercise.route) {
-                            CreateExerciseScreen(navController)
-                        }
-                        composable(Screen.Settings.route) {
-                            SettingsScreen(navController, generalViewModel, authViewModel)
-                        }
-                        composable(Screen.ChangePassword.route) {
-                            ChangePasswordScreen(navController, authViewModel)
-                        }
-                        composable(Screen.Feed.route) {
-                            FeedScreen(navController, authViewModel)
-                        }
-                        composable(Screen.AddMeasurement.route) {
-                            val database = AppDatabase.getDatabase(applicationContext)
-                            val physicalParametersDao = database.physicalParametersDao()
-                            val physicalParametersViewModel = PhysicalParametersViewModel(physicalParametersDao)
-                            AddMeasurementScreen(navController, physicalParametersViewModel)
-                        }
-                        composable(
-                            Screen.Routes.WORKOUT_DETAILS,
-                            arguments = listOf(navArgument("workoutId") { type = NavType.IntType })
-                        ) { backStackEntry ->
-                            val workoutId = backStackEntry.arguments?.getInt("workoutId") ?: 0
-                            WorkoutDetailsScreen(
-                                workoutId = workoutId, 
-                                navController = navController,
-                                viewModel = workoutDetailsViewModel,
-                                generalViewModel = generalViewModel
-                            )
-                        }
-                        composable(
-                            Screen.Exercise.route,
-                            arguments = listOf(
-                                navArgument("exerciseId") { type = NavType.IntType },
-                                navArgument("sessionId") { type = NavType.LongType },
-                                navArgument("workoutId") { type = NavType.IntType }
-                            )
-                        ) { backStackEntry ->
-                            val exerciseId = backStackEntry.arguments?.getInt("exerciseId") ?: 0
-                            val workoutSessionId = backStackEntry.arguments?.getLong("sessionId") ?: 0L
-                            val workoutId = backStackEntry.arguments?.getInt("workoutId") ?: 0
-                            ExerciseScreen(
-                                exerciseId = exerciseId,
-                                workoutSessionId = workoutSessionId,
-                                workoutId = workoutId,
-                                navController = navController,
-                                viewModel = workoutDetailsViewModel,
-                                generalViewModel = generalViewModel
-                            )
-                        }
-                        composable(
-                            Screen.AddExerciseToWorkout.route,
-                            arguments = listOf(navArgument("workoutId") { type = NavType.IntType })
-                        ) { backStackEntry ->
-                            val workoutId = backStackEntry.arguments?.getInt("workoutId") ?: 0
-                            AddExerciseToWorkoutScreen(
-                                workoutId = workoutId, 
-                                navController = navController,
-                                detailsViewModel = workoutDetailsViewModel
-                            )
-                        }
-                    }
-                }
                 }
             }
         }
     }
-}
+
+

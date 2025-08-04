@@ -55,6 +55,9 @@ interface ExerciseDao {
 
     @Insert
     suspend fun insertExerciseSession(entity: SessionEntityExercise)
+    
+    @Update
+    suspend fun updateExerciseSession(entity: SessionEntityExercise)
 
     @Query("SELECT * FROM exercise_sessions")
     fun getAllExerciseSessions(): Flow<List<SessionEntityExercise>>
@@ -148,4 +151,8 @@ interface ExerciseDao {
     // Get the latest exercise session for a specific exercise
     @Query("SELECT * FROM exercise_sessions WHERE exerciseId = :exerciseId ORDER BY exerciseSessionId DESC LIMIT 1")
     suspend fun getLatestExerciseSession(exerciseId: Long): SessionEntityExercise?
+    
+    // Get the latest exercise session with soreness factors for a specific exercise
+    @Query("SELECT * FROM exercise_sessions WHERE exerciseId = :exerciseId AND eccentricFactor != 1.0 AND noveltyFactor != 5 AND adaptationLevel != 5 AND rpe != 5 AND subjectiveSoreness != 5 ORDER BY exerciseSessionId DESC LIMIT 1")
+    suspend fun getLatestExerciseSessionWithSorenessFactors(exerciseId: Long): SessionEntityExercise?
 }
