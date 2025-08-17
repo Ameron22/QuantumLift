@@ -315,9 +315,9 @@ fun WelcomeTabWithMuscles(navController: NavController, selectedTabIndex: Int, p
         
         // Calculate target Y offset based on zoom type
         val targetYOffset = when (zoomType) {
-            "upper" -> 3.5f
+            "upper" -> 2.5f  // Reduced Y offset for less dramatic lowering
             "lower" -> 0.1f
-            "lower_back" -> 0.5f  // Lower Y offset for back view to show lower body better
+            "lower_back" -> 0.1f  // Same Y offset as Lower Body Front for consistent positioning
             else -> 0f
         }
         
@@ -351,7 +351,7 @@ fun WelcomeTabWithMuscles(navController: NavController, selectedTabIndex: Int, p
     
     // Animate panel X offset for smooth panel movement
     LaunchedEffect(isPanelExpanded) {
-        val targetXOffset = if (isPanelExpanded) 0.55f else 0f
+        val targetXOffset = if (isPanelExpanded) 0.35f else 0f
         val startXOffset = panelXOffset
         val duration = 300L // 300ms animation for panel movement
         
@@ -502,7 +502,7 @@ fun WelcomeTabWithMuscles(navController: NavController, selectedTabIndex: Int, p
                         try {
                             Log.d("MUSCLES_DEBUG", "=== Configuring camera position ===")
                             val camera = viewer.camera
-                            // Move camera closer (half the distance) and adjust position
+                            // Move camera much closer to be inside the sphere
                             camera.setExposure(16.0f, 1.0f / 125.0f, 1.0f)
                             camera.setLensProjection(45.0, 1.0, 0.1, 1.0)
                             
@@ -649,11 +649,11 @@ fun WelcomeTabWithMuscles(navController: NavController, selectedTabIndex: Int, p
                                                     val transform = transformManager.getInstance(rootEntity)
                                                     val matrix = FloatArray(16)
                                                     transformManager.getTransform(transform, matrix)
-                                                    // Scale the model by 2.0x to make it appear even closer
+                                                    // Scale the model by 5.0x to make it appear much closer (deep inside the sphere)
                                                     // Apply scaling to the matrix (multiply diagonal elements)
-                                                    matrix[0] *= 2.0f  // scale X
-                                                    matrix[5] *= 2.0f  // scale Y  
-                                                    matrix[10] *= 2.0f // scale Z
+                                                    matrix[0] *= 5.0f  // scale X
+                                                    matrix[5] *= 5.0f  // scale Y  
+                                                    matrix[10] *= 5.0f // scale Z
                                                     transformManager.setTransform(transform, matrix)
                                                     Log.d("MUSCLES_DEBUG", "=== Model scaled successfully ===")
                                                     
@@ -661,10 +661,11 @@ fun WelcomeTabWithMuscles(navController: NavController, selectedTabIndex: Int, p
                                                     try {
                                                         Log.d("MUSCLES_DEBUG", "=== Adjusting camera view by modifying model transform ===")
                                                         // Instead of moving camera, we can adjust the model transform to change the view
-                                                        // Move the model down slightly to make camera appear higher
-                                                        matrix[13] -= 1f  // Move model down (negative Y translation)
+                                                        // Move the model up and closer to make camera appear deep inside the sphere
+                                                        matrix[13] -= 0.75f  // Move model up slightly (less negative Y translation)
+                                                        matrix[14] += 2.5f  // Move model even closer (positive Z translation)
                                                         transformManager.setTransform(transform, matrix)
-                                                        Log.d("MUSCLES_DEBUG", "=== Model transform adjusted for higher camera view ===")
+                                                        Log.d("MUSCLES_DEBUG", "=== Model transform adjusted for inside-sphere view ===")
                                                     } catch (e: Exception) {
                                                         Log.e("MUSCLES_DEBUG", "=== FAILED to adjust model transform ===", e)
                                                     }
@@ -802,17 +803,17 @@ fun WelcomeTabWithMuscles(navController: NavController, selectedTabIndex: Int, p
                                                                     newMatrix[12] -= panelXOffset  // Move model left based on animated panel offset
                                                                     
                                                                                                         // Apply zoom effect based on zoom type
-                                    val zoomScale = 1f + (zoomProgress * 0.8f)  // Scale from 1.0 to 1.8
+                                    val zoomScale = 1f + (zoomProgress * 0.5f)  // Scale from 1.0 to 1.5 (reduced zoom)
                                     val zoomOffsetX = zoomProgress * 0.3f  // Move right (back to center) from 0 to 0.3
                                     
-                                    // Use smoothly animated Y offset
-                                    val zoomOffsetY = currentYOffset * zoomProgress
+                                    // Use smoothly animated Y offset (reduced to 1/2 for moderate lowering)
+                                    val zoomOffsetY = (currentYOffset * zoomProgress) / 2f
                                     
                                     // Always apply zoom effect (even if zoomProgress is 0, it will be 1.0 scale)
                                     newMatrix[0] *= zoomScale  // scale X
                                     newMatrix[5] *= zoomScale  // scale Y  
                                     newMatrix[10] *= zoomScale // scale Z
-                                    // Move model down to focus on upper body
+                                    // Move model down to focus on upper body (reduced movement)
                                     newMatrix[13] -= zoomOffsetY  // Move model down to show upper body
                                     // Move model right (back to center)
                                     newMatrix[12] += zoomOffsetX  // Move model right to center
@@ -914,9 +915,8 @@ fun applySorenessBasedColors(modelViewer: ModelViewer, muscleSoreness: Map<Strin
                             // Direct mapping from muscle parts to model object names
                             val musclePartToModelMapping = mapOf(
                                 "Abs" to "Abs",
-                                "Adductor" to "Adductor",
+                                "Adductors" to "Adductor",
                                 "Biceps" to "Biceps",
-                                "Calves" to "Calves",
                                 "Calves" to "Calves",
                                 "Chest" to "Chest",
                                 "Deltoids" to "Deltoid_Shoulder",                               
@@ -926,12 +926,11 @@ fun applySorenessBasedColors(modelViewer: ModelViewer, muscleSoreness: Map<Strin
                                 "Lower Back" to "Lower_Back",
                                 "Neck" to "Neck",
                                 "Obliques" to "Obliques",
-                                "Quandriceps" to "Quands",
+                                "Quadriceps" to "Quands",
                                 "Upper Back" to "Trapezius",
                                 "Triceps" to "Triceps",
                                 "Hamstrings" to "Hamstrings",
                                 "Upper Traps" to "Upper_traps",
-                                "Upper Trapezius" to "Upper_traps",
                                 // Additional mappings for more specific muscle parts
                                 //"Upper Chest" to "Chest",
                                 //"Middle Chest" to "Chest",
@@ -1064,7 +1063,7 @@ fun applySorenessBasedColors(modelViewer: ModelViewer, muscleSoreness: Map<Strin
                                     targetRotation = 0.0
                                 }
                                 // Always reset panel offset to ensure proper panel state
-                                panelXOffset = if (isPanelExpanded) 0.55f else 0f
+                                panelXOffset = if (isPanelExpanded) 0.35f else 0f
                                 
                                 Log.d("MODEL_LIFECYCLE", "=== Resumed rendering and animation, preserved zoom state: isZoomedIn=$isZoomedIn, zoomType=$zoomType ===")
                                 
@@ -1147,17 +1146,17 @@ fun applySorenessBasedColors(modelViewer: ModelViewer, muscleSoreness: Map<Strin
                                                             newMatrix[12] -= panelXOffset  // Move model left based on animated panel offset
                                                             
                                                             // Apply zoom effect based on zoom type
-                                                            val zoomScale = 1f + (zoomProgress * 0.8f)  // Scale from 1.0 to 1.8
+                                                            val zoomScale = 1f + (zoomProgress * 0.5f)  // Scale from 1.0 to 1.5 (reduced zoom)
                                                             val zoomOffsetX = zoomProgress * 0.3f  // Move right (back to center) from 0 to 0.3
                                                             
-                                                            // Use smoothly animated Y offset
-                                                            val zoomOffsetY = currentYOffset * zoomProgress
+                                                            // Use smoothly animated Y offset (reduced to 1/2 for moderate lowering)
+                                                            val zoomOffsetY = (currentYOffset * zoomProgress) / 2f
                                                             
                                                             // Always apply zoom effect (even if zoomProgress is 0, it will be 1.0 scale)
                                                             newMatrix[0] *= zoomScale  // scale X
                                                             newMatrix[5] *= zoomScale  // scale Y  
                                                             newMatrix[10] *= zoomScale // scale Z
-                                                            // Move model down to focus on upper body
+                                                            // Move model down to focus on upper body (reduced movement)
                                                             newMatrix[13] -= zoomOffsetY  // Move model down to show upper body
                                                             // Move model right (back to center)
                                                             newMatrix[12] += zoomOffsetX  // Move model right to center
@@ -1628,7 +1627,7 @@ fun applySorenessBasedColors(modelViewer: ModelViewer, muscleSoreness: Map<Strin
                                         MuscleRecoveryItem(
                                             muscleName = "Adductors",
                                             muscleSoreness = muscleSoreness,
-                                            historyNames = listOf("Adductor")
+                                            historyNames = listOf("Adductors")
                                         )
                                         
                                         // Calves
@@ -1701,11 +1700,11 @@ fun applySorenessBasedColors(modelViewer: ModelViewer, muscleSoreness: Map<Strin
                                     val muscleSoreness by historyViewModel.muscleSoreness.collectAsState()
                                     
                                     Column {
-                                        // Upper Trapezius
+                                        // Upper Traps
                                         MuscleRecoveryItem(
-                                            muscleName = "Upper Trapezius",
+                                            muscleName = "Upper Traps",
                                             muscleSoreness = muscleSoreness,
-                                            historyNames = listOf("Trapezius")
+                                            historyNames = listOf("Upper Traps")
                                         )
                                         
                                         // Trapezius
@@ -1824,7 +1823,7 @@ fun applySorenessBasedColors(modelViewer: ModelViewer, muscleSoreness: Map<Strin
                                         MuscleRecoveryItem(
                                             muscleName = "Adductors",
                                             muscleSoreness = muscleSoreness,
-                                            historyNames = listOf("Adductor")
+                                            historyNames = listOf("Adductors")
                                         )
                                         
                                         // Calves
@@ -1979,7 +1978,7 @@ fun setAllMusclesToGrey(modelViewer: ModelViewer) {
 
 @Composable
 fun HexagonalGrid(currentGroup: String, animationProgress: Float) {
-    val primaryColor = MaterialTheme.colorScheme.primary
+    val hexagonColor = Color.Black // Black fill for hexagons
     
     // Debug log to verify HexagonalGrid is being called
     LaunchedEffect(Unit) {
@@ -2101,18 +2100,34 @@ fun HexagonalGrid(currentGroup: String, animationProgress: Float) {
                 }
                 path.close()
                 
-                // Draw hexagon with fill and stroke for better visibility
+                // Draw main hexagon (black fill)
                 drawPath(
                     path = path,
-                    color = primaryColor.copy(alpha = alpha * 0.8f), // Slightly transparent fill
+                    color = hexagonColor.copy(alpha = alpha),
                     style = Fill
                 )
                 
-                // Draw border for better visibility
+                // Create inner hexagon for border effect
+                val innerPath = Path()
+                val innerRadius = radius * 0.85f // 85% of original radius for inner hexagon
+                for (i in 0..5) {
+                    val angle = i * Math.PI / 3
+                    val x = finalCenterX + innerRadius * cos(angle).toFloat()
+                    val y = centerY + innerRadius * sin(angle).toFloat()
+                    
+                    if (i == 0) {
+                        innerPath.moveTo(x, y)
+                    } else {
+                        innerPath.lineTo(x, y)
+                    }
+                }
+                innerPath.close()
+                
+                // Draw inner hexagon with dark violet (creates border effect)
                 drawPath(
-                    path = path,
-                    color = primaryColor.copy(alpha = alpha),
-                    style = Stroke(width = 2f)
+                    path = innerPath,
+                    color = Color(0xFF4A148C).copy(alpha = alpha),
+                    style = Fill
                 )
             }
         }

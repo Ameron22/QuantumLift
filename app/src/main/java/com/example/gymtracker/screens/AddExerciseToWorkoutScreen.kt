@@ -230,6 +230,19 @@ fun AddExerciseToWorkoutScreen(
         }.filter { it.isNotBlank() && it != " " }.distinct().sorted()
     }
     
+    // Debug logging for Upper Back filter
+    if (selectedMuscleParts.contains("Upper Back")) {
+        Log.d("AddExerciseToWorkoutScreen", "Upper Back selected - Available muscle parts: $availableMuscleParts")
+        Log.d("AddExerciseToWorkoutScreen", "Selected muscle parts: $selectedMuscleParts")
+        Log.d("AddExerciseToWorkoutScreen", "Selected muscle groups: $selectedMuscleGroups")
+    }
+    
+    // Debug logging for muscle parts availability
+    if (selectedMuscleGroups.contains("Back")) {
+        Log.d("AddExerciseToWorkoutScreen", "Back muscle group selected - Available muscle parts: $availableMuscleParts")
+        Log.d("AddExerciseToWorkoutScreen", "Back muscle parts from map: ${musclePartsMap["Back"]}")
+    }
+    
     // Clear muscle parts when muscle groups change
     LaunchedEffect(selectedMuscleGroups) {
         if (selectedMuscleGroups.isNotEmpty() && !selectedMuscleGroups.contains("All")) {
@@ -278,9 +291,24 @@ fun AddExerciseToWorkoutScreen(
         }
         
         val matchesDifficulty = selectedDifficulties.isEmpty() || selectedDifficulties.contains(exercise.difficulty)
-        val matchesMusclePart = selectedMuscleParts.isEmpty() || Converter().fromString(exercise.parts).any { exercisePart -> 
+        val exerciseParts = try {
+            Converter().fromString(exercise.parts)
+        } catch (e: Exception) {
+            Log.e("AddExerciseToWorkoutScreen", "Error parsing exercise parts for ${exercise.name}: ${e.message}")
+            emptyList<String>()
+        }
+        Log.d("AddExerciseToWorkoutScreen", "Exercise: ${exercise.name}, Parts JSON: ${exercise.parts}, Parsed parts: $exerciseParts")
+        val matchesMusclePart = selectedMuscleParts.isEmpty() || exerciseParts.any { exercisePart -> 
             selectedMuscleParts.any { selectedPart -> 
-                exercisePart.equals(selectedPart, ignoreCase = true) 
+                val matches = when (selectedPart.lowercase()) {
+                    "adductors" -> exercisePart.equals("adductors", ignoreCase = true) || exercisePart.equals("adductor", ignoreCase = true)
+                    "adductor" -> exercisePart.equals("adductors", ignoreCase = true) || exercisePart.equals("adductor", ignoreCase = true)
+                    else -> exercisePart.equals(selectedPart, ignoreCase = true)
+                }
+                if (selectedMuscleParts.contains("Upper Back")) {
+                    Log.d("AddExerciseToWorkoutScreen", "Checking Upper Back filter - Exercise part: '$exercisePart', Selected part: '$selectedPart', Matches: $matches")
+                }
+                matches
             }
         }
         val matchesEquipment = selectedEquipment.isEmpty() || run {
@@ -291,7 +319,14 @@ fun AddExerciseToWorkoutScreen(
             }
             selectedEquipment.any { selected -> exerciseEquipment.contains(selected) }
         }
-        matchesSearch && matchesMuscle && matchesDifficulty && matchesMusclePart && matchesEquipment
+        val finalMatch = matchesSearch && matchesMuscle && matchesDifficulty && matchesMusclePart && matchesEquipment
+        
+        // Debug logging for Upper Back filter
+        if (selectedMuscleParts.contains("Upper Back") && exercise.muscle == "Back") {
+            Log.d("AddExerciseToWorkoutScreen", "Upper Back filter - Exercise: ${exercise.name}, Matches: search=$matchesSearch, muscle=$matchesMuscle, difficulty=$matchesDifficulty, musclePart=$matchesMusclePart, equipment=$matchesEquipment, final=$finalMatch")
+        }
+        
+        finalMatch
     }
 
     // Add LaunchedEffect to check returnTo state

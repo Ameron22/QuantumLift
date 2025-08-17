@@ -98,11 +98,13 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
                                 
                                 // Update muscle data for each individual muscle part
                                 for (musclePart in partsToProcess) {
-                                    val existingData = muscleDataMap[musclePart] ?: MuscleData()
+                                    // Normalize muscle part names to handle capitalization inconsistencies
+                                    val normalizedMusclePart = normalizeMusclePartName(musclePart)
+                                    val existingData = muscleDataMap[normalizedMusclePart] ?: MuscleData()
                                     existingData.totalStress += muscleStress / partsToProcess.size // Distribute stress evenly
                                     existingData.lastWorkoutTime = max(existingData.lastWorkoutTime, session.sessionId)
                                     existingData.exercises.add(session)
-                                    muscleDataMap[musclePart] = existingData
+                                    muscleDataMap[normalizedMusclePart] = existingData
                                 }
 
                                 // Add muscle group stress data (keep for backward compatibility)
@@ -443,11 +445,42 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
      */
     private fun getAllMuscleParts(): List<String> {
         return listOf(
-            "Abs", "Adductor", "Biceps", "Calf", "Deltoids", 
-            "Forearm", "Glutes", "Latissimus Dorsi", "Lower Back", 
+            "Abs", "Adductors", "Biceps", "Calves", "Deltoids", 
+            "Forearms", "Glutes", "Hamstrings", "Lats", "Lower Back", 
             "Neck", "Obliques", "Pectorals", "Quadriceps", 
-            "Trapezius", "Triceps"
+            "Upper Back", "Upper Traps", "Triceps"
         )
+    }
+    
+    /**
+     * Normalize muscle part names to handle capitalization inconsistencies from CSV data
+     */
+    private fun normalizeMusclePartName(musclePart: String): String {
+        return when (musclePart.lowercase()) {
+            "upper traps" -> "Upper Traps"
+            "upper back" -> "Upper Back"
+            "lower back" -> "Lower Back"
+            "latissimus dorsi" -> "Lats"
+            "adductors" -> "Adductors"
+            "adductor" -> "Adductors"
+            "quadriceps" -> "Quadriceps"
+            "quands" -> "Quadriceps"
+            "forearms" -> "Forearms"
+            "forearm" -> "Forearms"
+            "calves" -> "Calves"
+            "calf" -> "Calves"
+            "deltoids" -> "Deltoids"
+            "deltoid" -> "Deltoids"
+            "abs" -> "Abs"
+            "obliques" -> "Obliques"
+            "pectorals" -> "Pectorals"
+            "glutes" -> "Glutes"
+            "biceps" -> "Biceps"
+            "triceps" -> "Triceps"
+            "hamstrings" -> "Hamstrings"
+            "neck" -> "Neck"
+            else -> musclePart // Return as-is if no normalization needed
+        }
     }
 
     /**
@@ -474,6 +507,7 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
         val musclePartsFrequency = exerciseSessions
             .flatMap { exercise -> 
                 exercise.muscleParts.split(", ").map { it.trim() }.filter { it.isNotEmpty() }
+                    .map { normalizeMusclePartName(it) } // Normalize muscle part names
             }
             .groupingBy { it }
             .eachCount()

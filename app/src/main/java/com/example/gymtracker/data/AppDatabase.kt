@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
         UserXP::class,
         XPHistory::class
     ],
-    version = 42,  // Increment version number to add XP tables
+    version = 43,  // Increment version number to add XP tables
     exportSchema = false
 )
 @TypeConverters(Converter::class)

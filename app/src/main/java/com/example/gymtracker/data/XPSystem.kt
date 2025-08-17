@@ -16,10 +16,10 @@ class XPSystem(private val userXPDao: UserXPDao) {
         
         // Level progression constants
         const val XP_LEVEL_1_10 = 100 // 0-1000 XP for levels 1-10
-        const val XP_LEVEL_11_25 = 200 // 1000-5000 XP for levels 11-25
-        const val XP_LEVEL_26_50 = 300 // 5000-15000 XP for levels 26-50
-        const val XP_LEVEL_51_75 = 400 // 15000-30000 XP for levels 51-75
-        const val XP_LEVEL_76_100 = 500 // 30000+ XP for levels 76-100
+        const val XP_LEVEL_11_25 = 200 // 1000-4000 XP for levels 11-25
+        const val XP_LEVEL_26_50 = 300 // 4000-11500 XP for levels 26-50
+        const val XP_LEVEL_51_75 = 400 // 11500-21500 XP for levels 51-75
+        const val XP_LEVEL_76_100 = 500 // 21500+ XP for levels 76-100
     }
     
     /**
@@ -49,10 +49,10 @@ class XPSystem(private val userXPDao: UserXPDao) {
     fun calculateLevel(totalXP: Int): Int {
         val level = when {
             totalXP < 1000 -> (totalXP / XP_LEVEL_1_10) + 1
-            totalXP < 5000 -> 10 + ((totalXP - 1000) / XP_LEVEL_11_25) + 1
-            totalXP < 15000 -> 25 + ((totalXP - 5000) / XP_LEVEL_26_50) + 1
-            totalXP < 30000 -> 50 + ((totalXP - 15000) / XP_LEVEL_51_75) + 1
-            else -> 75 + ((totalXP - 30000) / XP_LEVEL_76_100) + 1
+            totalXP < 4000 -> 10 + ((totalXP - 1000) / XP_LEVEL_11_25) + 1
+            totalXP < 11500 -> 25 + ((totalXP - 4000) / XP_LEVEL_26_50) + 1
+            totalXP < 21500 -> 50 + ((totalXP - 11500) / XP_LEVEL_51_75) + 1
+            else -> 75 + ((totalXP - 21500) / XP_LEVEL_76_100) + 1
         }.coerceAtMost(100) // Cap at level 100
         
         Log.d("XPSystem", "Level calculation: totalXP=$totalXP, calculatedLevel=$level")
@@ -72,17 +72,17 @@ class XPSystem(private val userXPDao: UserXPDao) {
         val xpForCurrentLevel = when {
             currentLevel <= 10 -> (currentLevel - 1) * XP_LEVEL_1_10
             currentLevel <= 25 -> 1000 + (currentLevel - 11) * XP_LEVEL_11_25
-            currentLevel <= 50 -> 5000 + (currentLevel - 26) * XP_LEVEL_26_50
-            currentLevel <= 75 -> 15000 + (currentLevel - 51) * XP_LEVEL_51_75
-            else -> 30000 + (currentLevel - 76) * XP_LEVEL_76_100
+            currentLevel <= 50 -> 4000 + (currentLevel - 26) * XP_LEVEL_26_50
+            currentLevel <= 75 -> 11500 + (currentLevel - 51) * XP_LEVEL_51_75
+            else -> 21500 + (currentLevel - 76) * XP_LEVEL_76_100
         }
         
         val xpForNextLevel = when {
-            currentLevel < 10 -> currentLevel * XP_LEVEL_1_10
-            currentLevel < 25 -> 1000 + (currentLevel - 10) * XP_LEVEL_11_25
-            currentLevel < 50 -> 5000 + (currentLevel - 25) * XP_LEVEL_26_50
-            currentLevel < 75 -> 15000 + (currentLevel - 50) * XP_LEVEL_51_75
-            else -> 30000 + (currentLevel - 75) * XP_LEVEL_76_100
+            currentLevel <= 10 -> currentLevel * XP_LEVEL_1_10
+            currentLevel <= 25 -> 1000 + (currentLevel - 10) * XP_LEVEL_11_25
+            currentLevel <= 50 -> 4000 + (currentLevel - 25) * XP_LEVEL_26_50
+            currentLevel <= 75 -> 11500 + (currentLevel - 50) * XP_LEVEL_51_75
+            else -> 21500 + (currentLevel - 75) * XP_LEVEL_76_100
         }
         
         val xpNeeded = xpForNextLevel - totalXP
@@ -166,9 +166,9 @@ class XPSystem(private val userXPDao: UserXPDao) {
         return when {
             level <= 10 -> (level - 1) * 100
             level <= 25 -> 1000 + (level - 11) * 200
-            level <= 50 -> 5000 + (level - 26) * 300
-            level <= 75 -> 15000 + (level - 51) * 400
-            else -> 30000 + (level - 76) * 500
+            level <= 50 -> 4000 + (level - 26) * 300
+            level <= 75 -> 11500 + (level - 51) * 400
+            else -> 21500 + (level - 76) * 500
         }
     }
     
@@ -177,11 +177,11 @@ class XPSystem(private val userXPDao: UserXPDao) {
      */
     fun getLevelEndXP(level: Int): Int {
         return when {
-            level < 10 -> level * 100
-            level < 25 -> 1000 + (level - 10) * 200
-            level < 50 -> 5000 + (level - 25) * 300
-            level < 75 -> 15000 + (level - 50) * 400
-            else -> 30000 + (level - 75) * 500
+            level <= 10 -> level * 100
+            level <= 25 -> 1000 + (level - 10) * 200
+            level <= 50 -> 4000 + (level - 25) * 300
+            level <= 75 -> 11500 + (level - 50) * 400
+            else -> 21500 + (level - 75) * 500
         }
     }
     

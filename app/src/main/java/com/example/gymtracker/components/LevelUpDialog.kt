@@ -1,6 +1,6 @@
 package com.example.gymtracker.components
 
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -13,7 +13,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -25,6 +26,41 @@ import com.example.gymtracker.data.XPSystem
 import com.example.gymtracker.data.AppDatabase
 import androidx.compose.ui.platform.LocalContext
 import android.util.Log
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.withStyle
+import kotlin.math.cos
+import kotlin.math.sin
+
+data class LevelUpStep(
+    val level: Int,
+    val xpStart: Int,
+    val xpEnd: Int,
+    val xpNeeded: Int,
+    val willLevelUp: Boolean
+)
+
+// Cyberpunk color palette
+object CyberpunkColors {
+    val NeonBlue = Color(0xFF00FFFF)
+    val NeonPurple = Color(0xFF8A2BE2)
+    val NeonPink = Color(0xFFFF1493)
+    val NeonGreen = Color(0xFF00FF41)
+    val DarkBackground = Color(0xFF0A0A0A)
+    val DarkSurface = Color(0xFF1A1A1A)
+    val GlowBlue = Color(0xFF0080FF)
+    val GlowPurple = Color(0xFF8000FF)
+}
 
 @Composable
 fun LevelUpDialog(
@@ -37,219 +73,334 @@ fun LevelUpDialog(
     previousLevelXP: Int
 ) {
     val context = LocalContext.current
-    var showDialog by remember { mutableStateOf(false) }
     
-    LaunchedEffect(Unit) {
-        showDialog = true
-    }
+    // Animation states for cyberpunk effects
+    val glowAnimation by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
     
-    if (showDialog) {
-        Dialog(
-            onDismissRequest = { },
-            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+
+    
+    val levelUpGlitch by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = tween(500, easing = LinearEasing)
+    )
+    
+    Dialog(
+        onDismissRequest = { },
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .shadow(
+                    elevation = 20.dp,
+                    shape = RoundedCornerShape(16.dp),
+                    ambientColor = CyberpunkColors.NeonBlue,
+                    spotColor = CyberpunkColors.NeonPurple
+                ),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = CyberpunkColors.DarkSurface
+            )
         ) {
-            Card(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                CyberpunkColors.DarkSurface,
+                                CyberpunkColors.DarkBackground
+                            )
+                        )
+                    )
             ) {
+                
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(24.dp),
+                        .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Calculate XP needed for next level (moved to top level)
                     val xpSystem = XPSystem(AppDatabase.getDatabase(context).userXPDao())
-                    val currentLevelStartXP = xpSystem.getLevelStartXP(currentLevel)
-                    val nextLevelStartXP = xpSystem.getLevelStartXP(currentLevel + 1)
-                    val xpNeededForNextLevel = nextLevelStartXP - currentLevelStartXP
                     
-                    // Calculate current XP within the level (before the gain)
-                    val xpBeforeGain = currentXP - xpGained
-                    val xpWithinCurrentLevel = xpBeforeGain - currentLevelStartXP
+                    // Calculate all level-ups that will occur
+                    val levelUps = mutableListOf<LevelUpStep>()
+                    var currentLevelForCalc = currentLevel
+                    var remainingXP = xpGained
+                    var currentXPInLevel = xpSystem.getXPWithinLevel(currentXP - xpGained, currentLevel)
                     
-                    // Calculate new XP within the level (after the gain)
-                    val xpAfterGain = currentXP - currentLevelStartXP
-                    
-                    // Animate the progress
-                    var showAnimation by remember { mutableStateOf(false) }
-                    var showLevelUpEffect by remember { mutableStateOf(false) }
-                    var showLeftoverAnimation by remember { mutableStateOf(false) }
-                    
-                    LaunchedEffect(Unit) {
-                        delay(500) // Brief delay before starting animation
-                        showAnimation = true
-                    }
-                    
-                    // Calculate XP for the new level when level changes
-                    val newLevelStartXP = xpSystem.getLevelStartXP(newLevel)
-                    val nextNewLevelStartXP = xpSystem.getLevelStartXP(newLevel + 1)
-                    val xpNeededForNewLevel = nextNewLevelStartXP - newLevelStartXP
-                    
-                    // Calculate leftover XP after leveling up
-                    val xpUsedForLevelUp = xpNeededForNextLevel - xpWithinCurrentLevel
-                    val leftoverXP = xpGained - xpUsedForLevelUp
-                    
-                    // Calculate XP within the new level (starts at 0, then adds leftover XP)
-                    val xpWithinNewLevel = if (leftoverXP > 0) leftoverXP else 0
-                    
-                    Log.d("LevelUpDialog", "XP Calculation: xpGained=$xpGained, xpWithinCurrentLevel=$xpWithinCurrentLevel, xpNeededForNextLevel=$xpNeededForNextLevel")
-                    Log.d("LevelUpDialog", "Leftover Calculation: xpUsedForLevelUp=$xpUsedForLevelUp, leftoverXP=$leftoverXP, xpWithinNewLevel=$xpWithinNewLevel")
-                    
-                    val animatedXP by animateFloatAsState(
-                        targetValue = if (showLeftoverAnimation) {
-                            // Animate leftover XP in new level
-                            xpWithinNewLevel.toFloat()
-                        } else if (showLevelUpEffect) {
-                            // Jump to 0 instantly when level changes
-                            0f
-                        } else if (showAnimation) {
-                            // Normal XP animation within current level - clamp to max XP for current level
-                            minOf(xpAfterGain.toFloat(), xpNeededForNextLevel.toFloat())
-                        } else {
-                            // Starting position
-                            xpWithinCurrentLevel.toFloat()
-                        },
-                        animationSpec = if (showLeftoverAnimation) {
-                            // Animate leftover XP
-                            tween(1500, easing = LinearEasing)
-                        } else if (showLevelUpEffect) {
-                            // Jump to 0 instantly
-                            tween(0, easing = LinearEasing)
-                        } else {
-                            // Normal animation for XP gain
-                            tween(2000, easing = LinearEasing)
-                        },
-                        label = "xp_progress"
-                    )
-                    
-                    // Use the appropriate XP needed value based on level
-                    val currentXpNeeded = if (showLevelUpEffect) xpNeededForNewLevel else xpNeededForNextLevel
-                    
-                    // Current Level Display - Animated
-                    LaunchedEffect(showAnimation, xpAfterGain, xpNeededForNextLevel) {
-                        if (showAnimation && xpAfterGain >= xpNeededForNextLevel && !showLevelUpEffect) {
-                            Log.d("LevelUpDialog", "Triggering level up effect - xpAfterGain=$xpAfterGain, xpNeededForNextLevel=$xpNeededForNextLevel")
-                            delay(2000) // Wait for XP animation to complete
-                            showLevelUpEffect = true
-                            delay(800) // Wait for level change animation
-                            if (leftoverXP > 0) {
-                                Log.d("LevelUpDialog", "Starting leftover animation with $leftoverXP XP")
-                                showLeftoverAnimation = true
+                    while (remainingXP > 0 && currentLevelForCalc < newLevel) {
+                        val xpNeededForLevel = xpSystem.getXPNeededForLevel(currentLevelForCalc)
+                        val xpCanAddToLevel = xpNeededForLevel - currentXPInLevel
+                        
+                        if (xpCanAddToLevel > 0) {
+                            val xpToAdd = minOf(remainingXP, xpCanAddToLevel)
+                            levelUps.add(LevelUpStep(
+                                level = currentLevelForCalc,
+                                xpStart = currentXPInLevel,
+                                xpEnd = currentXPInLevel + xpToAdd,
+                                xpNeeded = xpNeededForLevel,
+                                willLevelUp = currentXPInLevel + xpToAdd >= xpNeededForLevel
+                            ))
+                            
+                            remainingXP -= xpToAdd
+                            if (currentXPInLevel + xpToAdd >= xpNeededForLevel) {
+                                currentLevelForCalc++
+                                currentXPInLevel = 0
+                            } else {
+                                currentXPInLevel += xpToAdd
                             }
+                        } else {
+                            currentLevelForCalc++
+                            currentXPInLevel = 0
                         }
                     }
                     
-                    val animatedLevel by animateFloatAsState(
-                        targetValue = if (showLevelUpEffect) newLevel.toFloat() else currentLevel.toFloat(),
-                        animationSpec = tween(800, easing = LinearEasing),
-                        label = "level_animation"
-                    )
+                    if (remainingXP > 0) {
+                        levelUps.add(LevelUpStep(
+                            level = currentLevelForCalc,
+                            xpStart = 0,
+                            xpEnd = remainingXP,
+                            xpNeeded = xpSystem.getXPNeededForLevel(currentLevelForCalc),
+                            willLevelUp = false
+                        ))
+                    }
                     
-                    Text(
-                        text = "Current Level: ${animatedLevel.toInt()}",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center
-                    )
+                    // Animation state
+                    var currentStepIndex by remember { mutableStateOf(0) }
+                    var showAnimation by remember { mutableStateOf(false) }
+                    var animationComplete by remember { mutableStateOf(false) }
                     
-                    // Current XP Display
-                    Text(
-                        text = "Total XP: $currentXP",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center
-                    )
+                    val xpAnimatable = remember { Animatable(0f) }
+                    val levelAnimatable = remember { Animatable(currentLevel.toFloat()) }
                     
-                    // XP Gained Display
+                    var finalXP by remember { mutableStateOf(0) }
+                    var finalLevel by remember { mutableStateOf(currentLevel) }
+                    var finalXPNeeded by remember { mutableStateOf(0) }
+                    
+                    LaunchedEffect(Unit) {
+                        delay(500)
+                        showAnimation = true
+                    }
+                    
+                    val currentStep = if (currentStepIndex < levelUps.size) levelUps[currentStepIndex] else null
+                    
+                    LaunchedEffect(showAnimation, currentStepIndex) {
+                        if (!showAnimation || currentStep == null) return@LaunchedEffect
+
+                        xpAnimatable.snapTo(currentStep.xpStart.toFloat())
+
+                        xpAnimatable.animateTo(
+                            targetValue = currentStep.xpEnd.toFloat(),
+                            animationSpec = tween(2000, easing = LinearEasing)
+                        )
+
+                        if (currentStep.willLevelUp) {
+                            levelAnimatable.animateTo(
+                                targetValue = (currentStep.level + 1).toFloat(),
+                                animationSpec = tween(800, easing = LinearEasing)
+                            )
+                            xpAnimatable.snapTo(0f)
+                        }
+
+                        currentStepIndex++
+
+                        if (currentStepIndex >= levelUps.size) {
+                            finalXP = xpAnimatable.value.toInt()
+                            finalLevel = levelAnimatable.value.toInt()
+                            finalXPNeeded = if (levelUps.isNotEmpty()) {
+                                val lastStep = levelUps.last()
+                                lastStep.xpNeeded
+                            } else {
+                                0
+                            }
+                            animationComplete = true
+                        }
+                    }
+                    
+                    val displayLevel = if (animationComplete) finalLevel else levelAnimatable.value.toInt()
+                    val displayXP = if (animationComplete) finalXP else xpAnimatable.value.toInt()
+                    val displayXPNeeded = if (animationComplete) finalXPNeeded else (currentStep?.xpNeeded ?: 0)
+                    
+                    // Cyberpunk Level Display
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(
+                                        CyberpunkColors.NeonBlue.copy(alpha = 0.15f),
+                                        CyberpunkColors.NeonPurple.copy(alpha = 0.15f)
+                                    )
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .padding(10.dp)
+                    ) {
+                        Text(
+                            text = "LEVEL $displayLevel",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CyberpunkColors.NeonBlue,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    
+                    // XP Gained with Glow Effect
                     Text(
-                        text = "XP Gained: +$xpGained",
+                        text = "+$xpGained XP",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.secondary,
-                        textAlign = TextAlign.Center
+                        color = CyberpunkColors.NeonGreen,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
                     )
                     
-                    // XP Progress Bar
+                    // Holographic Progress Bar
                     Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Progress text (n/m format) - animated
                             Text(
-                                text = "${animatedXP.toInt()}/$currentXpNeeded",
+                                text = "$displayXP/$displayXPNeeded",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = CyberpunkColors.NeonBlue
                             )
                             
-                            // Progress bar - animated
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(8.dp)
+                                    .height(12.dp)
                                     .padding(start = 8.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
                             ) {
-                                val progress = (animatedXP / currentXpNeeded.toFloat()).coerceIn(0f, 1f)
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxHeight()
-                                        .fillMaxWidth(progress)
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(MaterialTheme.colorScheme.primary)
-                                )
+                                // Background circles
+                                Row(
+                                    modifier = Modifier.fillMaxSize(),
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    repeat(20) { index ->
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .background(
+                                                    color = CyberpunkColors.DarkSurface,
+                                                    shape = CircleShape
+                                                )
+                                        )
+                                    }
+                                }
+                                
+                                // Progress parallelograms
+                                val progress = if (displayXPNeeded > 0) {
+                                    (displayXP.toFloat() / displayXPNeeded.toFloat()).coerceIn(0f, 1f)
+                                } else {
+                                    0f
+                                }
+                                
+                                val filledCount = (progress * 20).toInt()
+                                
+                                Row(
+                                    modifier = Modifier.fillMaxSize(),
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    repeat(20) { index ->
+                                        if (index < filledCount) {
+                                            // Filled parallelogram
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(width = 10.dp, height = 8.dp)
+                                                    .background(
+                                                        brush = Brush.linearGradient(
+                                                            colors = listOf(
+                                                                CyberpunkColors.NeonBlue,
+                                                                CyberpunkColors.NeonPurple
+                                                            )
+                                                        ),
+                                                        shape = RoundedCornerShape(2.dp)
+                                                    )
+                                                    .rotate(15f)
+                                            )
+                                        } else {
+                                            // Empty space
+                                            Spacer(modifier = Modifier.size(width = 10.dp, height = 8.dp))
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                     
-                    // Level Change Display (if applicable)
+                    // Level Up Effect
                     if (currentLevel != newLevel) {
-                        Text(
-                            text = "Level Up! $currentLevel → $newLevel",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            textAlign = TextAlign.Center
-                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "LEVEL UP!",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = CyberpunkColors.NeonPink,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            
+                            Text(
+                                text = "$currentLevel → $newLevel",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = CyberpunkColors.NeonBlue,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                     
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     
-                    // Continue button
+                    // Cyberpunk Continue Button
                     Button(
-                        onClick = {
-                            showDialog = false
-                            onDismiss()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { onDismiss() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        CyberpunkColors.NeonBlue.copy(alpha = 0.15f),
+                                        CyberpunkColors.NeonPurple.copy(alpha = 0.15f)
+                                    )
+                                ),
+                                shape = RoundedCornerShape(10.dp)
+                            ),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
+                            containerColor = Color.Transparent
+                        ),
+                        shape = RoundedCornerShape(10.dp)
                     ) {
                         Text(
-                            text = "Continue",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium
+                            text = "CONTINUE",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CyberpunkColors.NeonBlue
                         )
                     }
                 }
             }
         }
     }
-} 
+}

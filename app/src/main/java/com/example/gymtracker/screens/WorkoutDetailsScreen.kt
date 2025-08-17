@@ -100,6 +100,9 @@ import com.example.gymtracker.data.XPSystem
 import kotlinx.coroutines.flow.first
 import androidx.compose.ui.platform.LocalConfiguration
 
+// Test XP amount - change this value to test different XP amounts
+private const val TEST_XP_AMOUNT = 666
+
 
 fun isCustomExercise(exerciseId: Int): Boolean = exerciseId > 750
 
@@ -2171,13 +2174,13 @@ fun WorkoutDetailsScreen(
                                     val previousTotalXP = currentUserXP?.totalXP ?: 0
                                     val previousLevel = currentUserXP?.currentLevel ?: 1
                                     
-                                    // Award 200 XP
+                                    // Award test XP
                                     val xpAwarded = xpSystem.awardXP(
                                         userId = userId,
-                                        xpAmount = 266,
+                                        xpAmount = TEST_XP_AMOUNT,
                                         source = "test_button",
                                         sourceId = "test_${System.currentTimeMillis()}",
-                                        description = "Test XP award: 266 XP"
+                                        description = "Test XP award: $TEST_XP_AMOUNT XP"
                                     )
                                     
                                     if (xpAwarded) {
@@ -2188,7 +2191,7 @@ fun WorkoutDetailsScreen(
                                         
                                         // Store in XP buffer for level-up dialog
                                         val xpBuffer = XPBuffer(
-                                            xpGained = 266,
+                                            xpGained = TEST_XP_AMOUNT,
                                             previousLevel = previousLevel,
                                             newLevel = newLevel,
                                             previousTotalXP = previousTotalXP,
@@ -2197,7 +2200,7 @@ fun WorkoutDetailsScreen(
                                         )
                                         generalViewModel.setXPBuffer(xpBuffer)
                                         
-                                        Toast.makeText(context, "Awarded 266 XP!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Awarded $TEST_XP_AMOUNT XP!", Toast.LENGTH_SHORT).show()
                                     } else {
                                         Toast.makeText(context, "Failed to award XP", Toast.LENGTH_SHORT).show()
                                     }
@@ -2228,7 +2231,7 @@ fun WorkoutDetailsScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Test: Award 266 XP",
+                                text = "Test: Award $TEST_XP_AMOUNT XP",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = Color.Red
                             )
