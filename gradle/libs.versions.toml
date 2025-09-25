@@ -37,6 +37,7 @@ jwtdecode = "2.0.1"
 datastore = "1.0.0"
 materialIcons = "1.5.4"
 fragment = "1.6.2"
+security = "1.0.0"
 
 [libraries]
 android-gif-drawable = { module = "pl.droidsonroids.gif:android-gif-drawable", version.ref = "androidGifDrawable" }
@@ -105,6 +106,7 @@ datastore-preferences = { module = "androidx.datastore:datastore-preferences", v
 material-icons-extended = { module = "androidx.compose.material:material-icons-extended", version.ref = "materialIcons" }
 androidx-fragment = { module = "androidx.fragment:fragment", version.ref = "fragment" }
 androidx-fragment-ktx = { module = "androidx.fragment:fragment-ktx", version.ref = "fragment" }
+androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "security" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

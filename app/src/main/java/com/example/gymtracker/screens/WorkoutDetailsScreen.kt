@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.padding
@@ -66,6 +67,10 @@ import androidx.compose.ui.graphics.Color
 import com.example.gymtracker.data.WorkoutExerciseWithDetails
 import com.example.gymtracker.components.LoadingSpinner
 import com.example.gymtracker.components.ExerciseGif
+import com.example.gymtracker.data.WarmUpTemplate
+import com.example.gymtracker.data.WarmUpExercise
+import com.example.gymtracker.data.WarmUpTemplateWithExercises
+import com.example.gymtracker.data.WorkoutWarmUp
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.zIndex
@@ -90,10 +95,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.CircularProgressIndicator
 import com.example.gymtracker.data.SessionEntityExercise
 import com.example.gymtracker.data.XPSystem
@@ -118,6 +125,7 @@ fun WorkoutDetailsScreen(
     val context = LocalContext.current
     val db = remember { AppDatabase.getDatabase(context) }
     val dao = remember { db.exerciseDao() }
+    val warmUpDao = remember { db.warmUpDao() }
     var workoutName by remember { mutableStateOf("") }
     var startTimeWorkout: Long by remember { mutableLongStateOf(0L) }
     var workoutStarted by remember { mutableStateOf(false) }
@@ -182,7 +190,15 @@ fun WorkoutDetailsScreen(
     var showXPNotification by remember { mutableStateOf(false) }
     var xpEarned by remember { mutableIntStateOf(0) }
     
-
+    // Warm-up state
+    var showWarmUpDialog by remember { mutableStateOf(false) }
+    var selectedWarmUp by remember { mutableStateOf<WarmUpTemplateWithExercises?>(null) }
+    var warmUpExercises by remember { mutableStateOf<List<WarmUpExercise>>(emptyList()) }
+    
+    // Debug logging for warm-up state changes
+    LaunchedEffect(selectedWarmUp) {
+        Log.d("WorkoutDetailsScreen", "Warm-up state changed: selectedWarmUp=${selectedWarmUp?.template?.name}, exercises=${warmUpExercises.size}")
+    }
 
     // Function to start countdown
     fun startCountdown() {
@@ -242,12 +258,113 @@ fun WorkoutDetailsScreen(
     var isSharing by remember { mutableStateOf(false) }
     val authRepository = remember { AuthRepository(context) }
 
+    // Function to order exercises by completion status (completed first, ordered by completion time)
+    fun orderExercisesByCompletion(exercises: List<WorkoutExerciseWithDetails>): List<WorkoutExerciseWithDetails> {
+        val currentWorkoutState = currentWorkout
+        if (currentWorkoutState?.isActive != true) {
+            // No active workout, return exercises in original order
+            return exercises
+        }
+        
+        val completedExercisesOrder = currentWorkoutState.completedExercisesOrder
+        val completedExercises = currentWorkoutState.completedExercises
+        
+        Log.d("WorkoutDetailsScreen", "Ordering exercises by completion:")
+        Log.d("WorkoutDetailsScreen", "  Completed exercises: $completedExercises")
+        Log.d("WorkoutDetailsScreen", "  Completion order: $completedExercisesOrder")
+        
+        // Separate completed and uncompleted exercises
+        val completedList = mutableListOf<WorkoutExerciseWithDetails>()
+        val uncompletedList = mutableListOf<WorkoutExerciseWithDetails>()
+        
+        exercises.forEach { exercise ->
+            if (completedExercises.contains(exercise.entityExercise.id)) {
+                completedList.add(exercise)
+            } else {
+                uncompletedList.add(exercise)
+            }
+        }
+        
+        // Sort completed exercises by completion order
+        completedList.sortBy { exercise ->
+            completedExercisesOrder.indexOf(exercise.entityExercise.id)
+        }
+        
+        // Combine: completed first (in completion order), then uncompleted (in original order)
+        val orderedExercises = completedList + uncompletedList
+        
+        Log.d("WorkoutDetailsScreen", "Ordered exercises: ${completedList.size} completed + ${uncompletedList.size} uncompleted")
+        
+        return orderedExercises
+    }
+
+    // Function to filter out warm-up exercises from the main exercise list
+    fun filterOutWarmUpExercises() {
+        // Safety check: don't filter if exercise list is empty
+        if (exercisesList.isEmpty()) {
+            Log.d("WorkoutDetailsScreen", "Cannot filter warm-ups - exercise list is empty")
+            return
+        }
+        
+        // Only filter if there are actually warm-up exercises
+        if (warmUpExercises.isEmpty()) {
+            // No warm-ups, so all exercises should be shown
+            reorderedExercises = orderExercisesByCompletion(exercisesList)
+            Log.d("WorkoutDetailsScreen", "No warm-ups - showing all ${exercisesList.size} exercises ordered by completion")
+            return
+        }
+        
+        val filteredExercises = exercisesList.filter { workoutExerciseWithDetails ->
+            // Check if this exercise is part of the warm-up (by checking if it exists in warmUpExercises)
+            val isWarmUpExercise = warmUpExercises.any { warmUpExercise ->
+                warmUpExercise.exerciseId == workoutExerciseWithDetails.entityExercise.id
+            }
+            !isWarmUpExercise // Only include non-warm-up exercises
+        }
+        
+        // Order the filtered exercises by completion
+        reorderedExercises = orderExercisesByCompletion(filteredExercises)
+        Log.d("WorkoutDetailsScreen", "Filtered and ordered exercises: ${exercisesList.size} -> ${filteredExercises.size} (removed ${exercisesList.size - filteredExercises.size} warm-up exercises)")
+    }
+
+    // Reorder exercises when completion status changes
+    LaunchedEffect(currentWorkout?.completedExercisesOrder, currentWorkout?.isActive) {
+        if (reorderedExercises.isNotEmpty() && currentWorkout?.isActive == true) {
+            reorderedExercises = orderExercisesByCompletion(reorderedExercises)
+            Log.d("WorkoutDetailsScreen", "Reordered exercises due to completion status change")
+        }
+    }
+
     // Initialize reorderedExercises when exercisesList changes
     LaunchedEffect(exercisesList) {
         // Only update reorderedExercises if we're not currently dragging
         // and if this is the initial load (reorderedExercises is empty and we haven't loaded data yet)
         if (!isDragging && reorderedExercises.isEmpty() && !hasLoadedInitialData) {
-            reorderedExercises = exercisesList
+            // If there are warm-ups, filter them out; otherwise show all exercises
+            if (warmUpExercises.isNotEmpty()) {
+                filterOutWarmUpExercises()
+            } else {
+                reorderedExercises = orderExercisesByCompletion(exercisesList)
+                Log.d("WorkoutDetailsScreen", "Initial load - no warm-ups, showing all ${exercisesList.size} exercises ordered by completion")
+            }
+        }
+    }
+    
+
+    
+    // Update filtering when warm-up exercises change
+    LaunchedEffect(warmUpExercises) {
+        // Only filter if we have exercises loaded and we're not dragging
+        if (exercisesList.isNotEmpty() && !isDragging) {
+            if (warmUpExercises.isNotEmpty()) {
+                filterOutWarmUpExercises()
+            } else {
+                // No warm-ups, show all exercises
+                reorderedExercises = orderExercisesByCompletion(exercisesList)
+                Log.d("WorkoutDetailsScreen", "No warm-ups - showing all ${exercisesList.size} exercises ordered by completion")
+            }
+        } else {
+            Log.d("WorkoutDetailsScreen", "Skipping warm-up filtering - exercisesList empty: ${exercisesList.isEmpty()}, isDragging: $isDragging")
         }
     }
 
@@ -530,6 +647,106 @@ fun WorkoutDetailsScreen(
             }
         }
     }
+    
+    // Function to load warm-up templates
+    fun loadWarmUpTemplates() {
+        coroutineScope.launch {
+            try {
+                val templates = warmUpDao.getAllWarmUpTemplatesWithExercises().first()
+                // Templates are loaded when dialog is shown
+            } catch (e: Exception) {
+                Log.e("WorkoutDetailsScreen", "Error loading warm-up templates: ${e.message}")
+            }
+        }
+    }
+    
+    // Function to load warm-up for current workout
+    fun loadWarmUpForWorkout() {
+        coroutineScope.launch {
+            try {
+                val workoutWarmUp = warmUpDao.getWorkoutWarmUp(workoutId)
+                if (workoutWarmUp != null) {
+                    // Load the warm-up template with exercises
+                    val warmUpTemplate = warmUpDao.getWarmUpTemplateWithExercises(workoutWarmUp.templateId)
+                    if (warmUpTemplate != null) {
+                        selectedWarmUp = warmUpTemplate
+                        warmUpExercises = warmUpTemplate.exercises
+                        Log.d("WorkoutDetailsScreen", "Loaded warm-up from database: ${warmUpTemplate.template.name} with ${warmUpTemplate.exercises.size} exercises")
+                        
+                        // Filter out warm-up exercises from main exercise list only if we have exercises
+                        withContext(Dispatchers.Main) {
+                            if (exercisesList.isNotEmpty()) {
+                                filterOutWarmUpExercises()
+                            } else {
+                                Log.d("WorkoutDetailsScreen", "No exercises to filter yet, warm-up will be filtered when exercises are loaded")
+                            }
+                        }
+                    }
+                } else {
+                    Log.d("WorkoutDetailsScreen", "No warm-up found for workout $workoutId")
+                }
+            } catch (e: Exception) {
+                Log.e("WorkoutDetailsScreen", "Error loading warm-up from database: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+    }
+    
+    // Function to select warm-up template
+    fun selectWarmUpTemplate(template: WarmUpTemplateWithExercises) {
+        coroutineScope.launch {
+            try {
+                // Save warm-up selection to database
+                val workoutWarmUp = WorkoutWarmUp(
+                    workoutId = workoutId,
+                    templateId = template.template.id,
+                    isCustomized = false,
+                    customDuration = null
+                )
+                warmUpDao.insertWorkoutWarmUp(workoutWarmUp)
+                
+                // Update local state
+                selectedWarmUp = template
+                warmUpExercises = template.exercises
+                showWarmUpDialog = false
+                
+                // Filter out warm-up exercises from main exercise list
+                withContext(Dispatchers.Main) {
+                    filterOutWarmUpExercises()
+                }
+                
+                Log.d("WorkoutDetailsScreen", "Warm-up saved to database: ${template.template.name} with ${template.exercises.size} exercises")
+            } catch (e: Exception) {
+                Log.e("WorkoutDetailsScreen", "Error saving warm-up to database: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+    }
+    
+    // Function to remove warm-up
+    fun removeWarmUp() {
+        coroutineScope.launch {
+            try {
+                // Remove warm-up from database
+                warmUpDao.deleteWorkoutWarmUpByWorkout(workoutId)
+                
+                // Update local state
+                selectedWarmUp = null
+                warmUpExercises = emptyList()
+                
+                // Since warm-up was removed, show all exercises
+                withContext(Dispatchers.Main) {
+                    reorderedExercises = orderExercisesByCompletion(exercisesList)
+                    Log.d("WorkoutDetailsScreen", "Warm-up removed - showing all ${exercisesList.size} exercises ordered by completion")
+                }
+                
+                Log.d("WorkoutDetailsScreen", "Warm-up removed from database for workout $workoutId")
+            } catch (e: Exception) {
+                Log.e("WorkoutDetailsScreen", "Error removing warm-up from database: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+    }
 
     fun shareWorkout(targetUserIds: List<String>) {
         if (targetUserIds.isEmpty()) return
@@ -636,7 +853,13 @@ fun WorkoutDetailsScreen(
 
     // Fetch workout data and sync with ViewModel
     LaunchedEffect(workoutId) {
+        // Reset warm-up state for new workout
+        selectedWarmUp = null
+        warmUpExercises = emptyList()
         try {
+            // Load warm-up data for this workout
+            loadWarmUpForWorkout()
+            
             Log.d("WorkoutDetailsScreen", "Loading workout data for ID: $workoutId")
 
             // Reset flags for new workout
@@ -708,11 +931,16 @@ fun WorkoutDetailsScreen(
                         val workoutExerciseWithDetails = exercisesData.map {
                             WorkoutExerciseWithDetails(it.workoutExercise, it.exercise)
                         }
-                        // Initialize reorderedExercises with the fetched data
-                        reorderedExercises = workoutExerciseWithDetails
+                        // Initialize reorderedExercises with the fetched data, ordered by completion
+                        reorderedExercises = orderExercisesByCompletion(workoutExerciseWithDetails)
                         hasLoadedInitialData = true
                         workoutExerciseWithDetails.forEach { exerciseWithDetails ->
                             viewModel.addExercise(exerciseWithDetails)
+                        }
+                        
+                        // Filter out warm-up exercises from the main exercise list if there are any
+                        if (warmUpExercises.isNotEmpty()) {
+                            filterOutWarmUpExercises()
                         }
 
                         // Check if we have an active workout in GeneralViewModel
@@ -792,8 +1020,12 @@ fun WorkoutDetailsScreen(
                                 val workoutExerciseWithDetails = updatedExercisesData.map {
                                     WorkoutExerciseWithDetails(it.workoutExercise, it.exercise)
                                 }
-                                reorderedExercises = workoutExerciseWithDetails
-                                viewModel.updateExercisesOrder(workoutExerciseWithDetails)
+                                reorderedExercises = orderExercisesByCompletion(workoutExerciseWithDetails)
+                                viewModel.updateExercisesOrder(reorderedExercises)
+                                
+                                // Preserve warm-up state when exercises are added
+                                // Reload warm-up to ensure state is preserved
+                                loadWarmUpForWorkout()
                             }
                         }
                     }
@@ -2060,6 +2292,273 @@ fun WorkoutDetailsScreen(
                         }
                     }
                 }
+                
+                // Warm-up Section - Always positioned at the top
+                if (selectedWarmUp != null) {
+                    // Warm-up exercises display
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = "Warm-up: ${selectedWarmUp!!.template.name}",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { removeWarmUp() },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.minus_icon),
+                                            contentDescription = "Remove Warm-up",
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                                
+                                Text(
+                                    text = selectedWarmUp!!.template.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                                
+                                // Warm-up exercises list
+                                Log.d("WorkoutDetailsScreen", "Rendering warm-up exercises: ${warmUpExercises.size} exercises")
+                                warmUpExercises.forEachIndexed { index, warmUpExercise ->
+                                    var exercise by remember { mutableStateOf<EntityExercise?>(null) }
+                                    
+                                    // Debug: Log the warm-up exercise data
+                                    LaunchedEffect(warmUpExercise) {
+                                        Log.d("WorkoutDetailsScreen", "Warm-up exercise: ID=${warmUpExercise.exerciseId}, sets=${warmUpExercise.sets}, reps=${warmUpExercise.reps}")
+                                    }
+                                    
+                                    // Load exercise data in a coroutine
+                                    LaunchedEffect(warmUpExercise.exerciseId) {
+                                        try {
+                                            Log.d("WorkoutDetailsScreen", "Loading exercise data for ID: ${warmUpExercise.exerciseId}")
+                                            exercise = dao.getExerciseById(warmUpExercise.exerciseId)
+                                            if (exercise != null) {
+                                                Log.d("WorkoutDetailsScreen", "Exercise loaded successfully: ${exercise?.name} (ID: ${exercise?.id})")
+                                            } else {
+                                                Log.e("WorkoutDetailsScreen", "Exercise not found in database for ID: ${warmUpExercise.exerciseId}")
+                                            }
+                                        } catch (e: Exception) {
+                                            Log.e("WorkoutDetailsScreen", "Error loading exercise: ${e.message}")
+                                            e.printStackTrace()
+                                        }
+                                    }
+                                    
+                                    exercise?.let { exerciseData ->
+
+                                        // Check if this warm-up exercise is completed
+                                        val currentWorkoutState = currentWorkout
+                                        val isWarmUpCompleted = if (currentWorkoutState?.workoutId == workoutId && currentWorkoutState.isActive == true) {
+                                            generalViewModel.isExerciseCompleted(exerciseData.id)
+                                        } else {
+                                            false
+                                        }
+                                        
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 2.dp)
+                                                .clickable {
+                                                    // If warm-up exercise is completed, show completion dialog instead of navigating
+                                                    if (isWarmUpCompleted) {
+                                                        // Show completion info dialog
+                                                        completedExerciseInfo = WorkoutExerciseWithDetails(
+                                                            workoutExercise = WorkoutExercise(
+                                                                id = -1,
+                                                                workoutId = workoutId,
+                                                                exerciseId = exerciseData.id,
+                                                                sets = warmUpExercise.sets,
+                                                                reps = if (warmUpExercise.isTimeBased) warmUpExercise.duration else warmUpExercise.reps,
+                                                                weight = 0,
+                                                                order = -1
+                                                            ),
+                                                            entityExercise = exerciseData
+                                                        )
+                                                        showCompletedExerciseDialog = true
+                                                    } else {
+                                                        // Navigate to exercise details for incomplete warm-up
+                                                        val currentWorkoutState = currentWorkout
+                                                        val sessionId = currentWorkoutState?.sessionId ?: System.currentTimeMillis()
+                                                        Log.d("WorkoutDetailsScreen", "Navigating to warm-up exercise: ${exerciseData.id}, session: $sessionId, workout: $workoutId")
+                                                        
+                                                        try {
+                                                            navController.navigate(
+                                                                Screen.Exercise.createRoute(
+                                                                    exerciseId = exerciseData.id,
+                                                                    sessionId = sessionId,
+                                                                    workoutId = workoutId
+                                                                )
+                                                            )
+                                                            Log.d("WorkoutDetailsScreen", "Navigation successful")
+                                                        } catch (e: Exception) {
+                                                            Log.e("WorkoutDetailsScreen", "Navigation failed: ${e.message}")
+                                                            e.printStackTrace()
+                                                            // Show error to user
+                                                            Toast.makeText(context, "Failed to open exercise: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    }
+                                                },
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.1f)
+                                            ),
+                                            shape = RoundedCornerShape(8.dp),
+                                            border = BorderStroke(
+                                                width = 1.dp,
+                                                color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f)
+                                            )
+                                        ) {
+                                            Box {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(12.dp),
+                                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    // Exercise GIF
+                                                    ExerciseGif(
+                                                        gifPath = exerciseData.gifUrl,
+                                                        modifier = Modifier
+                                                            .size(60.dp)
+                                                            .clip(RoundedCornerShape(6.dp))
+                                                    )
+                                                    
+                                                    // Exercise details
+                                                    Column(
+                                                        modifier = Modifier.weight(1f),
+                                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = exerciseData.name,
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                        
+                                                        Row(
+                                                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                                        ) {
+                                                            Text(
+                                                                text = "Sets: ${warmUpExercise.sets}",
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                                            )
+                                                            
+                                                            if (warmUpExercise.isTimeBased) {
+                                                                Text(
+                                                                    text = "Duration: ${warmUpExercise.duration}s",
+                                                                    style = MaterialTheme.typography.bodySmall,
+                                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                                                )
+                                                            } else {
+                                                                Text(
+                                                                    text = "Reps: ${warmUpExercise.reps}",
+                                                                    style = MaterialTheme.typography.bodySmall,
+                                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                                                )
+                                                            }
+                                                            
+                                                            if (warmUpExercise.restBetweenSets > 0) {
+                                                                Text(
+                                                                    text = "Rest: ${warmUpExercise.restBetweenSets}s",
+                                                                    style = MaterialTheme.typography.bodySmall,
+                                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                // Completion indicator (green circle) for warm-up exercises
+                                                if (isWarmUpCompleted) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .align(Alignment.BottomEnd)
+                                                            .padding(8.dp)
+                                                            .size(14.dp)
+                                                            .background(
+                                                                color = Color.Green,
+                                                                shape = CircleShape
+                                                            )
+                                                            .border(
+                                                                width = 1.dp,
+                                                                color = Color.White,
+                                                                shape = CircleShape
+                                                            )
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Warm-up button
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                .clickable { showWarmUpDialog = true }
+                                .border(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(12.dp)
+                                ),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Warm-up  ",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.tertiary
+                                )
+                                Icon(
+                                    painter = painterResource(id = R.drawable.fire_icon),
+                                    contentDescription = "Add Warm-up",
+                                    tint = MaterialTheme.colorScheme.tertiary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                        }
+                    }
+                }
+                
                 // Exercise items
                 itemsIndexed(reorderedExercises) { index, exerciseWithDetails ->
                     ExerciseItem(
@@ -2112,6 +2611,7 @@ fun WorkoutDetailsScreen(
                         }
                     )
                 }
+                
                 // Add Exercise Button
                 item {
                     Card(
@@ -2158,89 +2658,19 @@ fun WorkoutDetailsScreen(
                     }
                 }
                 
-                // Test XP Button
-                item {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                            .clickable {
-                                coroutineScope.launch {
-                                    val xpSystem = XPSystem(db.userXPDao())
-                                    val userId = "current_user"
-                                    
-                                    // Get current user XP to calculate level changes
-                                    val currentUserXP = xpSystem.getUserXP(userId)
-                                    val previousTotalXP = currentUserXP?.totalXP ?: 0
-                                    val previousLevel = currentUserXP?.currentLevel ?: 1
-                                    
-                                    // Award test XP
-                                    val xpAwarded = xpSystem.awardXP(
-                                        userId = userId,
-                                        xpAmount = TEST_XP_AMOUNT,
-                                        source = "test_button",
-                                        sourceId = "test_${System.currentTimeMillis()}",
-                                        description = "Test XP award: $TEST_XP_AMOUNT XP"
-                                    )
-                                    
-                                    if (xpAwarded) {
-                                        // Get updated user XP to calculate new level
-                                        val updatedUserXP = xpSystem.getUserXP(userId)
-                                        val newTotalXP = updatedUserXP?.totalXP ?: previousTotalXP
-                                        val newLevel = updatedUserXP?.currentLevel ?: previousLevel
-                                        
-                                        // Store in XP buffer for level-up dialog
-                                        val xpBuffer = XPBuffer(
-                                            xpGained = TEST_XP_AMOUNT,
-                                            previousLevel = previousLevel,
-                                            newLevel = newLevel,
-                                            previousTotalXP = previousTotalXP,
-                                            newTotalXP = newTotalXP,
-                                            timestamp = System.currentTimeMillis()
-                                        )
-                                        generalViewModel.setXPBuffer(xpBuffer)
-                                        
-                                        Toast.makeText(context, "Awarded $TEST_XP_AMOUNT XP!", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        Toast.makeText(context, "Failed to award XP", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            }
-                            .border(
-                                width = 1.dp,
-                                color = Color.Red.copy(alpha = 0.5f),
-                                shape = RoundedCornerShape(12.dp)
-                            ),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.plus_icon),
-                                contentDescription = "Test XP",
-                                tint = Color.Red,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Test: Award $TEST_XP_AMOUNT XP",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = Color.Red
-                            )
-                        }
-                    }
+
+                // Recovery Factors Section - Show when:
+                // 1. No active workout at all, OR
+                // 2. We're viewing the same workout that's currently active
+                val shouldShowRecoveryFactors = when {
+                    currentWorkout?.isActive != true -> true // No active workout
+                    currentWorkout?.workoutId == workoutId && currentWorkout?.isActive == true -> true // Inside active workout
+                    else -> false // Active workout exists but we're viewing a different workout
                 }
-                // Recovery Factors Section
-                item {
-                    Card(
+                
+                if (shouldShowRecoveryFactors) {
+                    item {
+                        Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp),
@@ -2438,6 +2868,7 @@ fun WorkoutDetailsScreen(
                             }
                         }
                     }
+                }
                 }
             }
         }
@@ -3151,6 +3582,133 @@ fun WorkoutDetailsScreen(
         )
     }
     
+    // Warm-up Selection Dialog
+    if (showWarmUpDialog) {
+        var warmUpTemplates by remember { mutableStateOf<List<WarmUpTemplateWithExercises>>(emptyList()) }
+        var isLoadingTemplates by remember { mutableStateOf(true) }
+        
+        // Load warm-up templates when dialog opens
+        LaunchedEffect(showWarmUpDialog) {
+            if (showWarmUpDialog) {
+                try {
+                    val templates = warmUpDao.getAllWarmUpTemplatesWithExercises().first()
+                    warmUpTemplates = templates
+                } catch (e: Exception) {
+                    Log.e("WorkoutDetailsScreen", "Error loading warm-up templates: ${e.message}")
+                } finally {
+                    isLoadingTemplates = false
+                }
+            }
+        }
+        
+        AlertDialog(
+            onDismissRequest = { showWarmUpDialog = false },
+            title = { 
+                Text(
+                    text = "Select Warm-up Template",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            },
+            text = {
+                if (isLoadingTemplates) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                } else if (warmUpTemplates.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No warm-up templates available",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 400.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(warmUpTemplates) { template ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectWarmUpTemplate(template) },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surface
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = template.template.name,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    
+                                    if (template.template.description.isNotEmpty()) {
+                                        Text(
+                                            text = template.template.description,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                    
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        Text(
+                                            text = "Category: ${template.template.category}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        )
+                                        
+                                        Text(
+                                            text = "Difficulty: ${template.template.difficulty}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        )
+                                        
+                                        Text(
+                                            text = "${template.template.estimatedDuration} min",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        )
+                                    }
+                                    
+                                    Text(
+                                        text = "${template.exercises.size} exercises",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showWarmUpDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
 }
 

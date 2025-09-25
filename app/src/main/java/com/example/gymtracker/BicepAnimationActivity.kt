@@ -62,7 +62,7 @@ class BicepAnimationActivity : ComponentActivity() {
                             startActivity(Intent(this@BicepAnimationActivity, LoginActivity::class.java))
                             finish()
                         }
-                    }, 500)
+                    }, 1000) // Increased timeout to 1 second
                 }
             }
         }
@@ -179,13 +179,46 @@ class BicepAnimationActivity : ComponentActivity() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val authRepository = AuthRepository(this@BicepAnimationActivity)
-                isLoggedIn = authRepository.isLoggedIn()
+                
+                // First, check if we have a valid token
+                val hasValidToken = authRepository.isLoggedIn()
+                
+                if (hasValidToken) {
+                    Log.d(TAG, "Valid token found, user is logged in")
+                    isLoggedIn = true
+                } else {
+                    Log.d(TAG, "No valid token found, attempting auto-login")
+                    // Try auto-login with stored credentials
+                    val autoLoginResult = authRepository.attemptAutoLogin()
+                    if (autoLoginResult.isSuccess) {
+                        Log.d(TAG, "Auto-login successful")
+                        isLoggedIn = true
+                    } else {
+                        Log.d(TAG, "Auto-login failed: ${autoLoginResult.exceptionOrNull()?.message}")
+                        isLoggedIn = false
+                    }
+                }
+                
                 authCheckCompleted = true
                 Log.d(TAG, "Auth check completed: isLoggedIn = $isLoggedIn")
+                
+                // If auth check completed and animation is done, navigate immediately
+                if (currentFrame > TOTAL_FRAMES) {
+                    runOnUiThread {
+                        navigateToNextScreen()
+                    }
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error checking authentication", e)
                 isLoggedIn = false
                 authCheckCompleted = true
+                
+                // If auth check failed and animation is done, navigate immediately
+                if (currentFrame > TOTAL_FRAMES) {
+                    runOnUiThread {
+                        navigateToNextScreen()
+                    }
+                }
             }
         }
     }

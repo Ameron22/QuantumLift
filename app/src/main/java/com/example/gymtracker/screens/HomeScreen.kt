@@ -662,7 +662,7 @@ fun WelcomeTabWithMuscles(navController: NavController, selectedTabIndex: Int, p
                                                         Log.d("MUSCLES_DEBUG", "=== Adjusting camera view by modifying model transform ===")
                                                         // Instead of moving camera, we can adjust the model transform to change the view
                                                         // Move the model up and closer to make camera appear deep inside the sphere
-                                                        matrix[13] -= 0.75f  // Move model up slightly (less negative Y translation)
+                                                        matrix[13] -= 0.6f  // Move model up slightly (less negative Y translation)
                                                         matrix[14] += 2.5f  // Move model even closer (positive Z translation)
                                                         transformManager.setTransform(transform, matrix)
                                                         Log.d("MUSCLES_DEBUG", "=== Model transform adjusted for inside-sphere view ===")
@@ -951,6 +951,9 @@ fun applySorenessBasedColors(modelViewer: ModelViewer, muscleSoreness: Map<Strin
                             // Get color cube materials
                             val colorCubeMaterials = mutableMapOf<String, MaterialInstance>()
                             val colorCubeNames = listOf("Green", "Grey", "Orange", "Red", "Violet", "Yellow")
+                            
+                            // Define protected parts that should not have their colors changed
+                            val protectedParts = listOf("Untrainable", "_FullBody Remeshed.001", "Sphere", "Grid")
 
                             for (colorName in colorCubeNames) {
                                 val colorEntity = asset.entities.find { entity ->
@@ -992,6 +995,13 @@ fun applySorenessBasedColors(modelViewer: ModelViewer, muscleSoreness: Map<Strin
                                         }
 
                                         if (muscleEntity != null && renderableManager.hasComponent(muscleEntity)) {
+                                            // Check if this muscle is a protected part that shouldn't be colored
+                                            val muscleName = asset.getName(muscleEntity)
+                                            if (protectedParts.any { protectedPart -> muscleName.contains(protectedPart) }) {
+                                                Log.d("MUSCLES_DEBUG", "=== Skipping protected part: $muscleName ===")
+                                                continue
+                                            }
+                                            
                                             val muscleRenderable = renderableManager.getInstance(muscleEntity)
                                             val musclePrimitiveCount = renderableManager.getPrimitiveCount(muscleRenderable)
 
@@ -1945,9 +1955,9 @@ fun setAllMusclesToGrey(modelViewer: ModelViewer) {
     val greyMaterial = renderableManager.getMaterialInstanceAt(greyRenderable, 0)
     Log.d("MUSCLES_DEBUG", "=== Got Grey material instance ===")
     
-    // Apply Grey material to all muscle entities (excluding color cubes and protected parts)
+    // Apply Grey material to all muscle entities (excluding color cubes, protected parts, and background objects)
     val colorCubeNames = listOf("Green", "Grey", "Orange", "Red", "Violet", "Yellow")
-    val protectedParts = listOf("Untrainable", "_FullBody Remeshed.001")
+    val protectedParts = listOf("Untrainable", "_FullBody Remeshed.001", "Sphere", "Grid")
     
     for (entity in asset.entities) {
         val name = asset.getName(entity)

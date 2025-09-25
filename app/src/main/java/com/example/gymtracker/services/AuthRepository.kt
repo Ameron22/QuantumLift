@@ -49,6 +49,8 @@ class AuthRepository(private val context: Context) {
                     authResponse.user?.let { user ->
                         tokenManager.saveUserInfo(user.id.toString(), user.username)
                     }
+                    // Save credentials securely for auto-login
+                    tokenManager.saveCredentials(username, password)
                     Result.success(authResponse)
                 } ?: Result.failure(Exception("Empty response body"))
             } else {
@@ -57,6 +59,29 @@ class AuthRepository(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.e("AUTH_REPO", "Login exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun attemptAutoLogin(): Result<AuthResponse> {
+        Log.d("AUTH_REPO", "Attempting auto-login with stored credentials")
+        return try {
+            // Check if auto-login is enabled and credentials are available
+            if (!tokenManager.isAutoLoginEnabled() || !tokenManager.hasStoredCredentials()) {
+                Log.d("AUTH_REPO", "Auto-login not enabled or no stored credentials")
+                return Result.failure(Exception("Auto-login not available"))
+            }
+            
+            val (username, password) = tokenManager.getStoredCredentials()
+            if (username.isNullOrBlank() || password.isNullOrBlank()) {
+                Log.d("AUTH_REPO", "Stored credentials are empty")
+                return Result.failure(Exception("No valid stored credentials"))
+            }
+            
+            Log.d("AUTH_REPO", "Attempting auto-login for stored user: $username")
+            login(username, password)
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Auto-login exception: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -104,6 +129,8 @@ class AuthRepository(private val context: Context) {
             if (response.isSuccessful) {
                 response.body()?.let { authResponse ->
                     Log.d("AUTH_REPO", "Password change successful")
+                    // Update stored password for auto-login
+                    tokenManager.updatePassword(newPassword)
                     Result.success(authResponse)
                 } ?: Result.failure(Exception("Empty response body"))
             } else {
@@ -124,6 +151,13 @@ class AuthRepository(private val context: Context) {
                 return Result.failure(Exception("No authentication token found"))
             }
             
+            // Validate token before making the request
+            if (!tokenManager.isTokenValid()) {
+                Log.d("AUTH_REPO", "Token is invalid, clearing auth data")
+                tokenManager.clearAuthData()
+                return Result.failure(Exception("Token is invalid or expired"))
+            }
+            
             val response = apiService.getProfile("Bearer $token")
             Log.d("AUTH_REPO", "Get profile response code: ${response.code()}")
             if (response.isSuccessful) {
@@ -135,6 +169,11 @@ class AuthRepository(private val context: Context) {
                 } ?: Result.failure(Exception("Empty response body"))
             } else {
                 Log.e("AUTH_REPO", "Get profile failed with code: ${response.code()}")
+                // If we get 401 or 403, the token might be invalid
+                if (response.code() == 401 || response.code() == 403) {
+                    Log.d("AUTH_REPO", "Token appears to be invalid, clearing auth data")
+                    tokenManager.clearAuthData()
+                }
                 Result.failure(Exception("Failed to get profile: ${response.code()}"))
             }
         } catch (e: Exception) {
@@ -147,6 +186,10 @@ class AuthRepository(private val context: Context) {
         tokenManager.clearAuthData()
     }
     
+    suspend fun logoutAndClearCredentials() {
+        tokenManager.clearAllAuthData()
+    }
+    
     fun getToken(): Flow<String?> = tokenManager.token
     
     fun getUserId(): Flow<String?> = tokenManager.userId
@@ -154,7 +197,30 @@ class AuthRepository(private val context: Context) {
     fun getUsername(): Flow<String?> = tokenManager.username
     
     suspend fun isLoggedIn(): Boolean {
-        return tokenManager.getStoredToken() != null
+        return tokenManager.isTokenValid()
+    }
+    
+    suspend fun refreshTokenIfNeeded(): Result<Boolean> {
+        Log.d("AUTH_REPO", "Checking if token needs refresh")
+        return try {
+            if (!tokenManager.isTokenValid()) {
+                Log.d("AUTH_REPO", "Token is invalid, attempting auto-login to refresh")
+                val autoLoginResult = attemptAutoLogin()
+                if (autoLoginResult.isSuccess) {
+                    Log.d("AUTH_REPO", "Token refreshed successfully via auto-login")
+                    Result.success(true)
+                } else {
+                    Log.d("AUTH_REPO", "Failed to refresh token via auto-login")
+                    Result.success(false)
+                }
+            } else {
+                Log.d("AUTH_REPO", "Token is still valid")
+                Result.success(true)
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH_REPO", "Error refreshing token: ${e.message}", e)
+            Result.failure(e)
+        }
     }
     
     suspend fun sendFriendInvitation(recipientEmail: String): Result<FriendInvitationResponse> {

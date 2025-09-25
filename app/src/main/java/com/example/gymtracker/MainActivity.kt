@@ -135,6 +135,13 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
         Log.d("MainActivity", "App stopped - hiding delete zone")
         hideDeleteZone()
     }
+    
+    @OnLifecycleEvent(Lifecycle.Event.ON_RESUME)
+    fun onAppResume() {
+        Log.d("MainActivity", "App resumed - checking token refresh")
+        // Try to refresh token when app comes back to foreground
+        // Note: This will be handled in the Compose content where we have access to the ViewModel
+    }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -246,6 +253,9 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                             }
                             navigationFromNotification = null // Clear after navigation
                         }
+                        
+                        // Try to refresh token when MainActivity starts
+                        authViewModel.refreshTokenIfNeeded()
                     }
 
                                         // MainActivity only shows content for authenticated users
@@ -288,6 +298,9 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                                  }
                                                                  composable(Screen.CreateExercise.route) {
                                      CreateExerciseScreen(navController)
+                                 }
+                                                                 composable(Screen.CreateWarmUp.route) {
+                                     CreateWarmUpScreen(navController)
                                  }
                                                                  composable(Screen.Settings.route) {
                                      SettingsScreen(

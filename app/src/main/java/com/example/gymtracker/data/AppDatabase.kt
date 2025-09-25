@@ -8,6 +8,8 @@ import android.content.Context
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.gymtracker.utils.ExerciseDataImporter
+import com.example.gymtracker.data.Converter
+import com.example.gymtracker.classes.InsertInitialData
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -23,17 +25,21 @@ import kotlinx.coroutines.launch
         PhysicalParameters::class,
         BodyMeasurement::class,
         UserXP::class,
-        XPHistory::class
+        XPHistory::class,
+        WarmUpTemplate::class,
+        WarmUpExercise::class,
+        WorkoutWarmUp::class
     ],
-    version = 43,  // Increment version number to add XP tables
+    version = 45,  // Increment version number to add weight field to WarmUpExercise
     exportSchema = false
 )
-@TypeConverters(Converter::class)
+@TypeConverters(com.example.gymtracker.data.Converter::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun exerciseDao(): ExerciseDao
     abstract fun achievementDao(): AchievementDao
     abstract fun physicalParametersDao(): PhysicalParametersDao
     abstract fun userXPDao(): UserXPDao
+    abstract fun warmUpDao(): WarmUpDao
 
     companion object {
         @Volatile
@@ -61,13 +67,18 @@ abstract class AppDatabase : RoomDatabase() {
                                     Log.d("AppDatabase", "Starting exercise import in onCreate")
                                     // Get the database instance that was just created
                                     val database = INSTANCE
-                                    if (database != null) {
-                                        val importer = ExerciseDataImporter(context.applicationContext, database.exerciseDao())
-                                        importer.importExercises()
-                                        Log.d("AppDatabase", "Exercise import completed")
-                                    } else {
-                                        Log.e("AppDatabase", "Database instance is null during onCreate")
-                                    }
+                                                                if (database != null) {
+                                val importer = ExerciseDataImporter(context.applicationContext, database.exerciseDao())
+                                importer.importExercises()
+                                Log.d("AppDatabase", "Exercise import completed")
+                                
+                                // Initialize warm-up templates
+                                val insertInitialData = InsertInitialData()
+                                insertInitialData.insertWarmUpTemplates(database.warmUpDao())
+                                Log.d("AppDatabase", "Warm-up templates initialization completed")
+                            } else {
+                                Log.e("AppDatabase", "Database instance is null during onCreate")
+                            }
                                 } catch (e: Exception) {
                                     Log.e("AppDatabase", "Error during exercise import", e)
                                 }

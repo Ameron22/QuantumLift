@@ -55,15 +55,36 @@ class AuthViewModel(private val context: Context) : ViewModel() {
     private fun checkLoginStatus() {
         viewModelScope.launch {
             _authState.value = _authState.value.copy(isLoading = true)
-            val isLoggedIn = authRepository.isLoggedIn()
-            if (isLoggedIn) {
-                // Load user profile if logged in
-                loadUserProfile()
+            try {
+                val isLoggedIn = authRepository.isLoggedIn()
+                if (isLoggedIn) {
+                    // Load user profile if logged in
+                    loadUserProfile()
+                } else {
+                    // Try auto-login if no valid token
+                    val autoLoginResult = authRepository.attemptAutoLogin()
+                    if (autoLoginResult.isSuccess) {
+                        Log.d("AUTH_LOG", "Auto-login successful during status check")
+                        loadUserProfile()
+                        _authState.value = _authState.value.copy(
+                            isLoading = false,
+                            isLoggedIn = true,
+                            user = autoLoginResult.getOrNull()?.user
+                        )
+                        return@launch
+                    }
+                }
+                _authState.value = _authState.value.copy(
+                    isLoading = false,
+                    isLoggedIn = isLoggedIn
+                )
+            } catch (e: Exception) {
+                Log.e("AUTH_LOG", "Error checking login status: ${e.message}", e)
+                _authState.value = _authState.value.copy(
+                    isLoading = false,
+                    isLoggedIn = false
+                )
             }
-            _authState.value = _authState.value.copy(
-                isLoading = false,
-                isLoggedIn = isLoggedIn
-            )
         }
     }
     
@@ -76,6 +97,14 @@ class AuthViewModel(private val context: Context) : ViewModel() {
                 },
                 onFailure = { exception ->
                     Log.e("AUTH_LOG", "Failed to load user profile: ${exception.message}")
+                    // If profile loading fails, it might be due to token issues
+                    // Check if we should clear the login state
+                    if (exception.message?.contains("token", ignoreCase = true) == true ||
+                        exception.message?.contains("401", ignoreCase = true) == true ||
+                        exception.message?.contains("403", ignoreCase = true) == true) {
+                        Log.d("AUTH_LOG", "Token appears to be invalid, clearing login state")
+                        _authState.value = _authState.value.copy(isLoggedIn = false)
+                    }
                 }
             )
         }
@@ -184,6 +213,37 @@ class AuthViewModel(private val context: Context) : ViewModel() {
         viewModelScope.launch {
             authRepository.logout()
             _authState.value = AuthState()
+        }
+    }
+    
+    fun logoutAndClearCredentials() {
+        viewModelScope.launch {
+            authRepository.logoutAndClearCredentials()
+            _authState.value = AuthState()
+        }
+    }
+    
+    fun refreshTokenIfNeeded() {
+        viewModelScope.launch {
+            try {
+                val result = authRepository.refreshTokenIfNeeded()
+                result.fold(
+                    onSuccess = { success ->
+                        if (success) {
+                            Log.d("AUTH_LOG", "Token refreshed successfully")
+                            // Reload user profile if token was refreshed
+                            loadUserProfile()
+                        } else {
+                            Log.d("AUTH_LOG", "Token refresh not needed or failed")
+                        }
+                    },
+                    onFailure = { exception ->
+                        Log.e("AUTH_LOG", "Error refreshing token: ${exception.message}", exception)
+                    }
+                )
+            } catch (e: Exception) {
+                Log.e("AUTH_LOG", "Error in refreshTokenIfNeeded: ${e.message}", e)
+            }
         }
     }
     

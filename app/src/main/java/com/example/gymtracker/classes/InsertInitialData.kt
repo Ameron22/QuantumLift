@@ -7,8 +7,13 @@ import com.example.gymtracker.data.Converter
 import com.example.gymtracker.data.WorkoutExercise
 import com.example.gymtracker.data.SessionWorkoutEntity
 import com.example.gymtracker.data.SessionEntityExercise
+import com.example.gymtracker.data.WarmUpTemplate
+import com.example.gymtracker.data.WarmUpExercise
+import com.example.gymtracker.data.DefaultWarmUpTemplates
+import com.example.gymtracker.data.WarmUpDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
 
 class InsertInitialData {
     /** comment because not needed at the moment
@@ -400,5 +405,30 @@ class InsertInitialData {
             }
         }
     }
-    **/
+    */
+    
+    suspend fun insertWarmUpTemplates(warmUpDao: WarmUpDao) = withContext(Dispatchers.IO) {
+        try {
+            // Check if warm-up templates already exist
+            val existingTemplates = warmUpDao.getAllWarmUpTemplates().first()
+            if (existingTemplates.isEmpty()) {
+                // Insert default warm-up templates
+                val defaultTemplates = DefaultWarmUpTemplates.getDefaultTemplates()
+                
+                for (template in defaultTemplates) {
+                    val templateId = warmUpDao.insertWarmUpTemplate(template)
+                    
+                    // Insert exercises for this template
+                    val exercises = DefaultWarmUpTemplates.getDefaultExercisesForTemplate(templateId.toInt())
+                    val exercisesWithCorrectTemplateId = exercises.map { exercise ->
+                        exercise.copy(templateId = templateId.toInt())
+                    }
+                    warmUpDao.insertWarmUpExercises(exercisesWithCorrectTemplateId)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            throw e
+        }
+    }
 }

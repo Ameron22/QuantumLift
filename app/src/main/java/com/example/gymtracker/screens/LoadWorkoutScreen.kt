@@ -259,11 +259,30 @@ fun LoadWorkoutScreen(
         },
         bottomBar = { BottomNavBar(navController) },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { navController.navigate(Screen.CreateExercise.route) },
-                containerColor = MaterialTheme.colorScheme.secondary
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Exercise")
+                // Warm-Up Creation Button
+                FloatingActionButton(
+                    onClick = { navController.navigate(Screen.CreateWarmUp.route) },
+                    containerColor = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Add, 
+                        contentDescription = "Create Warm-Up",
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                
+                // Existing Create Exercise Button
+                FloatingActionButton(
+                    onClick = { navController.navigate(Screen.CreateExercise.route) },
+                    containerColor = MaterialTheme.colorScheme.secondary
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Exercise")
+                }
             }
         },
         containerColor = Color.Transparent

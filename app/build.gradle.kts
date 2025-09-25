@@ -94,6 +94,9 @@ dependencies {
     
     // DataStore for secure token storage
     implementation(libs.datastore.preferences)
+    
+    // Android Security for encrypted credential storage
+    implementation(libs.androidx.security.crypto)
 
     implementation(libs.coil)
     implementation(libs.coil.compose)

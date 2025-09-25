@@ -8,6 +8,7 @@ import androidx.lifecycle.Lifecycle
 import com.example.gymtracker.data.ExerciseDao
 import com.example.gymtracker.data.RecoveryFactors
 import com.example.gymtracker.data.SessionEntityExercise
+import com.example.gymtracker.data.EntityExercise
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -447,7 +448,7 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
         return listOf(
             "Abs", "Adductors", "Biceps", "Calves", "Deltoids", 
             "Forearms", "Glutes", "Hamstrings", "Lats", "Lower Back", 
-            "Neck", "Obliques", "Pectorals", "Quadriceps", 
+            "Neck", "Obliques", "Chest", "Quadriceps", 
             "Upper Back", "Upper Traps", "Triceps"
         )
     }
@@ -473,7 +474,8 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
             "deltoid" -> "Deltoids"
             "abs" -> "Abs"
             "obliques" -> "Obliques"
-            "pectorals" -> "Pectorals"
+            "pectorals" -> "Chest"
+            "chest" -> "Chest"
             "glutes" -> "Glutes"
             "biceps" -> "Biceps"
             "triceps" -> "Triceps"
@@ -516,6 +518,12 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
         return allMuscleParts.map { musclePart ->
             musclePart to (musclePartsFrequency[musclePart] ?: 0)
         }.sortedByDescending { it.second }
+    }
+    
+    suspend fun getExerciseById(exerciseId: Long): EntityExercise? {
+        return withContext(Dispatchers.IO) {
+            dao.getExerciseById(exerciseId.toInt())
+        }
     }
 }
 

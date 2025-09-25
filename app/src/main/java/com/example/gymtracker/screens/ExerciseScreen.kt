@@ -82,6 +82,7 @@ import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.SessionEntityExercise
 import com.example.gymtracker.data.WorkoutExercise
 import com.example.gymtracker.data.ExerciseWithWorkoutData
+import com.example.gymtracker.data.WarmUpExercise
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -523,11 +524,72 @@ fun ExerciseScreen(
                 val exercisesData = dao.getExercisesWithWorkoutData(workoutId)
                 // Find the specific exercise we need
                 withContext(Dispatchers.Main) {
-                    val foundExerciseWithDetails = exercisesData.find { it.exercise.id == exerciseId }
+                    var foundExerciseWithDetails = exercisesData.find { it.exercise.id == exerciseId }
+                    
+                    // If exercise not found in workout, it might be a warm-up exercise
                     if (foundExerciseWithDetails == null) {
-                        Log.e("ExerciseScreen", "Exercise not found in workout")
-                        navController.popBackStack()
-                        return@withContext
+                        Log.d("ExerciseScreen", "Exercise not found in workout, checking if it's a warm-up exercise")
+                        try {
+                            // Load the exercise directly from database
+                            val exercise = dao.getExerciseById(exerciseId)
+                            if (exercise != null) {
+                                Log.d("ExerciseScreen", "Found exercise as standalone exercise: ${exercise.name}")
+                                
+                                // Try to load warm-up exercise configuration from the database
+                                var warmUpExerciseConfig: WarmUpExercise? = null
+                                try {
+                                    // Get the warm-up template for this workout
+                                    val warmUpDao = db.warmUpDao()
+                                    val workoutWarmUp = warmUpDao.getWorkoutWarmUp(workoutId)
+                                    if (workoutWarmUp != null) {
+                                        // Get the warm-up template with exercises
+                                        val warmUpTemplate = warmUpDao.getWarmUpTemplateWithExercises(workoutWarmUp.templateId)
+                                        if (warmUpTemplate != null) {
+                                            // Find the specific exercise in the warm-up
+                                            warmUpExerciseConfig = warmUpTemplate.exercises.find { it.exerciseId == exerciseId }
+                                            Log.d("ExerciseScreen", "Found warm-up exercise config: sets=${warmUpExerciseConfig?.sets}, reps=${warmUpExerciseConfig?.reps}, weight=${warmUpExerciseConfig?.weight}")
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("ExerciseScreen", "Error loading warm-up config: ${e.message}")
+                                }
+                                
+                                // Create a workout exercise with warm-up configuration or defaults
+                                val mockWorkoutExercise = WorkoutExercise(
+                                    id = -1, // Use negative ID to indicate it's not a real workout exercise
+                                    workoutId = workoutId,
+                                    exerciseId = exerciseId,
+                                    sets = warmUpExerciseConfig?.sets ?: 1, // Use warm-up config or default to 1
+                                    reps = if (exercise.useTime) {
+                                        warmUpExerciseConfig?.duration ?: 30 // Use warm-up duration or default to 30 seconds
+                                    } else {
+                                        warmUpExerciseConfig?.reps ?: 10 // Use warm-up reps or default to 10
+                                    },
+                                    weight = warmUpExerciseConfig?.weight ?: 0, // Use warm-up weight or default to 0
+                                    order = 0
+                                )
+                                foundExerciseWithDetails = ExerciseWithWorkoutData(
+                                    exercise = exercise,
+                                    workoutExercise = mockWorkoutExercise
+                                )
+                                
+                                // For warm-up exercises, we need to ensure they're saved to the workout session
+                                Log.d("ExerciseScreen", "Created warm-up exercise with workoutId: $workoutId, sessionId: $workoutSessionId")
+                                
+                                // Note: Warm-up exercises are NOT added to WorkoutExercise table
+                                // They are only tracked in SessionEntityExercise for completion tracking
+                                // This prevents duplication in the main exercise list
+                                Log.d("ExerciseScreen", "Warm-up exercise loaded - will track completion without adding to workout")
+                            } else {
+                                Log.e("ExerciseScreen", "Exercise not found in database")
+                                navController.popBackStack()
+                                return@withContext
+                            }
+                        } catch (e: Exception) {
+                            Log.e("ExerciseScreen", "Error loading standalone exercise: ${e.message}")
+                            navController.popBackStack()
+                            return@withContext
+                        }
                     }
                     
                     // Assign to the mutable state variable
@@ -625,6 +687,10 @@ fun ExerciseScreen(
         val exercise = exerciseWithDetails?.exercise ?: return
         val workoutExercise = exerciseWithDetails?.workoutExercise ?: return
         
+        // Log whether this is a warm-up exercise
+        val isWarmUpExercise = workoutExercise.id < 0
+        Log.d("ExerciseScreen", "Saving exercise session - Exercise: ${exercise.name}, isWarmUp: $isWarmUpExercise, workoutId: ${workoutExercise.workoutId}, sessionId: $workoutSessionId")
+        
         // Ensure completedSet reflects the actual completed sets
         completedSet = minOf(completedSet, workoutExercise.sets)
         
@@ -654,8 +720,8 @@ fun ExerciseScreen(
         try {
             withContext(Dispatchers.IO) {
                 dao.insertExerciseSession(exerciseSession)
-                Log.d("ExerciseScreen", "Exercise session saved successfully")
-
+                Log.d("ExerciseScreen", "Exercise session saved successfully - Exercise: ${exercise.name}, isWarmUp: $isWarmUpExercise, workoutId: ${workoutExercise.workoutId}, sessionId: $workoutSessionId, completedSets: $completedSet")
+                
                 // Update achievements
                 val achievementManager = AchievementManager.getInstance()
                 achievementManager.updateStrengthProgress(exercise.name, maxWeight.toFloat())
@@ -838,7 +904,7 @@ fun ExerciseScreen(
                             updateTimerService(context, remainingTime, isBreakRunning, exerciseWithDetails?.exercise?.name ?: "Exercise", exerciseId, workoutSessionId, workoutId)
                         } else {
                             // All sets completed
-                            Log.d("ExerciseScreen", "All sets completed, saving exercise session - isNavigatingBack: $isNavigatingBack")
+                            Log.d("ExerciseScreen", "All sets completed, stopping timer - isNavigatingBack: $isNavigatingBack")
                             
                             // Prevent multiple completions
                             if (isNavigatingBack) {
@@ -854,15 +920,12 @@ fun ExerciseScreen(
                             activeSetIndex = null
                             stopTimerAndCleanup(context)
                             completedSet = workoutExercise?.sets ?: 0
-                            try {
-                                Log.d("ExerciseScreen", "Launching saveExerciseSession coroutine")
-                                coroutineScope.launch {
-                                    saveExerciseSession()
-                                }
-                            } catch (e: Exception) {
-                                Log.e("ExerciseScreen", "Error saving exercise: ${e.message}")
-                                // Don't navigate back here since saveExerciseSession() handles navigation
-                            }
+                            
+                            // Don't automatically save and navigate - let user choose
+                            Log.d("ExerciseScreen", "All sets completed - timer stopped, waiting for user action")
+                            
+                            // Log completion status for debugging
+                            Log.d("ExerciseScreen", "Completion status - completedSet: $completedSet, totalSets: ${workoutExercise?.sets}, user must manually save")
                         }
                     } else {
                         // Exercise time finished, start break
@@ -877,7 +940,7 @@ fun ExerciseScreen(
                         val workoutExercise = exerciseWithDetails?.workoutExercise
                         if (activeSetIndex!! >= (workoutExercise?.sets ?: 0)) {
                             // All sets completed
-                            Log.d("ExerciseScreen", "All sets completed (exercise time), saving exercise session - isNavigatingBack: $isNavigatingBack")
+                            Log.d("ExerciseScreen", "All sets completed (exercise time), stopping timer - isNavigatingBack: $isNavigatingBack")
                             
                             // Prevent multiple completions
                             if (isNavigatingBack) {
@@ -893,15 +956,12 @@ fun ExerciseScreen(
                             activeSetIndex = null
                             stopTimerAndCleanup(context)
                             completedSet = workoutExercise?.sets ?: 0
-                            try {
-                                Log.d("ExerciseScreen", "Launching saveExerciseSession coroutine (exercise time)")
-                                coroutineScope.launch {
-                                    saveExerciseSession()
-                                }
-                            } catch (e: Exception) {
-                                Log.e("ExerciseScreen", "Error saving exercise: ${e.message}")
-                                // Don't navigate back here since saveExerciseSession() handles navigation
-                            }
+                            
+                            // Don't automatically save and navigate - let user choose
+                            Log.d("ExerciseScreen", "All sets completed - timer stopped, waiting for user action")
+                            
+                            // Log completion status for debugging
+                            Log.d("ExerciseScreen", "Completion status - completedSet: $completedSet, totalSets: ${workoutExercise?.sets}, user must manually save")
                         } else {
                             // Start break time
                             isBreakRunning = true
@@ -1165,11 +1225,14 @@ fun ExerciseScreen(
                         // Update service with new exercise time
                         updateTimerService(context, remainingTime, isBreakRunning, exerciseWithDetails?.exercise?.name ?: "Exercise", exerciseId, workoutSessionId, workoutId)
                     } else {
-                        Log.d("ExerciseScreen", "All sets completed (skip break), saving exercise session")
+                        Log.d("ExerciseScreen", "All sets completed (skip break), stopping timer")
                         stopTimer()
-                        coroutineScope.launch {
-                            saveExerciseSession()
-                        }
+                        
+                        // Don't automatically save and navigate - let user choose
+                        Log.d("ExerciseScreen", "All sets completed by skipping break - timer stopped, waiting for user action")
+                        
+                        // Log completion status for debugging
+                        Log.d("ExerciseScreen", "Completion status (skip) - completedSet: $completedSet, totalSets: ${workoutExercise?.sets}, user must manually save")
                     }
                 }
             } else {
@@ -1184,12 +1247,15 @@ fun ExerciseScreen(
                 
                 // Check if this was the last set
                 if (activeSetIndex!! >= (workoutExercise?.sets ?: 0)) {
-                    Log.d("ExerciseScreen", "Last set completed (skip exercise), saving exercise session")
+                    Log.d("ExerciseScreen", "Last set completed (skip exercise), stopping timer")
                     completedSet = workoutExercise?.sets ?: 0  // Mark all sets as completed
                     stopTimer()
-                    coroutineScope.launch {
-                        saveExerciseSession()
-                    }
+                    
+                    // Don't automatically save and navigate - let user choose
+                    Log.d("ExerciseScreen", "Last set completed by skipping - timer stopped, waiting for user action")
+                    
+                    // Log completion status for debugging
+                    Log.d("ExerciseScreen", "Completion status (skip) - completedSet: $completedSet, totalSets: ${workoutExercise?.sets}, user must manually save")
                 } else {
                     // Start break for next set
                     isBreakRunning = true
@@ -1829,7 +1895,7 @@ fun ExerciseScreen(
                                         }
                                     }
                                     // Show delete button only for the last set, if not completed, and not the active set during timer
-                                    set == (exerciseWithDetails?.workoutExercise?.sets ?: ex.workoutExercise.sets) && set > completedSet && !(isTimerRunning && activeSetIndex == set) -> {
+                                    set == (exerciseWithDetails?.workoutExercise?.sets ?: ex.workoutExercise.sets) && set > completedSet && !(isTimerRunning && activeSetIndex == set) && completedSet < (exerciseWithDetails?.workoutExercise?.sets ?: ex.workoutExercise.sets) -> {
                                         IconButton(
                                             onClick = {
                                                 setWeights.remove(set)
@@ -1867,50 +1933,89 @@ fun ExerciseScreen(
                 }
 
                     // Add Set Button
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.Start
-                    ) {
-                        IconButton(
-                            onClick = {
-                                val currentSets = exerciseWithDetails?.workoutExercise?.sets ?: ex.workoutExercise.sets
-                                val newSet = currentSets + 1
-                                setWeights[newSet] = ex.workoutExercise.weight
-                                setReps[newSet] = ex.workoutExercise.reps
-                                // Update the exerciseWithDetails with the new workoutExercise
-                                exerciseWithDetails = exerciseWithDetails?.copy(
-                                    workoutExercise = ex.workoutExercise.copy(sets = newSet)
-                                )
-                            },
+                    if (completedSet < currentSets) {
+                        Row(
                             modifier = Modifier
-                                .size(48.dp)
-                                .padding(start = 8.dp)
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.Start
                         ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.plus_icon),
-                                contentDescription = "Add Set",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
+                            IconButton(
+                                onClick = {
+                                    val currentSets = exerciseWithDetails?.workoutExercise?.sets ?: ex.workoutExercise.sets
+                                    val newSet = currentSets + 1
+                                    setWeights[newSet] = ex.workoutExercise.weight
+                                    setReps[newSet] = ex.workoutExercise.reps
+                                    // Update the exerciseWithDetails with the new workoutExercise
+                                    exerciseWithDetails = exerciseWithDetails?.copy(
+                                        workoutExercise = ex.workoutExercise.copy(sets = newSet)
+                                    )
+                                },
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .padding(start = 4.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.plus_icon),
+                                    contentDescription = "Add Set",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(30.dp)
+                                )
+                            }
                         }
+                    } else {
+                        Log.d("ExerciseScreen", "Hiding add set button - all sets completed: completedSet=$completedSet, currentSets=$currentSets")
                     }
-
+                    
                     // Add time selectors row
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.Start
-                    ) {
-                        // Set time selector - only show for exercises with reps
-                        if (!ex.exercise.useTime) {
+                    if (completedSet < currentSets) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.Start
+                        ) {
+                            // Set time selector - only show for exercises with reps
+                            if (!ex.exercise.useTime) {
+                                Card(
+                                    modifier = Modifier
+                                        .width(120.dp)
+                                        .padding(end = 8.dp)
+                                        .clickable { showSetTimePicker = true },
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .padding(8.dp)
+                                            .fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Set",
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                        Text(
+                                            text = String.format(
+                                                "%02d:%02d",
+                                                setTimeReps / 60,
+                                                setTimeReps % 60
+                                            ),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Break time selector
                             Card(
                                 modifier = Modifier
                                     .width(120.dp)
-                                    .padding(end = 8.dp)
-                                    .clickable { showSetTimePicker = true },
+                                    .clickable { showBreakTimePicker = true },
                                 shape = RoundedCornerShape(12.dp),
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -1924,14 +2029,14 @@ fun ExerciseScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "Set",
+                                        text = "Break",
                                         style = MaterialTheme.typography.bodyMedium
                                     )
                                     Text(
                                         text = String.format(
                                             "%02d:%02d",
-                                            setTimeReps / 60,
-                                            setTimeReps % 60
+                                            breakTime / 60,
+                                            breakTime % 60
                                         ),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.primary
@@ -1939,41 +2044,11 @@ fun ExerciseScreen(
                                 }
                             }
                         }
-
-                        // Break time selector
-                        Card(
-                            modifier = Modifier
-                                .width(120.dp)
-                                .clickable { showBreakTimePicker = true },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .padding(8.dp)
-                                    .fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Break",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Text(
-                                    text = String.format(
-                                        "%02d:%02d",
-                                        breakTime / 60,
-                                        breakTime % 60
-                                    ),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
+                    } else {
+                        Log.d("ExerciseScreen", "Hiding time pickers - all sets completed: completedSet=$completedSet, currentSets=$currentSets")
                     }
-
+                    // Add extra padding under the + sign
+                    Spacer(modifier = Modifier.height(70.dp))
 
                 }
             }
