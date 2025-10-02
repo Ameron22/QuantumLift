@@ -54,6 +54,21 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.content.Context
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Environment
+import androidx.core.content.ContextCompat
+import androidx.core.app.ActivityCompat
+import java.io.File
+import java.io.FileWriter
+import java.io.IOException
+import android.content.Intent
+import androidx.core.content.FileProvider
+import java.net.URI
+import com.example.gymtracker.data.AppDatabase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -100,6 +115,12 @@ fun SettingsScreen(
     // State for back confirmation dialog
     var showBackConfirmationDialog by remember { mutableStateOf(false) }
     var pendingNavigationRoute by remember { mutableStateOf<String?>(null) }
+    
+    // State for CSV export
+    var isExportingData by remember { mutableStateOf(false) }
+    var exportMessage by remember { mutableStateOf<String?>(null) }
+    var showExportMessage by remember { mutableStateOf(false) }
+    var lastExportedFile by remember { mutableStateOf<File?>(null) }
     
     // State for collapsible timer settings
     var showTimerSettings by remember { mutableStateOf(true) }
@@ -239,6 +260,121 @@ fun SettingsScreen(
                 launchSingleTop = true
                 restoreState = true
             }
+        }
+    }
+    
+    // Function to export soreness data to CSV
+    fun exportSorenessDataToCSV() {
+        scope.launch {
+            isExportingData = true
+            exportMessage = null
+            
+            try {
+                val database = AppDatabase.getDatabase(context)
+                val sorenessDao = database.sorenessDao()
+                
+                // Get all soreness assessments
+                val assessments = sorenessDao.getAllAssessments().first()
+                
+                if (assessments.isEmpty()) {
+                    exportMessage = "No soreness data found to export"
+                    showExportMessage = true
+                    isExportingData = false
+                    return@launch
+                }
+                
+                // Create CSV file in Downloads folder for easy access
+                val fileName = "soreness_data_${System.currentTimeMillis()}.csv"
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                val file = File(downloadsDir, fileName)
+                
+                withContext(Dispatchers.IO) {
+                    FileWriter(file).use { writer ->
+                        // Write CSV header
+                        writer.appendLine("assessmentId,sessionId,exerciseId,muscleGroups,muscleParts,soreness24hr,soreness48hr,overallSoreness,assessmentDay,timestamp,notes,wasActive,sleepQuality,stressLevel")
+                        
+                        // Write data rows
+                        assessments.forEach { assessment ->
+                            writer.appendLine(
+                                "${assessment.assessmentId}," +
+                                "${assessment.sessionId}," +
+                                "${assessment.exerciseId}," +
+                                "\"${assessment.muscleGroups.joinToString(",")}\"," +
+                                "\"${assessment.muscleParts.joinToString(",")}\"," +
+                                "\"${assessment.soreness24hr.entries.joinToString(",") { "${it.key}:${it.value}" }}\"," +
+                                "${assessment.soreness48hr?.entries?.joinToString(",") { "${it.key}:${it.value}" } ?: ""}," +
+                                "${assessment.overallSoreness}," +
+                                "${assessment.assessmentDay}," +
+                                "${assessment.timestamp}," +
+                                "\"${assessment.notes ?: ""}\"," +
+                                "${assessment.wasActive}," +
+                                "${assessment.sleepQuality ?: ""}," +
+                                "${assessment.stressLevel ?: ""}"
+                            )
+                        }
+                    }
+                }
+                
+                exportMessage = "Soreness data exported successfully!\nFile saved to: ${file.absolutePath}\nRecords exported: ${assessments.size}\n\nWould you like to share the file?"
+                showExportMessage = true
+                
+                // Store file reference for sharing
+                lastExportedFile = file
+                
+            } catch (e: Exception) {
+                Log.e("SettingsScreen", "Error exporting soreness data", e)
+                exportMessage = "Error exporting data: ${e.message}"
+                showExportMessage = true
+            } finally {
+                isExportingData = false
+            }
+        }
+    }
+    
+    // Function to share the exported CSV file
+    fun shareCSVFile(file: File) {
+        try {
+            Log.d("SettingsScreen", "Attempting to share file: ${file.absolutePath}")
+            Log.d("SettingsScreen", "File exists: ${file.exists()}")
+            Log.d("SettingsScreen", "File can read: ${file.canRead()}")
+            
+            if (!file.exists()) {
+                exportMessage = "Error: File not found at ${file.absolutePath}"
+                showExportMessage = true
+                return
+            }
+            
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+            
+            Log.d("SettingsScreen", "FileProvider URI: $uri")
+            
+            val shareIntent = Intent().apply {
+                action = Intent.ACTION_SEND
+                type = "text/csv"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, "Soreness Data Export")
+                putExtra(Intent.EXTRA_TEXT, "Soreness assessment data exported from GymTracker app")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            
+            val chooser = Intent.createChooser(shareIntent, "Share CSV File")
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(chooser)
+            
+            Log.d("SettingsScreen", "Share intent launched successfully")
+            
+        } catch (e: IllegalArgumentException) {
+            Log.e("SettingsScreen", "FileProvider error - file path not configured", e)
+            exportMessage = "Error sharing file: File path not accessible. Please check file_paths.xml configuration."
+            showExportMessage = true
+        } catch (e: Exception) {
+            Log.e("SettingsScreen", "Error sharing file", e)
+            exportMessage = "Error sharing file: ${e.message}"
+            showExportMessage = true
         }
     }
 
@@ -987,6 +1123,58 @@ fun SettingsScreen(
         
         Spacer(modifier = Modifier.height(16.dp))
         
+        // Export Soreness Data Button
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "ML Training Data Export",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Export all soreness assessment data to CSV for machine learning training",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                )
+                
+                Button(
+                    onClick = { exportSorenessDataToCSV() },
+                    enabled = !isExportingData,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    if (isExportingData) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Exporting...")
+                    } else {
+                        Text("Export Soreness Data to CSV")
+                    }
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
         // Work Time Picker Dialog
         if (showWorkTimePicker) {
             AlertDialog(
@@ -1189,6 +1377,52 @@ fun SettingsScreen(
                     }
                 ) {
                     Text("Don't Save")
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+    
+    // Export message dialog
+    if (showExportMessage && exportMessage != null) {
+        AlertDialog(
+            onDismissRequest = { 
+                showExportMessage = false
+                exportMessage = null
+                lastExportedFile = null
+            },
+            title = { Text("Export Result") },
+            text = { 
+                Text(
+                    text = exportMessage!!,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (lastExportedFile != null) {
+                        TextButton(
+                            onClick = { 
+                                lastExportedFile?.let { shareCSVFile(it) }
+                                showExportMessage = false
+                                exportMessage = null
+                                lastExportedFile = null
+                            }
+                        ) {
+                            Text("Share")
+                        }
+                    }
+                    TextButton(
+                        onClick = { 
+                            showExportMessage = false
+                            exportMessage = null
+                            lastExportedFile = null
+                        }
+                    ) {
+                        Text("OK")
+                    }
                 }
             },
             containerColor = MaterialTheme.colorScheme.surface

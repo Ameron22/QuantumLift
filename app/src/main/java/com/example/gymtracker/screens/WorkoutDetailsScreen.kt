@@ -49,6 +49,7 @@ import java.util.concurrent.TimeUnit
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.gymtracker.viewmodels.WorkoutDetailsViewModel
 import com.example.gymtracker.viewmodels.GeneralViewModel
+import com.example.gymtracker.services.SorenessAssessmentService
 import com.example.gymtracker.viewmodels.CurrentWorkoutState
 import com.example.gymtracker.viewmodels.XPBuffer
 import com.example.gymtracker.data.AchievementManager
@@ -106,6 +107,11 @@ import com.example.gymtracker.data.SessionEntityExercise
 import com.example.gymtracker.data.XPSystem
 import kotlinx.coroutines.flow.first
 import androidx.compose.ui.platform.LocalConfiguration
+import com.example.gymtracker.components.SwipeableExerciseCard
+import com.example.gymtracker.components.ExerciseAlternativeDialog
+import com.example.gymtracker.data.ExerciseAlternative
+import com.example.gymtracker.data.ExerciseAlternativeWithDetails
+import kotlinx.coroutines.launch
 
 // Test XP amount - change this value to test different XP amounts
 private const val TEST_XP_AMOUNT = 666
@@ -189,6 +195,12 @@ fun WorkoutDetailsScreen(
     // XP notification state
     var showXPNotification by remember { mutableStateOf(false) }
     var xpEarned by remember { mutableIntStateOf(0) }
+    
+    // Exercise alternatives state
+    var showAlternativesDialog by remember { mutableStateOf(false) }
+    var selectedWorkoutExercise by remember { mutableStateOf<WorkoutExerciseWithDetails?>(null) }
+    var alternatives by remember { mutableStateOf<List<ExerciseAlternative>>(emptyList()) }
+    var similarExercises by remember { mutableStateOf<List<EntityExercise>>(emptyList()) }
     
     // Warm-up state
     var showWarmUpDialog by remember { mutableStateOf(false) }
@@ -1038,6 +1050,93 @@ fun WorkoutDetailsScreen(
             }
     }
 
+    // Function to handle left swipe for exercise alternatives
+    fun handleExerciseSwipe(exerciseWithDetails: WorkoutExerciseWithDetails) {
+        selectedWorkoutExercise = exerciseWithDetails
+        coroutineScope.launch {
+            // Load existing alternatives
+            alternatives = dao.getExerciseAlternatives(exerciseWithDetails.workoutExercise.id)
+            
+            // Load similar exercises for suggestions
+            similarExercises = dao.getSimilarExercises(
+                exerciseWithDetails.entityExercise.muscle,
+                exerciseWithDetails.entityExercise.equipment,
+                exerciseWithDetails.entityExercise.id
+            )
+            
+            showAlternativesDialog = true
+        }
+    }
+    
+    // Function to add an alternative exercise
+    fun addAlternativeExercise(alternativeExercise: EntityExercise) {
+        selectedWorkoutExercise?.let { workoutExercise ->
+            coroutineScope.launch {
+                val newAlternative = ExerciseAlternative(
+                    originalExerciseId = workoutExercise.entityExercise.id,
+                    alternativeExerciseId = alternativeExercise.id,
+                    workoutExerciseId = workoutExercise.workoutExercise.id,
+                    order = alternatives.size,
+                    isActive = false
+                )
+                
+                val alternativeId = dao.insertExerciseAlternative(newAlternative)
+                
+                // Update the hasAlternatives flag
+                dao.updateWorkoutExerciseHasAlternatives(workoutExercise.workoutExercise.id, true)
+                
+                // Refresh alternatives list
+                alternatives = dao.getExerciseAlternatives(workoutExercise.workoutExercise.id)
+            }
+        }
+    }
+    
+    // Function to activate an alternative (replace current exercise)
+    fun activateAlternative(alternative: ExerciseAlternative) {
+        selectedWorkoutExercise?.let { workoutExercise ->
+            coroutineScope.launch {
+                // Deactivate all alternatives for this workout exercise
+                dao.deactivateAllAlternatives(workoutExercise.workoutExercise.id)
+                
+                // Activate the selected alternative
+                dao.activateAlternative(alternative.id)
+                
+                // Update the workout exercise to use the alternative exercise
+                dao.updateWorkoutExerciseId(workoutExercise.workoutExercise.id, alternative.alternativeExerciseId)
+                
+                // Refresh the exercise list
+                val updatedWorkoutExercises = dao.getWorkoutExercisesForWorkout(workoutId)
+                val updatedExercises = updatedWorkoutExercises.map { workoutExercise ->
+                    val exercise = dao.getExerciseById(workoutExercise.exerciseId)
+                    WorkoutExerciseWithDetails(workoutExercise, exercise!!)
+                }
+                reorderedExercises = updatedExercises
+                viewModel.updateExercisesOrder(updatedExercises)
+                
+                // Close the dialog
+                showAlternativesDialog = false
+                selectedWorkoutExercise = null
+            }
+        }
+    }
+    
+    // Function to remove an alternative
+    fun removeAlternative(alternative: ExerciseAlternative) {
+        coroutineScope.launch {
+            dao.deleteExerciseAlternative(alternative)
+            
+            // Refresh alternatives list
+            selectedWorkoutExercise?.let { workoutExercise ->
+                alternatives = dao.getExerciseAlternatives(workoutExercise.workoutExercise.id)
+                
+                // If no alternatives left, update the flag
+                if (alternatives.isEmpty()) {
+                    dao.updateWorkoutExerciseHasAlternatives(workoutExercise.workoutExercise.id, false)
+                }
+            }
+        }
+    }
+
     // Function to check if exercise is completed and show dialog
     fun checkCompletedExerciseAndShowDialog(exerciseWithDetails: WorkoutExerciseWithDetails) {
         val isActiveWorkout = currentWorkout?.workoutId == workoutId && currentWorkout?.isActive == true
@@ -1476,6 +1575,16 @@ fun WorkoutDetailsScreen(
                         }
                         // Don't fail the workout completion if sharing fails
                     }
+                    
+                    // Handle soreness assessment scheduling (TESTING MODE: 1-2 minute delays)
+                    try {
+                        val sorenessService = SorenessAssessmentService(context)
+                        sorenessService.handleWorkoutCompletion(sessionWorkout.sessionId, exercisesList)
+                        Log.d("WorkoutDetailsScreen", "Scheduled soreness assessment for session ${sessionWorkout.sessionId} (TESTING: 1-2 min delays)")
+                    } catch (e: Exception) {
+                        Log.e("WorkoutDetailsScreen", "Error scheduling soreness assessment: ${e.message}")
+                        // Don't fail workout completion if soreness scheduling fails
+                    }
                 }
 
                 // Switch to main thread for UI updates
@@ -1666,9 +1775,10 @@ fun WorkoutDetailsScreen(
         }
     }
 
-    // Function to display exercise details
+
+    // Function to display exercise card content
     @Composable
-    fun ExerciseItem(
+    fun ExerciseCardContent(
         exercise: EntityExercise,
         workoutExercise: WorkoutExercise,
         index: Int,
@@ -1711,7 +1821,6 @@ fun WorkoutDetailsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(136.dp)
-                .padding(horizontal = 16.dp, vertical = 2.dp)
                 .scale(scale)
                 .zIndex(if (isBeingDragged) 1000f else 0f)
                 .background(
@@ -1987,8 +2096,6 @@ fun WorkoutDetailsScreen(
                         .padding(end = 8.dp)
                         .size(24.dp)
                 )
-
-
 
                 // Completion indicator moved to bottom right
                 // Only show completed exercises when we're viewing the active workout
@@ -2561,55 +2668,68 @@ fun WorkoutDetailsScreen(
                 
                 // Exercise items
                 itemsIndexed(reorderedExercises) { index, exerciseWithDetails ->
-                    ExerciseItem(
+                    SwipeableExerciseCard(
                         exercise = exerciseWithDetails.entityExercise,
                         workoutExercise = exerciseWithDetails.workoutExercise,
-                        index = index,
-                        context = context,
-                        currentWorkout = currentWorkout,
-                        swapThreshold = swapThreshold,
-                        cardHeightPx = cardHeightPx,
-                        exerciseListState = exerciseListState,
-                        onDelete = {
-                            coroutineScope.launch {
-                                // Remove the exercise from the workout
-                                dao.deleteWorkoutExercise(exerciseWithDetails.workoutExercise)
-                                // Update reorderedExercises by removing the deleted item
-                                val updatedReorderedExercises = reorderedExercises.filter {
-                                    it.workoutExercise.id != exerciseWithDetails.workoutExercise.id
-                                }
-                                reorderedExercises = updatedReorderedExercises
-                                // Update ViewModel efficiently
-                                viewModel.updateExercisesOrder(updatedReorderedExercises)
-                            }
+                        hasAlternatives = exerciseWithDetails.workoutExercise.hasAlternatives,
+                        onSwipeLeft = {
+                            handleExerciseSwipe(exerciseWithDetails)
                         },
-                        onDragStart = { _, _ ->
-                            // Drag started
-                            dragStartY = 0f
-                            hasStartedDragging = false
-                            isWaitingForContinuation = false // Cancel any ongoing countdown
-                            deselectionTimeLeft = 0f
-                        },
-                        onDragEnd = {
-                            // Reset only drag-related state
-                            isDragging = false
-                            draggedItem = null
-                            dragOffset = Offset.Zero
-                            hasStartedDragging = false
-                            dragDirection = 0
-
-                            Log.d(
-                                "DRAG_DEBUG",
-                                "Drag gesture ended - movement monitoring will handle countdown"
-                            )
-                        },
-                        onDragMove = { offset ->
-                            // Record movement activity
-                            recordMovement()
-
-                            handleDragMove(offset, swapThreshold, cardHeightPx, exerciseListState)
+                        onSwipeRight = {
+                            // Right swipe action - could be used for other features
                         }
-                    )
+                    ) {
+                        // Content - this is where the exercise card content goes
+                        ExerciseCardContent(
+                            exercise = exerciseWithDetails.entityExercise,
+                            workoutExercise = exerciseWithDetails.workoutExercise,
+                            index = index,
+                            context = context,
+                            currentWorkout = currentWorkout,
+                            swapThreshold = swapThreshold,
+                            cardHeightPx = cardHeightPx,
+                            exerciseListState = exerciseListState,
+                            onDelete = {
+                                coroutineScope.launch {
+                                    // Remove the exercise from the workout
+                                    dao.deleteWorkoutExercise(exerciseWithDetails.workoutExercise)
+                                    // Update reorderedExercises by removing the deleted item
+                                    val updatedReorderedExercises = reorderedExercises.filter {
+                                        it.workoutExercise.id != exerciseWithDetails.workoutExercise.id
+                                    }
+                                    reorderedExercises = updatedReorderedExercises
+                                    // Update ViewModel efficiently
+                                    viewModel.updateExercisesOrder(updatedReorderedExercises)
+                                }
+                            },
+                            onDragStart = { _, _ ->
+                                // Drag started
+                                dragStartY = 0f
+                                hasStartedDragging = false
+                                isWaitingForContinuation = false // Cancel any ongoing countdown
+                                deselectionTimeLeft = 0f
+                            },
+                            onDragEnd = {
+                                // Reset only drag-related state
+                                isDragging = false
+                                draggedItem = null
+                                dragOffset = Offset.Zero
+                                hasStartedDragging = false
+                                dragDirection = 0
+
+                                Log.d(
+                                    "DRAG_DEBUG",
+                                    "Drag gesture ended - movement monitoring will handle countdown"
+                                )
+                            },
+                            onDragMove = { offset ->
+                                // Record movement activity
+                                recordMovement()
+
+                                handleDragMove(offset, swapThreshold, cardHeightPx, exerciseListState)
+                            }
+                        )
+                    }
                 }
                 
                 // Add Exercise Button
@@ -3707,6 +3827,44 @@ fun WorkoutDetailsScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+
+    // Exercise Alternatives Dialog
+    if (showAlternativesDialog && selectedWorkoutExercise != null) {
+        var alternativesWithDetails by remember { mutableStateOf<List<ExerciseAlternativeWithDetails>>(emptyList()) }
+        
+        // Load alternatives with details
+        LaunchedEffect(selectedWorkoutExercise) {
+            alternativesWithDetails = dao.getExerciseAlternativesWithDetails(selectedWorkoutExercise!!.workoutExercise.id)
+        }
+        
+        ExerciseAlternativeDialog(
+            currentExercise = selectedWorkoutExercise!!.entityExercise,
+            workoutExerciseId = selectedWorkoutExercise!!.workoutExercise.id,
+            alternatives = alternativesWithDetails,
+            onDismiss = {
+                showAlternativesDialog = false
+                selectedWorkoutExercise = null
+                alternatives = emptyList()
+                similarExercises = emptyList()
+            },
+            onSelectAlternative = { alternativeExercise ->
+                // This is called when user selects an alternative
+                val alternative = alternatives.find { it.alternativeExerciseId == alternativeExercise.id }
+                if (alternative != null) {
+                    activateAlternative(alternative)
+                }
+            },
+            onAddAlternative = {
+                // This is called when user wants to add a new alternative
+                // We'll show a similar exercises list for them to choose from
+                // For now, just add the first similar exercise as an example
+                if (similarExercises.isNotEmpty()) {
+                    addAlternativeExercise(similarExercises.first())
+                }
+            },
+            dao = dao
         )
     }
 

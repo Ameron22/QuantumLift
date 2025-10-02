@@ -195,6 +195,10 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                 importer.importExercises()
                 Log.d("MainActivity", "Exercise import completed")
                 checkAchievements(dao)
+                
+                // Test migration 47→48
+                com.example.gymtracker.utils.MigrationTestRunner.testMigration47To48(applicationContext)
+                
             } catch (e: Exception) {
                 Log.e("MainActivity", "Error during initialization", e)
             }

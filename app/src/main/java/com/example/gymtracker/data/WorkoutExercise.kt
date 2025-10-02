@@ -12,5 +12,6 @@ data class WorkoutExercise(
     val sets: Int,
     val reps: Int,
     val weight: Int,
-    val order: Int = 0    // Position in workout
+    val order: Int = 0,    // Position in workout
+    val hasAlternatives: Boolean = false  // Flag to indicate if alternatives exist
 ) 

@@ -10,6 +10,12 @@ data class ExerciseWithWorkoutData(
     val workoutExercise: WorkoutExercise
 )
 
+// Data class to combine exercise alternative with exercise details
+data class ExerciseAlternativeWithDetails(
+    val alternative: ExerciseAlternative,
+    val exercise: EntityExercise
+)
+
 @Dao
 interface ExerciseDao {
     // Add this method to check if the database is empty
@@ -36,6 +42,9 @@ interface ExerciseDao {
 
     @Delete
     suspend fun deleteWorkout(workout: EntityWorkout)
+
+    @Delete
+    suspend fun deleteExercise(exercise: EntityExercise)
 
     @Query("SELECT * FROM exercises WHERE id = :exerciseId")
     suspend fun getExerciseById(exerciseId: Int): EntityExercise?
@@ -155,4 +164,49 @@ interface ExerciseDao {
     // Get the latest exercise session with soreness factors for a specific exercise
     @Query("SELECT * FROM exercise_sessions WHERE exerciseId = :exerciseId AND eccentricFactor != 1.0 AND noveltyFactor != 5 AND adaptationLevel != 5 AND rpe != 5 AND subjectiveSoreness != 5 ORDER BY exerciseSessionId DESC LIMIT 1")
     suspend fun getLatestExerciseSessionWithSorenessFactors(exerciseId: Long): SessionEntityExercise?
+    
+    // --- Exercise Alternative methods ---
+    @Insert
+    suspend fun insertExerciseAlternative(alternative: ExerciseAlternative): Long
+
+    @Update
+    suspend fun updateExerciseAlternative(alternative: ExerciseAlternative)
+
+    @Delete
+    suspend fun deleteExerciseAlternative(alternative: ExerciseAlternative)
+
+    @Query("SELECT * FROM exercise_alternatives WHERE workoutExerciseId = :workoutExerciseId ORDER BY `order` ASC")
+    suspend fun getExerciseAlternatives(workoutExerciseId: Int): List<ExerciseAlternative>
+
+    @Query("UPDATE exercise_alternatives SET isActive = 0 WHERE workoutExerciseId = :workoutExerciseId")
+    suspend fun deactivateAllAlternatives(workoutExerciseId: Int)
+
+    @Query("UPDATE exercise_alternatives SET isActive = 1 WHERE id = :alternativeId")
+    suspend fun activateAlternative(alternativeId: Int)
+
+    @Query("UPDATE workout_exercises SET exerciseId = :newExerciseId WHERE id = :workoutExerciseId")
+    suspend fun updateWorkoutExerciseId(workoutExerciseId: Int, newExerciseId: Int)
+
+    @Query("UPDATE workout_exercises SET hasAlternatives = :hasAlternatives WHERE id = :workoutExerciseId")
+    suspend fun updateWorkoutExerciseHasAlternatives(workoutExerciseId: Int, hasAlternatives: Boolean)
+
+    // Get similar exercises based on muscle group and equipment
+    @Query("SELECT * FROM exercises WHERE muscle = :muscleGroup AND equipment = :equipment AND id != :excludeId LIMIT :limit")
+    suspend fun getSimilarExercises(muscleGroup: String, equipment: String, excludeId: Int, limit: Int = 5): List<EntityExercise>
+
+    // Get exercises by muscle group only (for broader alternatives)
+    @Query("SELECT * FROM exercises WHERE muscle = :muscleGroup AND id != :excludeId LIMIT :limit")
+    suspend fun getExercisesByMuscleGroup(muscleGroup: String, excludeId: Int, limit: Int = 10): List<EntityExercise>
+
+    // Get exercise alternatives with their exercise details
+    @Transaction
+    suspend fun getExerciseAlternativesWithDetails(workoutExerciseId: Int): List<ExerciseAlternativeWithDetails> {
+        val alternatives = getExerciseAlternatives(workoutExerciseId)
+        val exercises = getAllExercises()
+        
+        return alternatives.mapNotNull { alternative ->
+            val exercise = exercises.find { it.id == alternative.alternativeExerciseId }
+            exercise?.let { ExerciseAlternativeWithDetails(alternative, it) }
+        }
+    }
 }
