@@ -64,7 +64,7 @@ interface ExerciseDao {
 
     @Insert
     suspend fun insertExerciseSession(entity: SessionEntityExercise)
-    
+
     @Update
     suspend fun updateExerciseSession(entity: SessionEntityExercise)
 
@@ -80,11 +80,13 @@ interface ExerciseDao {
     @Query("UPDATE workout_sessions Set endTime = :endTime WHERE sessionId = :sessionId")
     suspend fun updateWorkoutSessionEndTime(sessionId: Long, endTime: Long)
 
-    @Query("SELECT ws.sessionId, ws.workoutId, ws.startTime, ws.endTime, ws.workoutName, es.muscleGroup, es.sets, es.repsOrTime, es.weight " +
-            "FROM workout_sessions ws INNER JOIN exercise_sessions es " +
-            "ON ws.sessionId = es.sessionId " +
-            "GROUP BY ws.sessionId, es.muscleGroup " +
-            "ORDER BY ws.startTime DESC")
+    @Query(
+        "SELECT ws.sessionId, ws.workoutId, ws.startTime, ws.endTime, ws.workoutName, es.muscleGroup, es.sets, es.repsOrTime, es.weight " +
+                "FROM workout_sessions ws INNER JOIN exercise_sessions es " +
+                "ON ws.sessionId = es.sessionId " +
+                "GROUP BY ws.sessionId, es.muscleGroup " +
+                "ORDER BY ws.startTime DESC"
+    )
     fun getAllWorkoutSessionsWithMuscleStress(): Flow<List<SessionWorkoutWithMusclesStress>>
 
     @Query("SELECT * FROM workout_sessions WHERE workoutId = :workoutId ORDER BY startTime DESC")
@@ -141,7 +143,7 @@ interface ExerciseDao {
     suspend fun getExercisesWithWorkoutData(workoutId: Int): List<ExerciseWithWorkoutData> {
         val workoutExercises = getWorkoutExercisesForWorkout(workoutId)
         val exercises = getAllExercises()
-        
+
         return workoutExercises.mapNotNull { we ->
             val exercise = exercises.find { it.id == we.exerciseId }
             exercise?.let { ExerciseWithWorkoutData(it, we) }
@@ -150,21 +152,21 @@ interface ExerciseDao {
 
     @Query("DELETE FROM workout_sessions WHERE sessionId = :sessionId")
     suspend fun deleteWorkoutSessionById(sessionId: Long)
-    
+
     @Query("DELETE FROM exercise_sessions WHERE sessionId = :sessionId")
     suspend fun deleteExerciseSessionsBySessionId(sessionId: Long)
-    
+
     @Query("SELECT * FROM exercise_sessions WHERE sessionId = :sessionId")
     suspend fun getExerciseSessionsForSession(sessionId: Long): List<SessionEntityExercise>
-    
+
     // Get the latest exercise session for a specific exercise
     @Query("SELECT * FROM exercise_sessions WHERE exerciseId = :exerciseId ORDER BY exerciseSessionId DESC LIMIT 1")
     suspend fun getLatestExerciseSession(exerciseId: Long): SessionEntityExercise?
-    
+
     // Get the latest exercise session with soreness factors for a specific exercise
     @Query("SELECT * FROM exercise_sessions WHERE exerciseId = :exerciseId AND eccentricFactor != 1.0 AND noveltyFactor != 5 AND adaptationLevel != 5 AND rpe != 5 AND subjectiveSoreness != 5 ORDER BY exerciseSessionId DESC LIMIT 1")
     suspend fun getLatestExerciseSessionWithSorenessFactors(exerciseId: Long): SessionEntityExercise?
-    
+
     // --- Exercise Alternative methods ---
     @Insert
     suspend fun insertExerciseAlternative(alternative: ExerciseAlternative): Long
@@ -188,22 +190,34 @@ interface ExerciseDao {
     suspend fun updateWorkoutExerciseId(workoutExerciseId: Int, newExerciseId: Int)
 
     @Query("UPDATE workout_exercises SET hasAlternatives = :hasAlternatives WHERE id = :workoutExerciseId")
-    suspend fun updateWorkoutExerciseHasAlternatives(workoutExerciseId: Int, hasAlternatives: Boolean)
+    suspend fun updateWorkoutExerciseHasAlternatives(
+        workoutExerciseId: Int,
+        hasAlternatives: Boolean
+    )
 
     // Get similar exercises based on muscle group and equipment
     @Query("SELECT * FROM exercises WHERE muscle = :muscleGroup AND equipment = :equipment AND id != :excludeId LIMIT :limit")
-    suspend fun getSimilarExercises(muscleGroup: String, equipment: String, excludeId: Int, limit: Int = 5): List<EntityExercise>
+    suspend fun getSimilarExercises(
+        muscleGroup: String,
+        equipment: String,
+        excludeId: Int,
+        limit: Int = 5
+    ): List<EntityExercise>
 
     // Get exercises by muscle group only (for broader alternatives)
     @Query("SELECT * FROM exercises WHERE muscle = :muscleGroup AND id != :excludeId LIMIT :limit")
-    suspend fun getExercisesByMuscleGroup(muscleGroup: String, excludeId: Int, limit: Int = 10): List<EntityExercise>
+    suspend fun getExercisesByMuscleGroup(
+        muscleGroup: String,
+        excludeId: Int,
+        limit: Int = 10
+    ): List<EntityExercise>
 
     // Get exercise alternatives with their exercise details
     @Transaction
     suspend fun getExerciseAlternativesWithDetails(workoutExerciseId: Int): List<ExerciseAlternativeWithDetails> {
         val alternatives = getExerciseAlternatives(workoutExerciseId)
         val exercises = getAllExercises()
-        
+
         return alternatives.mapNotNull { alternative ->
             val exercise = exercises.find { it.id == alternative.alternativeExerciseId }
             exercise?.let { ExerciseAlternativeWithDetails(alternative, it) }

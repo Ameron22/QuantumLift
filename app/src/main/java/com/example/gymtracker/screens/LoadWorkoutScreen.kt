@@ -76,7 +76,7 @@ fun LoadWorkoutScreen(
     // State for filter dialog
     var showFilterDialog by remember { mutableStateOf(false) }
     var selectedMuscleGroup by remember { mutableStateOf<String?>(null) }
-    
+
     // State for level-up dialog
     var showLevelUpDialog by remember { mutableStateOf(false) }
     var levelUpData by remember { mutableStateOf<LevelUpData?>(null) }
@@ -90,7 +90,7 @@ fun LoadWorkoutScreen(
             val workoutsWithExercises = allWorkouts.mapNotNull { workout ->
                 dao.getWorkoutWithExercises(workout.id).firstOrNull()
             }
-            
+
             withContext(Dispatchers.Main) {
                 workouts.value = workoutsWithExercises
                 filteredWorkouts.value = workouts.value
@@ -101,17 +101,17 @@ fun LoadWorkoutScreen(
     
     // Check for level-up using XP buffer
     val xpBuffer by generalViewModel.xpBuffer.collectAsState()
-    
+
     LaunchedEffect(xpBuffer) {
         if (xpBuffer != null) {
             Log.d("LoadWorkoutScreen", "XP buffer detected: ${xpBuffer}")
-            
+
             // Use XPSystem utility functions for consistent calculations
             val xpSystem = XPSystem(AppDatabase.getDatabase(context).userXPDao())
-            
+
             // Calculate XP for next level
             val xpForNextLevel = xpSystem.getXPNeededForLevel(xpBuffer!!.newLevel)
-            
+
             // Show level-up dialog
             levelUpData = LevelUpData(
                 xpGained = xpBuffer!!.xpGained,
@@ -205,7 +205,10 @@ fun LoadWorkoutScreen(
                 TopAppBar(
                     title = { Text("Workouts") },
                     actions = {
-                        WorkoutIndicator(generalViewModel = generalViewModel, navController = navController)
+                        WorkoutIndicator(
+                            generalViewModel = generalViewModel,
+                            navController = navController
+                        )
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
@@ -270,12 +273,12 @@ fun LoadWorkoutScreen(
                     modifier = Modifier.size(56.dp)
                 ) {
                     Icon(
-                        Icons.Default.Add, 
+                        Icons.Default.Add,
                         contentDescription = "Create Warm-Up",
                         modifier = Modifier.size(24.dp)
                     )
                 }
-                
+
                 // Existing Create Exercise Button
                 FloatingActionButton(
                     onClick = { navController.navigate(Screen.CreateExercise.route) },
@@ -355,8 +358,9 @@ fun LoadWorkoutScreen(
                 // Existing workout cards
                 items(filteredWorkouts.value) { workoutWithExercises ->
                     val currentWorkout by generalViewModel.currentWorkout.collectAsState()
-                    val isActive = currentWorkout?.workoutId == workoutWithExercises.workout.id && currentWorkout?.isActive == true
-                    
+                    val isActive =
+                        currentWorkout?.workoutId == workoutWithExercises.workout.id && currentWorkout?.isActive == true
+
                     WorkoutCard(
                         workout = workoutWithExercises.workout,
                         muscleGroups = workoutWithExercises.exercises.map { it.muscle }.distinct(),
@@ -495,10 +499,13 @@ fun LoadWorkoutScreen(
             }
         )
     }
-    
+
     // Level Up Dialog
     if (showLevelUpDialog && levelUpData != null) {
-        Log.d("LoadWorkoutScreen", "Rendering LevelUpDialog - showLevelUpDialog: $showLevelUpDialog, levelUpData: $levelUpData")
+        Log.d(
+            "LoadWorkoutScreen",
+            "Rendering LevelUpDialog - showLevelUpDialog: $showLevelUpDialog, levelUpData: $levelUpData"
+        )
         LevelUpDialog(
             onDismiss = {
                 Log.d("LoadWorkoutScreen", "LevelUpDialog dismissed")
@@ -515,6 +522,9 @@ fun LoadWorkoutScreen(
             previousLevelXP = levelUpData!!.previousLevelXP
         )
     } else {
-        Log.d("LoadWorkoutScreen", "LevelUpDialog condition not met - showLevelUpDialog: $showLevelUpDialog, levelUpData: $levelUpData")
+        Log.d(
+            "LoadWorkoutScreen",
+            "LevelUpDialog condition not met - showLevelUpDialog: $showLevelUpDialog, levelUpData: $levelUpData"
+        )
     }
 }

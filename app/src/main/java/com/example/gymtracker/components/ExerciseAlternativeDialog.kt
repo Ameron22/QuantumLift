@@ -30,11 +30,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun ExerciseAlternativeDialog(
     currentExercise: EntityExercise,
-    workoutExerciseId: Int,
-    alternatives: List<ExerciseAlternativeWithDetails>,
     onDismiss: () -> Unit,
     onSelectAlternative: (EntityExercise) -> Unit,
-    onAddAlternative: () -> Unit,
     dao: ExerciseDao
 ) {
     var similarExercises by remember { mutableStateOf<List<EntityExercise>>(emptyList()) }
@@ -135,71 +132,34 @@ fun ExerciseAlternativeDialog(
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                // Existing alternatives section
-                if (alternatives.isNotEmpty()) {
-                    Text(
-                        text = "Your Alternatives",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(alternatives) { alternativeWithDetails ->
-                            AlternativeExerciseItem(
-                                exercise = alternativeWithDetails.exercise,
-                                isActive = alternativeWithDetails.alternative.isActive,
-                                onClick = { onSelectAlternative(alternativeWithDetails.exercise) }
-                            )
-                        }
-                        
-                        // Add new alternative button
+                // Show similar exercises
+                Text(
+                    text = "Similar Exercises",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (isLoadingSimilar) {
                         item {
-                            AddAlternativeButton(
-                                onClick = onAddAlternative
-                            )
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
+                            }
                         }
-                    }
-                } else {
-                    // No alternatives yet - show similar exercises
-                    Text(
-                        text = "Similar Exercises",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (isLoadingSimilar) {
-                            item {
-                                Box(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator()
-                                }
-                            }
-                        } else {
-                            items(similarExercises) { exercise ->
-                                AlternativeExerciseItem(
-                                    exercise = exercise,
-                                    isActive = false,
-                                    onClick = { onSelectAlternative(exercise) }
-                                )
-                            }
-                            
-                            // Add new alternative button
-                            item {
-                                AddAlternativeButton(
-                                    onClick = onAddAlternative
-                                )
-                            }
+                    } else {
+                        items(similarExercises) { exercise ->
+                            AlternativeExerciseItem(
+                                exercise = exercise,
+                                isActive = false,
+                                onClick = { onSelectAlternative(exercise) }
+                            )
                         }
                     }
                 }
@@ -261,39 +221,4 @@ private fun AlternativeExerciseItem(
     }
 }
 
-@Composable
-private fun AddAlternativeButton(
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-        ),
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "Add Alternative",
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Add New Alternative",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Medium
-            )
-        }
-    }
-}
 
