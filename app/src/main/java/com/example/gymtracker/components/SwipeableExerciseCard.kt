@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -21,11 +22,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.example.gymtracker.R
 import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.WorkoutExercise
 import kotlin.math.abs
@@ -40,12 +43,14 @@ fun SwipeableExerciseCard(
     onSwipeRight: () -> Unit,
     onAddAlternativeClick: () -> Unit,
     onSelectAlternative: (EntityExercise) -> Unit = {},
+    onRemoveAlternative: (EntityExercise) -> Unit = {},
     swipeActivationZone: @Composable BoxScope.() -> Unit = {},
     content: @Composable (isSwipeInProgress: Boolean) -> Unit
 ) {
     var offsetX by remember { mutableFloatStateOf(0f) }
     var isSwipeInProgress by remember { mutableStateOf(false) }
     var isCarouselMode by remember { mutableStateOf(false) }
+    var isExitingCarousel by remember { mutableStateOf(false) }  // New: Track exit transition
     var savedOffsetX by remember { mutableFloatStateOf(0f) } // Saved state when carousel mode was entered
     var currentAlternativeIndex by remember { mutableIntStateOf(0) }
     var isDragging by remember { mutableStateOf(false) }
@@ -60,6 +65,7 @@ fun SwipeableExerciseCard(
     LaunchedEffect(exercise.id) {
         println("CAROUSEL: Exercise changed to ${exercise.id}, resetting carousel mode")
         isCarouselMode = false
+        isExitingCarousel = false
         currentAlternativeIndex = 0
         offsetX = 0f
         isSwipeInProgress = false
@@ -100,21 +106,28 @@ fun SwipeableExerciseCard(
     
     // Show carousel if in carousel mode OR during smooth transition (only after some drag)
     val isTransitioning = !isCarouselMode && isSwipeInProgress && offsetX < 0 && isDragging && abs(offsetX) > 20f
-    val showCarousel = isCarouselMode || isTransitioning
+    val showCarousel = isCarouselMode || isTransitioning || isExitingCarousel
     
     // Entry transition progress (when entering carousel mode)
-    val entryProgress = if (!isCarouselMode && offsetX < 0) {
+    val entryProgress = if (!isCarouselMode && !isExitingCarousel && offsetX < 0) {
         (abs(offsetX) / transitionThreshold).coerceIn(0f, 1f)
     } else {
         0f
     }
     
-    // Transition progress within carousel
-    // Use transition progress when:
-    // 1. We're in carousel mode AND dragging, OR
-    // 2. We're showing carousel AND past the entry threshold (meaning carousel should be active)
-    val isPastEntryThreshold = abs(offsetX) > threshold
-    val transitionProgress = if ((isCarouselMode || isPastEntryThreshold) && showCarousel && offsetX != 0f) {
+    // Exit transition progress (when exiting carousel mode)
+    // Goes from 1.0 (fully in carousel) → 0.0 (back to normal) as user swipes right
+    val exitProgress = if (isExitingCarousel && offsetX > 0) {
+        1f - (offsetX / transitionThreshold).coerceIn(0f, 1f)
+    } else if (isExitingCarousel) {
+        1f  // Still in carousel, no swipe yet
+    } else {
+        0f  // Not exiting
+    }
+    
+    // Transition progress within carousel (ONLY when already in carousel mode)
+    // During entry transition, we DON'T want card-to-card transitions - only main card shrinking
+    val transitionProgress = if (isCarouselMode && offsetX != 0f) {
         (abs(offsetX) / transitionThreshold).coerceIn(0f, 1f)
     } else {
         0f
@@ -125,15 +138,171 @@ fun SwipeableExerciseCard(
         println("CAROUSEL_DEBUG: offsetX=$offsetX, isTransitioning=$isTransitioning, showCarousel=$showCarousel, isDragging=$isDragging, isCarouselMode=$isCarouselMode")
     }
 
-    if (showCarousel) {
-        // Carousel mode: Show alternatives between original card and add button
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(136.dp)
-                .padding(horizontal = 16.dp, vertical = 2.dp)
-                .zIndex(if (isSwipeInProgress) 1000f else 0f)
-                .pointerInput(Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(136.dp)
+    ) {
+        // Normal mode: Main card (always rendered, but may be hidden during carousel)
+        if (!isCarouselMode) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(136.dp)
+                    .padding(horizontal = 16.dp, vertical = 2.dp)
+                    .alpha(
+                        when {
+                            isExitingCarousel -> 1f - exitProgress  // Fade in during exit (1.0 → 0.0 becomes 0.0 → 1.0)
+                            showCarousel -> 1f - entryProgress  // Fade out during entry
+                            else -> 1f
+                        }
+                    )
+                    .zIndex(if (isSwipeInProgress) 1000f else 0f)
+            ) {
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight()
+                ) {
+                    // Card width calculation - shrinks when swiping left
+                    val cardWidth = if (isSwipeInProgress && offsetX < 0) {
+                        // Shrink proportionally to swipe distance
+                        val shrinkAmount = with(density) { abs(offsetX).toDp() }
+                        (maxWidth - shrinkAmount).coerceAtLeast(50.dp)
+                    } else {
+                        // Normal width
+                        maxWidth
+                    }
+
+                    Card(
+                        modifier = Modifier
+                            .width(cardWidth)
+                            .fillMaxHeight()
+                            .align(Alignment.CenterStart)
+                            .graphicsLayer {
+                                // Apply general scale
+                                scaleY = scale
+                            },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isSwipeInProgress)
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                            else
+                                MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(12.dp))
+                        ) {
+                            // Show card content
+                            content(false)
+                        }
+                    }
+                }
+
+                // Swipe activation zone - positioned ONLY on the 8-dots drag handle icon
+                // ONLY show when NOT in carousel mode to avoid gesture conflicts
+                if (!isCarouselMode) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .height(60.dp) // Height to match icon area
+                            .width(60.dp) // Width to match icon clickable area (narrower to avoid remove button)
+                            .padding(end = 4.dp) // Small padding from edge
+                            .pointerInput(Unit) {
+                                var totalDragX = 0f
+                                var totalDragY = 0f
+                                var isHorizontalDrag = false
+
+                                detectDragGestures(
+                                    onDragStart = { _ ->
+                                        totalDragX = 0f
+                                        totalDragY = 0f
+                                        isHorizontalDrag = false
+                                        println("CAROUSEL_VOID: [ACTIVATION ZONE] onDragStart")
+                                    },
+                                onDragEnd = {
+                                    println("CAROUSEL_VOID: [ACTIVATION ZONE] onDragEnd - isHorizontalDrag=$isHorizontalDrag, offsetX=$offsetX, totalDragX=$totalDragX, totalDragY=$totalDragY")
+                                    if (isHorizontalDrag) {
+                                        println("CAROUSEL_VOID: [ACTIVATION ZONE] PROCESSING - offsetX=$offsetX, threshold=$threshold")
+
+                                        // Check if we should enter carousel mode (threshold-based)
+                                        if (offsetX < -threshold) {
+                                            println("CAROUSEL_VOID: [ACTIVATION ZONE] ENTERING CAROUSEL MODE - nonActiveAlternatives.size=${nonActiveAlternatives.size}")
+                                            isCarouselMode = true
+                                            currentAlternativeIndex = if (nonActiveAlternatives.isEmpty()) nonActiveAlternatives.size else 0
+                                            println("CAROUSEL_VOID: [ACTIVATION ZONE] Set currentAlternativeIndex=$currentAlternativeIndex")
+                                            // Reset states and return early
+                                            offsetX = 0f
+                                            isSwipeInProgress = false
+                                            isDragging = false
+                                            isHorizontalDrag = false
+                                            println("CAROUSEL_VOID: [ACTIVATION ZONE] Reset states - offsetX=$offsetX, isSwipeInProgress=$isSwipeInProgress")
+                                            return@detectDragGestures
+                                        }
+                                    }
+
+                                    // Always reset states
+                                    offsetX = 0f
+                                    isSwipeInProgress = false
+                                    isDragging = false
+                                    isHorizontalDrag = false
+                                },
+                                onDragCancel = {
+                                    isDragging = false
+                                    isSwipeInProgress = false
+                                    offsetX = 0f
+                                    isHorizontalDrag = false
+                                },
+                                onDrag = { change, dragAmount ->
+                                    totalDragX += abs(dragAmount.x)
+                                    totalDragY += abs(dragAmount.y)
+
+                                    // Determine if this is a horizontal drag after some movement
+                                    if (!isHorizontalDrag && (totalDragX > 20f || totalDragY > 20f)) {
+                                        isHorizontalDrag = totalDragX > totalDragY * 1.5f
+                                        println("CAROUSEL_VOID: [ACTIVATION ZONE] onDrag - Checking direction: totalDragX=$totalDragX, totalDragY=$totalDragY, isHorizontalDrag=$isHorizontalDrag")
+                                        if (isHorizontalDrag) {
+                                            isSwipeInProgress = true
+                                            isDragging = true
+                                            println("CAROUSEL_VOID: [ACTIVATION ZONE] onDrag - HORIZONTAL DRAG CONFIRMED")
+                                        }
+                                    }
+
+                                    // Only update offsetX if horizontal drag is confirmed
+                                    if (isHorizontalDrag) {
+                                        change.consume()
+                                        offsetX += dragAmount.x
+                                        offsetX = offsetX.coerceIn(-525f, 525f)
+                                        println("CAROUSEL_VOID: [ACTIVATION ZONE] onDrag - Updated offsetX=$offsetX")
+                                    }
+                                }
+                            )
+                        }
+                    )
+                }
+            }
+        }
+
+        // Carousel mode: Show alternatives (fade in during entry transition, fade out during exit)
+        if (showCarousel) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(136.dp)
+                    .padding(horizontal = 16.dp, vertical = 2.dp)
+                    .alpha(
+                        when {
+                            isExitingCarousel -> exitProgress  // Fade out during exit (1.0 → 0.0)
+                            isCarouselMode -> 1f  // Fully visible in carousel mode
+                            else -> entryProgress  // Fade in during entry
+                        }
+                    )
+                    .zIndex(if (isSwipeInProgress) 1001f else 1f) // Above main card
+                    .pointerInput(Unit) {
                     var totalDragX = 0f
                     var totalDragY = 0f
                     var isHorizontalDrag = false
@@ -150,26 +319,32 @@ fun SwipeableExerciseCard(
                             if (isHorizontalDrag) {
                                 println("CAROUSEL_VOID: [CAROUSEL] onDragEnd - PROCESSING (isHorizontalDrag is TRUE)")
 
-                                if (isCarouselMode) {
-                                    println("CAROUSEL_VOID: [CAROUSEL] In carousel mode - checking offsetX=$offsetX vs threshold=$threshold")
+                                if (isCarouselMode || isExitingCarousel) {
+                                    println("CAROUSEL_VOID: [CAROUSEL] In carousel/exit mode - checking offsetX=$offsetX vs threshold=$threshold")
                                     // In carousel mode - navigate between alternatives and add button
                                     if (offsetX > threshold) {
-                                        println("CAROUSEL_VOID: [CAROUSEL] Swipe RIGHT detected")
-                                        // Swipe right - go to previous alternative or exit carousel
-                                        if (currentAlternativeIndex > 0) {
-                                            currentAlternativeIndex--
-                                            println("CAROUSEL_VOID: [CAROUSEL] Moving to PREVIOUS - index now: $currentAlternativeIndex")
-                                        } else {
-                                            // Exit carousel mode only when at first alternative
-                                            println("CAROUSEL_VOID: [CAROUSEL] EXITING carousel mode")
-                                            // Reset ALL states immediately before the drag end completes
+                                        println("CAROUSEL_VOID: [CAROUSEL] Swipe RIGHT detected - currentIndex=$currentAlternativeIndex, isExitingCarousel=$isExitingCarousel")
+                                        
+                                        if (isExitingCarousel) {
+                                            // Complete the exit transition
+                                            println("CAROUSEL_VOID: [CAROUSEL] COMPLETING EXIT transition")
+                                            isCarouselMode = false
+                                            isExitingCarousel = false
+                                            currentAlternativeIndex = 0
                                             offsetX = 0f
                                             isSwipeInProgress = false
                                             isDragging = false
-                                            isCarouselMode = false
-                                            currentAlternativeIndex = 0
-                                            // Early return to skip the general reset below
                                             return@detectDragGestures
+                                        } else if (currentAlternativeIndex > 0) {
+                                            // Navigate to previous alternative
+                                            currentAlternativeIndex--
+                                            println("CAROUSEL_VOID: [CAROUSEL] Moving to PREVIOUS - index now: $currentAlternativeIndex")
+                                        } else {
+                                            // At first alternative - START exit transition
+                                            println("CAROUSEL_VOID: [CAROUSEL] STARTING EXIT transition")
+                                            isExitingCarousel = true
+                                            isCarouselMode = false
+                                            // DON'T reset offsetX - let it continue for transition
                                         }
                                     } else if (offsetX < -threshold) {
                                         println("CAROUSEL_VOID: [CAROUSEL] Swipe LEFT detected - currentIndex=$currentAlternativeIndex, nonActiveAlternatives.size=${nonActiveAlternatives.size}")
@@ -250,6 +425,13 @@ fun SwipeableExerciseCard(
                                     maxSwipeDistance
                                 )
                                 println("CAROUSEL_VOID: [CAROUSEL] onDrag - Updated offsetX=$offsetX (dragAmount.x=${dragAmount.x})")
+                                
+                                // Check for exit transition during drag
+                                if (isCarouselMode && currentAlternativeIndex == 0 && offsetX > 0) {
+                                    println("CAROUSEL_VOID: [CAROUSEL] onDrag - RIGHT swipe at first alternative - STARTING EXIT transition")
+                                    isExitingCarousel = true
+                                    isCarouselMode = false
+                                }
                             }
                         }
                     )
@@ -284,13 +466,22 @@ fun SwipeableExerciseCard(
                         currentIndex = currentAlternativeIndex,
                         nextIndex = nextIndex,
                         transitionProgress = transitionProgress,
+                        entryProgress = entryProgress,
+                        exitProgress = exitProgress,
+                        isCarouselMode = isCarouselMode,
+                        isExitingCarousel = isExitingCarousel,
                         offsetX = offsetX,
                         onSelectAlternative = {
                             println("CAROUSEL: Alternative selected - exiting carousel mode")
                             onSelectAlternative(alternative)
                             // Exit carousel mode after selection
                             isCarouselMode = false
+                            isExitingCarousel = false
                             currentAlternativeIndex = 0
+                        },
+                        onRemoveAlternative = {
+                            println("CAROUSEL: Alternative removal requested")
+                            onRemoveAlternative(alternative)
                         }
                     )
                 }
@@ -307,148 +498,6 @@ fun SwipeableExerciseCard(
                 onAddClick = onAddAlternativeClick
             )
         }
-    } else {
-        // Normal mode: Main card with shrinking effect
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(136.dp)
-                .padding(horizontal = 16.dp, vertical = 2.dp)
-                .zIndex(if (isSwipeInProgress) 1000f else 0f)
-        ) {
-            BoxWithConstraints(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight()
-            ) {
-                // Card width calculation - shrinks when swiping left
-                val cardWidth = if (isSwipeInProgress && offsetX < 0) {
-                    // Shrink proportionally to swipe distance
-                    val shrinkAmount = with(density) { abs(offsetX).toDp() }
-                    (maxWidth - shrinkAmount).coerceAtLeast(50.dp)
-                } else {
-                    // Normal width
-                    maxWidth
-                }
-
-                Card(
-                    modifier = Modifier
-                        .width(cardWidth)
-                        .fillMaxHeight()
-                        .align(Alignment.CenterStart)
-                        .graphicsLayer {
-                            // Apply general scale
-                            scaleY = scale
-                        }
-                        .clickable {
-                            // Tap to exit carousel mode
-                            if (isCarouselMode) {
-                                isCarouselMode = false
-                                offsetX = 0f
-                            }
-                        },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (isSwipeInProgress)
-                            MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-                        else
-                            MaterialTheme.colorScheme.surface
-                    )
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(12.dp))
-                    ) {
-                        // Show card content
-                        content(false)
-                    }
-                }
-            }
-
-            // Swipe activation zone - positioned on the right side where the icons are
-            // ONLY show when NOT in carousel mode to avoid gesture conflicts
-            if (!isCarouselMode) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .fillMaxHeight()
-                        .width(60.dp) // Wide enough to include the icon area
-                        .pointerInput(Unit) {
-                            var totalDragX = 0f
-                            var totalDragY = 0f
-                            var isHorizontalDrag = false
-
-                            detectDragGestures(
-                                onDragStart = { _ ->
-                                    totalDragX = 0f
-                                    totalDragY = 0f
-                                    isHorizontalDrag = false
-                                    println("CAROUSEL_VOID: [ACTIVATION ZONE] onDragStart")
-                                },
-                            onDragEnd = {
-                                println("CAROUSEL_VOID: [ACTIVATION ZONE] onDragEnd - isHorizontalDrag=$isHorizontalDrag, offsetX=$offsetX, totalDragX=$totalDragX, totalDragY=$totalDragY")
-                                if (isHorizontalDrag) {
-                                    println("CAROUSEL_VOID: [ACTIVATION ZONE] PROCESSING - offsetX=$offsetX, threshold=$threshold")
-
-                                    // Check if we should enter carousel mode (threshold-based)
-                                    if (offsetX < -threshold) {
-                                        println("CAROUSEL_VOID: [ACTIVATION ZONE] ENTERING CAROUSEL MODE - nonActiveAlternatives.size=${nonActiveAlternatives.size}")
-                                        isCarouselMode = true
-                                        currentAlternativeIndex = if (nonActiveAlternatives.isEmpty()) nonActiveAlternatives.size else 0
-                                        println("CAROUSEL_VOID: [ACTIVATION ZONE] Set currentAlternativeIndex=$currentAlternativeIndex")
-                                        // Reset states and return early
-                                        offsetX = 0f
-                                        isSwipeInProgress = false
-                                        isDragging = false
-                                        isHorizontalDrag = false
-                                        println("CAROUSEL_VOID: [ACTIVATION ZONE] Reset states - offsetX=$offsetX, isSwipeInProgress=$isSwipeInProgress")
-                                        return@detectDragGestures
-                                    }
-                                }
-
-                                // Always reset states
-                                offsetX = 0f
-                                isSwipeInProgress = false
-                                isDragging = false
-                                isHorizontalDrag = false
-                            },
-                            onDragCancel = {
-                                isDragging = false
-                                isSwipeInProgress = false
-                                offsetX = 0f
-                                isHorizontalDrag = false
-                            },
-                            onDrag = { change, dragAmount ->
-                                totalDragX += abs(dragAmount.x)
-                                totalDragY += abs(dragAmount.y)
-
-                                // Determine if this is a horizontal drag after some movement
-                                if (!isHorizontalDrag && (totalDragX > 20f || totalDragY > 20f)) {
-                                    isHorizontalDrag = totalDragX > totalDragY * 1.5f
-                                    println("CAROUSEL_VOID: [ACTIVATION ZONE] onDrag - Checking direction: totalDragX=$totalDragX, totalDragY=$totalDragY, isHorizontalDrag=$isHorizontalDrag")
-                                    if (isHorizontalDrag) {
-                                        isSwipeInProgress = true
-                                        isDragging = true
-                                        println("CAROUSEL_VOID: [ACTIVATION ZONE] onDrag - HORIZONTAL DRAG CONFIRMED")
-                                    }
-                                }
-
-                                // Only consume and handle horizontal drags
-                                if (isHorizontalDrag) {
-                                    change.consume()
-                                    offsetX = (offsetX + dragAmount.x).coerceIn(
-                                        -maxSwipeDistance,
-                                        maxSwipeDistance
-                                    )
-                                    println("CAROUSEL_VOID: [ACTIVATION ZONE] onDrag - Updated offsetX=$offsetX")
-                                }
-                            }
-                        )
-                    }
-                )
-            }
         }
     }
 }
@@ -618,8 +667,13 @@ private fun RowScope.TransitionAlternativeCard(
     currentIndex: Int,
     nextIndex: Int,
     transitionProgress: Float,
+    entryProgress: Float,
+    exitProgress: Float,
+    isCarouselMode: Boolean,
+    isExitingCarousel: Boolean,
     offsetX: Float,
-    onSelectAlternative: () -> Unit
+    onSelectAlternative: () -> Unit,
+    onRemoveAlternative: () -> Unit
 ) {
     // Determine if this card is currently active, becoming active, or becoming inactive
     val isCurrentlyActive = itemIndex == currentIndex
@@ -630,6 +684,38 @@ private fun RowScope.TransitionAlternativeCard(
 
     // Calculate the width fraction (0.0 = slim bar, 1.0 = full width)
     val widthFraction = when {
+        // During EXIT transition: first card (index 0) shrinks gradually
+        isExitingCarousel && itemIndex == 0 -> {
+            // exitProgress goes 1.0 → 0.0 as user swipes right
+            // So multiply by same slow factor for smooth transition
+            val fraction = (exitProgress * 0.15f).coerceIn(0f, 1f)
+            println("CAROUSEL_VOID: [CARD $itemIndex] EXIT SHRINKING - widthFraction=$fraction (exitProgress=$exitProgress)")
+            fraction
+        }
+        
+        // During EXIT transition: other cards stay as slim bars
+        isExitingCarousel && itemIndex != 0 -> {
+            println("CAROUSEL_VOID: [CARD $itemIndex] EXIT SLIM BAR - widthFraction=0.0")
+            0f
+        }
+        
+        // During ENTRY transition: first card (index 0) expands gradually based on offsetX
+        // It should expand at the SAME RATE as the main card shrinks (pixel-perfect sync)
+        !isCarouselMode && itemIndex == 0 -> {
+            // Use entryProgress but make it expand MUCH slower to match main card shrinking
+            // entryProgress goes 0→1 over transitionThreshold (250dp)
+            // We use a small factor (0.15) so it takes much longer to fully expand
+            val fraction = (entryProgress * 0.15f).coerceIn(0f, 1f)  // Only 15% of entryProgress - very slow expansion
+            println("CAROUSEL_VOID: [CARD $itemIndex] ENTRY EXPANDING - widthFraction=$fraction (entryProgress=$entryProgress)")
+            fraction
+        }
+        
+        // During ENTRY transition: other cards stay as slim bars
+        !isCarouselMode && itemIndex != 0 -> {
+            println("CAROUSEL_VOID: [CARD $itemIndex] ENTRY SLIM BAR - widthFraction=0.0")
+            0f
+        }
+        
         isCurrentlyActive && isBecomingInactive -> {
             // Shrinking from expanded to slim
             val fraction = 1f - transitionProgress
@@ -674,54 +760,79 @@ private fun RowScope.TransitionAlternativeCard(
             ),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // GIF - same size as original card (100dp)
-                if (exercise.gifUrl.isNotEmpty()) {
-                    ExerciseGif(
-                        gifPath = exercise.gifUrl,
-                        modifier = Modifier
-                            .size(100.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                    )
-                }
-
-                // Text details on the right
-                Column(
+            Box {
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
-                    verticalArrangement = Arrangement.Center
+                        .fillMaxSize()
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = exercise.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "${exercise.muscle} - ${exercise.parts}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Difficulty: ${exercise.difficulty}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    // GIF - same size as original card (100dp)
+                    if (exercise.gifUrl.isNotEmpty()) {
+                        ExerciseGif(
+                            gifPath = exercise.gifUrl,
+                            modifier = Modifier
+                                .size(100.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        )
+                    }
+
+                    // Text details on the right
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = exercise.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "${exercise.muscle} - ${exercise.parts}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Difficulty: ${exercise.difficulty}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                
+                // Remove button (top right) - only show when card is expanded enough
+                if (widthFraction > 0.5f) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .size(20.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
+                                shape = CircleShape
+                            )
+                            .clickable(onClick = onRemoveAlternative),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.minus_icon),
+                            contentDescription = "Remove Alternative",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
                 }
             }
         }

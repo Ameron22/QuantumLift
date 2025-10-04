@@ -212,6 +212,16 @@ interface ExerciseDao {
         limit: Int = 10
     ): List<EntityExercise>
 
+    // Get filtered similar exercises with multiple criteria
+    @Query("SELECT * FROM exercises WHERE muscle = :muscleGroup AND equipment = :equipment AND difficulty = :difficulty AND id != :excludeId LIMIT :limit")
+    suspend fun getFilteredSimilarExercises(
+        muscleGroup: String,
+        equipment: String,
+        difficulty: String,
+        excludeId: Int,
+        limit: Int = 20
+    ): List<EntityExercise>
+
     // Get exercise alternatives with their exercise details
     @Transaction
     suspend fun getExerciseAlternativesWithDetails(workoutExerciseId: Int): List<ExerciseAlternativeWithDetails> {

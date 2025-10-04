@@ -1212,6 +1212,133 @@ fun WorkoutDetailsScreen(
             }
         }
     }
+    
+    // Function to remove an alternative exercise with special handling for original exercise
+    suspend fun removeAlternativeExercise(workoutExerciseId: Int, exerciseIdToRemove: Int) {
+        println("CAROUSEL: removeAlternativeExercise called - workoutExerciseId=$workoutExerciseId, exerciseIdToRemove=$exerciseIdToRemove")
+        
+        // Get all alternatives for this workout exercise
+        val alternativesList = dao.getExerciseAlternatives(workoutExerciseId)
+        
+        if (alternativesList.isEmpty()) {
+            println("CAROUSEL: No alternatives found")
+            return
+        }
+        
+        // Get the original exercise ID
+        val originalExerciseId = alternativesList.firstOrNull()?.originalExerciseId
+        println("CAROUSEL: Original exercise ID: $originalExerciseId")
+        
+        // Check if we're removing the original exercise
+        val isRemovingOriginal = exerciseIdToRemove == originalExerciseId
+        println("CAROUSEL: Is removing original: $isRemovingOriginal")
+        
+        if (isRemovingOriginal) {
+            // Special case: removing the original exercise
+            // Make the first alternative the new original
+            
+            if (alternativesList.isEmpty()) {
+                println("CAROUSEL: ERROR - Cannot remove original when there are no alternatives")
+                return
+            }
+            
+            // Get the first alternative to become the new original
+            val newOriginalId = alternativesList.firstOrNull()?.alternativeExerciseId
+            if (newOriginalId == null) {
+                println("CAROUSEL: ERROR - No alternative found to become new original")
+                return
+            }
+            
+            println("CAROUSEL: Making exercise $newOriginalId the new original")
+            
+            // Update all alternatives to have the new original ID
+            alternativesList.forEach { alt ->
+                if (alt.alternativeExerciseId != newOriginalId) {
+                    // Update this alternative to point to the new original
+                    val updatedAlt = alt.copy(originalExerciseId = newOriginalId)
+                    dao.updateExerciseAlternative(updatedAlt)
+                }
+            }
+            
+            // Remove the alternative record for the new original (since it's now the original, not an alternative)
+            val newOriginalAltRecord = alternativesList.find { it.alternativeExerciseId == newOriginalId }
+            if (newOriginalAltRecord != null) {
+                dao.deleteExerciseAlternative(newOriginalAltRecord)
+            }
+            
+            // Update the workout exercise to use the new original
+            dao.updateWorkoutExerciseId(workoutExerciseId, newOriginalId)
+            println("CAROUSEL: Updated workout exercise to use new original: $newOriginalId")
+            
+        } else {
+            // Normal case: removing a non-original alternative
+            println("CAROUSEL: Removing alternative exercise: $exerciseIdToRemove")
+            
+            // Find and delete the alternative record
+            val altToDelete = alternativesList.find { it.alternativeExerciseId == exerciseIdToRemove }
+            if (altToDelete != null) {
+                dao.deleteExerciseAlternative(altToDelete)
+                println("CAROUSEL: Deleted alternative record")
+            } else {
+                println("CAROUSEL: WARNING - Alternative record not found for exercise $exerciseIdToRemove")
+            }
+        }
+        
+        // Check if there are any alternatives left
+        val remainingAlternatives = dao.getExerciseAlternatives(workoutExerciseId)
+        if (remainingAlternatives.isEmpty()) {
+            println("CAROUSEL: No alternatives remaining, updating hasAlternatives flag")
+            dao.updateWorkoutExerciseHasAlternatives(workoutExerciseId, false)
+        }
+        
+        // Refresh the exercise list
+        val updatedWorkoutExercises = dao.getWorkoutExercisesForWorkout(workoutId)
+        val updatedExercises = updatedWorkoutExercises.map { workoutExercise ->
+            val exercise = dao.getExerciseById(workoutExercise.exerciseId)
+            WorkoutExerciseWithDetails(workoutExercise, exercise!!)
+        }
+        reorderedExercises = updatedExercises
+        viewModel.updateExercisesOrder(updatedExercises)
+        
+        // Refresh exercise alternatives map
+        val alternativesMap = mutableMapOf<Int, List<EntityExercise>>()
+        reorderedExercises.forEach { exerciseWithDetails ->
+            val alts = dao.getExerciseAlternatives(exerciseWithDetails.workoutExercise.id)
+            
+            // Build the full list: original exercise + all alternatives
+            val allExercises = mutableListOf<EntityExercise>()
+            
+            // Add the original exercise if there are any alternatives
+            if (alts.isNotEmpty()) {
+                val origExerciseId = alts.firstOrNull()?.originalExerciseId
+                if (origExerciseId != null) {
+                    try {
+                        val originalExercise = dao.getExerciseById(origExerciseId)
+                        if (originalExercise != null && originalExercise.id != exerciseWithDetails.entityExercise.id) {
+                            allExercises.add(originalExercise)
+                        }
+                    } catch (e: Exception) {
+                        println("CAROUSEL: Failed to load original exercise $origExerciseId: ${e.message}")
+                    }
+                }
+            }
+            
+            // Add all alternative exercises
+            val alternativeExercises = alts.mapNotNull { alt ->
+                try {
+                    dao.getExerciseById(alt.alternativeExerciseId)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            allExercises.addAll(alternativeExercises)
+            
+            alternativesMap[exerciseWithDetails.workoutExercise.id] = allExercises
+        }
+        exerciseAlternatives = alternativesMap
+        
+        println("CAROUSEL: Alternative removal completed successfully")
+    }
 
     // Function to check if exercise is completed and show dialog
     fun checkCompletedExerciseAndShowDialog(exerciseWithDetails: WorkoutExerciseWithDetails) {
@@ -2858,6 +2985,13 @@ fun WorkoutDetailsScreen(
                                 } else {
                                     println("CAROUSEL: ERROR - Exercise ${selectedExercise.id} is neither an alternative nor the original")
                                 }
+                            }
+                        },
+                        onRemoveAlternative = { exerciseToRemove ->
+                            // Handle alternative removal with special logic for original exercise
+                            println("CAROUSEL: onRemoveAlternative called for exercise: ${exerciseToRemove.name} (id: ${exerciseToRemove.id})")
+                            coroutineScope.launch {
+                                removeAlternativeExercise(exerciseWithDetails.workoutExercise.id, exerciseToRemove.id)
                             }
                         }
                     ) {
