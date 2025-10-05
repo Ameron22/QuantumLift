@@ -1059,10 +1059,10 @@ fun WorkoutDetailsScreen(
             // Load existing alternatives
             alternatives = dao.getExerciseAlternatives(exerciseWithDetails.workoutExercise.id)
             
-            // Load similar exercises for suggestions
-            similarExercises = dao.getSimilarExercises(
+            // Load similar exercises for suggestions based on muscle group and overlapping muscle parts
+            similarExercises = dao.getSimilarExercisesWithParsedParts(
                 exerciseWithDetails.entityExercise.muscle,
-                exerciseWithDetails.entityExercise.equipment,
+                exerciseWithDetails.entityExercise.parts,
                 exerciseWithDetails.entityExercise.id
             )
             
@@ -2615,11 +2615,11 @@ fun WorkoutDetailsScreen(
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                .padding(vertical = 0.dp),
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
                             ),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(0.dp)
                         ) {
                             Column(
                                 modifier = Modifier.padding(16.dp),
@@ -2737,7 +2737,7 @@ fun WorkoutDetailsScreen(
                                                     }
                                                 },
                                             colors = CardDefaults.cardColors(
-                                                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.1f)
+                                                containerColor = Color(0xFF1A1A1A)
                                             ),
                                             shape = RoundedCornerShape(8.dp),
                                             border = BorderStroke(

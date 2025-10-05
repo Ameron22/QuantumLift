@@ -1,10 +1,16 @@
 package com.example.gymtracker.data
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
 //This table will store metadata for each workout session.
-@Entity(tableName = "workout_sessions")
+@Entity(
+    tableName = "workout_sessions",
+    indices = [
+        Index(value = ["workoutId"])
+    ]
+)
 @TypeConverters(Converter::class)
 data class SessionWorkoutEntity(
     @PrimaryKey(autoGenerate = true) val sessionId: Long = 0,

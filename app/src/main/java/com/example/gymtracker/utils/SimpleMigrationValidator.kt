@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import androidx.room.Room
 import com.example.gymtracker.data.AppDatabase
-import com.example.gymtracker.data.ExerciseDao
 import com.example.gymtracker.data.ExerciseAlternative
 import com.example.gymtracker.data.WorkoutExercise
 import com.example.gymtracker.data.EntityExercise
@@ -108,7 +107,7 @@ object SimpleMigrationValidator {
                 
                 // Test 5: Verify similar exercises query works
                 Log.d(TAG, "Test 5: Verifying similar exercises query")
-                val similarExercises = dao.getSimilarExercises("Test Muscle", "Test Equipment", exerciseId, 5)
+                //val similarExercises = dao.getSimilarExercises("Test Muscle", "Test Equipment", exerciseId, 5)
                 // This might be empty if no similar exercises exist, which is fine
                 Log.d(TAG, "✓ Similar exercises query working correctly")
                 

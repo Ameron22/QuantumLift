@@ -2,6 +2,7 @@ package com.example.gymtracker.data
 
 import androidx.room.*
 import com.example.gymtracker.classes.SessionWorkoutWithMusclesStress
+import com.example.gymtracker.data.Converter
 import kotlinx.coroutines.flow.Flow
 
 // Data class to combine exercise info with workout-specific data
@@ -195,13 +196,32 @@ interface ExerciseDao {
         hasAlternatives: Boolean
     )
 
-    // Get similar exercises based on muscle group and equipment
-    @Query("SELECT * FROM exercises WHERE muscle = :muscleGroup AND equipment = :equipment AND id != :excludeId LIMIT :limit")
+    // Get similar exercises based on muscle group and overlapping muscle parts
+    // Uses LIKE operator to check for overlapping muscle parts (compatible with older SQLite)
+    @Query("""
+        SELECT * FROM exercises 
+        WHERE muscle = :muscleGroup 
+        AND id != :excludeId 
+        AND (
+            parts = :muscleParts 
+            OR parts LIKE '%' || :musclePart1 || '%'
+            OR parts LIKE '%' || :musclePart2 || '%'
+            OR parts LIKE '%' || :musclePart3 || '%'
+            OR parts LIKE '%' || :musclePart4 || '%'
+            OR parts LIKE '%' || :musclePart5 || '%'
+        )
+        LIMIT :limit
+    """)
     suspend fun getSimilarExercises(
         muscleGroup: String,
-        equipment: String,
+        muscleParts: String,
+        musclePart1: String,
+        musclePart2: String,
+        musclePart3: String,
+        musclePart4: String,
+        musclePart5: String,
         excludeId: Int,
-        limit: Int = 5
+        limit: Int = 10
     ): List<EntityExercise>
 
     // Get exercises by muscle group only (for broader alternatives)
@@ -213,9 +233,31 @@ interface ExerciseDao {
     ): List<EntityExercise>
 
     // Get filtered similar exercises with multiple criteria
-    @Query("SELECT * FROM exercises WHERE muscle = :muscleGroup AND equipment = :equipment AND difficulty = :difficulty AND id != :excludeId LIMIT :limit")
+    // Uses muscle group + overlapping muscle parts + equipment/difficulty filters
+    @Query("""
+        SELECT * FROM exercises 
+        WHERE muscle = :muscleGroup 
+        AND id != :excludeId 
+        AND (
+            parts = :muscleParts 
+            OR parts LIKE '%' || :musclePart1 || '%'
+            OR parts LIKE '%' || :musclePart2 || '%'
+            OR parts LIKE '%' || :musclePart3 || '%'
+            OR parts LIKE '%' || :musclePart4 || '%'
+            OR parts LIKE '%' || :musclePart5 || '%'
+        )
+        AND (:equipment = '' OR equipment LIKE '%' || :equipment || '%' OR (:equipment = 'None' AND (equipment = '' OR equipment IS NULL)))
+        AND (:difficulty = '' OR difficulty = :difficulty)
+        LIMIT :limit
+    """)
     suspend fun getFilteredSimilarExercises(
         muscleGroup: String,
+        muscleParts: String,
+        musclePart1: String,
+        musclePart2: String,
+        musclePart3: String,
+        musclePart4: String,
+        musclePart5: String,
         equipment: String,
         difficulty: String,
         excludeId: Int,
@@ -232,5 +274,127 @@ interface ExerciseDao {
             val exercise = exercises.find { it.id == alternative.alternativeExerciseId }
             exercise?.let { ExerciseAlternativeWithDetails(alternative, it) }
         }
+    }
+
+
+    // Helper function to get filtered similar exercises with parsed muscle parts
+    suspend fun getFilteredSimilarExercisesWithParsedParts(
+        muscleGroup: String,
+        muscleParts: String,
+        equipment: String,
+        difficulty: String,
+        excludeId: Int,
+        limit: Int = 20
+    ): List<EntityExercise> {
+        val converter = Converter()
+        val partsList = converter.fromString(muscleParts)
+        
+        // Pad the list to 5 elements with empty strings
+        val paddedParts = partsList + List(5 - partsList.size) { "" }
+        
+        val allExercises = getFilteredSimilarExercises(
+            muscleGroup = muscleGroup,
+            muscleParts = muscleParts,
+            musclePart1 = paddedParts[0],
+            musclePart2 = paddedParts[1],
+            musclePart3 = paddedParts[2],
+            musclePart4 = paddedParts[3],
+            musclePart5 = paddedParts[4],
+            equipment = equipment,
+            difficulty = difficulty,
+            excludeId = excludeId,
+            limit = limit * 2 // Get more results to filter from
+        )
+        
+        // Apply additional filtering to exclude exercises with conflicting muscle part names
+        return filterExercisesByMusclePartNames(allExercises, partsList, limit)
+    }
+
+    // Helper function to get similar exercises with parsed muscle parts (no equipment/difficulty filter)
+    suspend fun getSimilarExercisesWithParsedParts(
+        muscleGroup: String,
+        muscleParts: String,
+        excludeId: Int,
+        limit: Int = 10
+    ): List<EntityExercise> {
+        val converter = Converter()
+        val partsList = converter.fromString(muscleParts)
+        
+        // Pad the list to 5 elements with empty strings
+        val paddedParts = partsList + List(5 - partsList.size) { "" }
+        
+        val allExercises = getSimilarExercises(
+            muscleGroup = muscleGroup,
+            muscleParts = muscleParts,
+            musclePart1 = paddedParts[0],
+            musclePart2 = paddedParts[1],
+            musclePart3 = paddedParts[2],
+            musclePart4 = paddedParts[3],
+            musclePart5 = paddedParts[4],
+            excludeId = excludeId,
+            limit = limit * 2 // Get more results to filter from
+        )
+        
+        // Apply additional filtering to exclude exercises with conflicting muscle part names
+        return filterExercisesByMusclePartNames(allExercises, partsList, limit)
+    }
+
+    // Helper function to filter exercises by muscle part names in their titles
+    private fun filterExercisesByMusclePartNames(
+        exercises: List<EntityExercise>,
+        currentMuscleParts: List<String>,
+        limit: Int
+    ): List<EntityExercise> {
+        // Create a map of muscle part names to their common variations
+        val musclePartVariations = mapOf(
+            "Biceps" to listOf("bicep", "biceps", "curl"),
+            "Triceps" to listOf("tricep", "triceps", "extension", "dip"),
+            "Chest" to listOf("chest", "pec", "bench", "press", "fly", "flye"),
+            "Back" to listOf("back", "lat", "row", "pull", "pulldown"),
+            "Shoulders" to listOf("shoulder", "deltoid", "lateral", "rear", "military", "press"),
+            "Quadriceps" to listOf("quad", "quads", "squat", "leg press", "extension"),
+            "Hamstrings" to listOf("hamstring", "hams", "curl", "deadlift"),
+            "Glutes" to listOf("glute", "glutes", "hip", "thrust", "bridge"),
+            "Calves" to listOf("calf", "calves", "raise"),
+            "Abs" to listOf("ab", "abs", "crunch", "situp", "plank"),
+            "Obliques" to listOf("oblique", "twist", "side"),
+            "Forearms" to listOf("forearm", "grip", "wrist"),
+            "Lats" to listOf("lat", "lats", "pull", "pulldown"),
+            "Upper Back" to listOf("upper back", "rhomboid", "trap", "shrug"),
+            "Lower Back" to listOf("lower back", "erector", "hyperextension"),
+            "Front Deltoids" to listOf("front delt", "front deltoid", "military", "press"),
+            "Middle Deltoids" to listOf("middle delt", "middle deltoid", "lateral", "raise"),
+            "Rear Deltoids" to listOf("rear delt", "rear deltoid", "reverse", "fly")
+        )
+        
+        // Get all muscle part variations for the current exercise
+        val currentMusclePartVariations = currentMuscleParts.flatMap { part ->
+            musclePartVariations[part] ?: listOf(part.lowercase())
+        }.toSet()
+        
+        // Get all other muscle part variations (not in current exercise)
+        val otherMusclePartVariations = musclePartVariations.entries
+            .filter { entry -> !currentMuscleParts.contains(entry.key) }
+            .flatMap { it.value }
+            .toSet()
+        
+        return exercises.filter { exercise ->
+            val exerciseNameLower = exercise.name.lowercase()
+            
+            // Check if exercise name contains muscle part variations that are NOT in current exercise
+            val containsConflictingMuscleParts = otherMusclePartVariations.any { variation ->
+                exerciseNameLower.contains(variation)
+            }
+            
+            // Check if exercise name contains muscle part variations that ARE in current exercise
+            val containsMatchingMuscleParts = currentMusclePartVariations.any { variation ->
+                exerciseNameLower.contains(variation)
+            }
+            
+            // Keep exercises that either:
+            // 1. Don't contain any conflicting muscle part names, OR
+            // 2. Contain matching muscle part names (even if they also contain conflicting ones)
+            !containsConflictingMuscleParts || containsMatchingMuscleParts
+        }.take(limit)
     }
 }

@@ -1,9 +1,17 @@
 package com.example.gymtracker.data
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "exercise_alternatives")
+@Entity(
+    tableName = "exercise_alternatives",
+    indices = [
+        Index(value = ["originalExerciseId"]),
+        Index(value = ["alternativeExerciseId"]),
+        Index(value = ["workoutExerciseId"])
+    ]
+)
 data class ExerciseAlternative(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,

@@ -80,7 +80,7 @@ val MIGRATION_46_47 = object : Migration(46, 47) {
 }
 
 // Migration from version 47 to 48 - Add exercise alternatives functionality
-        val MIGRATION_47_48 = object : Migration(47, 48) {
+val MIGRATION_47_48 = object : Migration(47, 48) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 try {
                     // Check if hasAlternatives column already exists
@@ -150,6 +150,35 @@ val MIGRATION_46_47 = object : Migration(46, 47) {
     }
 }
 
+// Migration from version 48 to 49 - Add database indexes for performance
+val MIGRATION_48_49 = object : Migration(48, 49) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        try {
+            // Add indexes to workout_exercises table
+            database.execSQL("CREATE INDEX IF NOT EXISTS `index_workout_exercises_exerciseId` ON `workout_exercises` (`exerciseId`)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS `index_workout_exercises_workoutId` ON `workout_exercises` (`workoutId`)")
+            
+            // Add indexes to exercise_sessions table
+            database.execSQL("CREATE INDEX IF NOT EXISTS `index_exercise_sessions_sessionId` ON `exercise_sessions` (`sessionId`)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS `index_exercise_sessions_exerciseId` ON `exercise_sessions` (`exerciseId`)")
+            
+            // Add indexes to workout_sessions table
+            database.execSQL("CREATE INDEX IF NOT EXISTS `index_workout_sessions_workoutId` ON `workout_sessions` (`workoutId`)")
+            
+            // Add indexes to exercise_alternatives table
+            database.execSQL("CREATE INDEX IF NOT EXISTS `index_exercise_alternatives_originalExerciseId` ON `exercise_alternatives` (`originalExerciseId`)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS `index_exercise_alternatives_alternativeExerciseId` ON `exercise_alternatives` (`alternativeExerciseId`)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS `index_exercise_alternatives_workoutExerciseId` ON `exercise_alternatives` (`workoutExerciseId`)")
+            
+            Log.d("AppDatabase", "Migration 48->49 completed: Added database indexes for performance")
+            
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Error in migration 48->49", e)
+            throw e
+        }
+    }
+}
+
 @Database(
     entities = [
         EntityExercise::class,
@@ -169,7 +198,7 @@ val MIGRATION_46_47 = object : Migration(46, 47) {
         ExerciseAlternative::class
         // WorkoutContext::class // Temporarily removed for debugging
     ],
-    version = 48,  // Increment version number to add ExerciseAlternative
+    version = 49,  // Increment version number to add database indexes
     exportSchema = false
 )
 @TypeConverters(com.example.gymtracker.data.Converter::class)
@@ -194,7 +223,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "app_database"
                 )
-                .addMigrations(MIGRATION_45_46, MIGRATION_46_47, MIGRATION_47_48)  // Add migrations to preserve existing data
+                .addMigrations(MIGRATION_45_46, MIGRATION_46_47, MIGRATION_47_48, MIGRATION_48_49)  // Add migrations to preserve existing data
                 .fallbackToDestructiveMigration()  // Fallback for other version changes
                 .addCallback(object : RoomDatabase.Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {

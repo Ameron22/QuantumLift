@@ -40,9 +40,9 @@ fun ExerciseAlternativeDialog(
     var showFilters by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
-    // Filter states
-    var selectedEquipment by remember { mutableStateOf(currentExercise.equipment) }
-    var selectedDifficulty by remember { mutableStateOf(currentExercise.difficulty) }
+    // Filter states - start with no filters applied
+    var selectedEquipment by remember { mutableStateOf("") }
+    var selectedDifficulty by remember { mutableStateOf("") }
     
     // Dropdown expansion states
     var equipmentExpanded by remember { mutableStateOf(false) }
@@ -71,14 +71,26 @@ fun ExerciseAlternativeDialog(
             try {
                 isLoadingSimilar = true
                 
-                // Get exercises based on current filters
-                val filteredExercises = dao.getFilteredSimilarExercises(
-                    muscleGroup = currentExercise.muscle, // Always use current exercise's muscle group
-                    equipment = selectedEquipment,
-                    difficulty = selectedDifficulty,
-                    excludeId = currentExercise.id,
-                    limit = 20
-                )
+                // Get exercises - use filtered method only if filters are applied
+                val filteredExercises = if (selectedEquipment.isNotEmpty() || selectedDifficulty.isNotEmpty()) {
+                    // Use filtered method when user applies filters
+                    dao.getFilteredSimilarExercisesWithParsedParts(
+                        muscleGroup = currentExercise.muscle,
+                        muscleParts = currentExercise.parts,
+                        equipment = selectedEquipment,
+                        difficulty = selectedDifficulty,
+                        excludeId = currentExercise.id,
+                        limit = 20
+                    )
+                } else {
+                    // Use simple method for initial load (no filters applied)
+                    dao.getSimilarExercisesWithParsedParts(
+                        muscleGroup = currentExercise.muscle,
+                        muscleParts = currentExercise.parts,
+                        excludeId = currentExercise.id,
+                        limit = 20
+                    )
+                }
                 
                 similarExercises = filteredExercises
             } catch (e: Exception) {
@@ -197,7 +209,7 @@ fun ExerciseAlternativeDialog(
                                 onExpandedChange = { equipmentExpanded = it }
                             ) {
                                 OutlinedTextField(
-                                    value = selectedEquipment,
+                                    value = if (selectedEquipment.isEmpty()) "All Equipment" else selectedEquipment,
                                     onValueChange = { },
                                     readOnly = true,
                                     label = { Text("Equipment") },
@@ -210,6 +222,14 @@ fun ExerciseAlternativeDialog(
                                     expanded = equipmentExpanded,
                                     onDismissRequest = { equipmentExpanded = false }
                                 ) {
+                                    // Add "All" option
+                                    DropdownMenuItem(
+                                        text = { Text("All Equipment") },
+                                        onClick = { 
+                                            selectedEquipment = ""
+                                            equipmentExpanded = false
+                                        }
+                                    )
                                     allEquipments.forEach { equipment ->
                                         DropdownMenuItem(
                                             text = { Text(equipment) },
@@ -228,7 +248,7 @@ fun ExerciseAlternativeDialog(
                                 onExpandedChange = { difficultyExpanded = it }
                             ) {
                                 OutlinedTextField(
-                                    value = selectedDifficulty,
+                                    value = if (selectedDifficulty.isEmpty()) "All Difficulties" else selectedDifficulty,
                                     onValueChange = { },
                                     readOnly = true,
                                     label = { Text("Difficulty") },
@@ -241,6 +261,14 @@ fun ExerciseAlternativeDialog(
                                     expanded = difficultyExpanded,
                                     onDismissRequest = { difficultyExpanded = false }
                                 ) {
+                                    // Add "All" option
+                                    DropdownMenuItem(
+                                        text = { Text("All Difficulties") },
+                                        onClick = { 
+                                            selectedDifficulty = ""
+                                            difficultyExpanded = false
+                                        }
+                                    )
                                     allDifficulties.forEach { difficulty ->
                                         DropdownMenuItem(
                                             text = { Text(difficulty) },
