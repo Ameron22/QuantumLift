@@ -3008,8 +3008,12 @@ fun WorkoutDetailsScreen(
                             isSwipeInProgress = it,
                             onDelete = {
                                 coroutineScope.launch {
+                                    // Clean up alternatives first to maintain database integrity
+                                    dao.deleteAllAlternativesForWorkoutExercise(exerciseWithDetails.workoutExercise.id)
+                                    
                                     // Remove the exercise from the workout
                                     dao.deleteWorkoutExercise(exerciseWithDetails.workoutExercise)
+                                    
                                     // Update reorderedExercises by removing the deleted item
                                     val updatedReorderedExercises = reorderedExercises.filter {
                                         it.workoutExercise.id != exerciseWithDetails.workoutExercise.id

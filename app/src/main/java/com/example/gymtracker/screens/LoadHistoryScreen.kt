@@ -85,22 +85,27 @@ fun LoadHistoryScreen(
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text("History") },
+                    title = {
+                        Text(
+                            text = "History",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    },
                     actions = {
                         WorkoutIndicator(generalViewModel = generalViewModel, navController = navController)
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
                     )
                 )
                 
                 // Tab bar under TopAppBar
-                ScrollableTabRow(
+                TabRow(
                     selectedTabIndex = selectedTabIndex,
                     modifier = Modifier.fillMaxWidth(),
                     containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    edgePadding = 16.dp
+                    contentColor = MaterialTheme.colorScheme.primary
                 ) {
                     tabs.forEachIndexed { index, title ->
                         Tab(

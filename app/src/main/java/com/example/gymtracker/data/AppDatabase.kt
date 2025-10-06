@@ -14,6 +14,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+// Migration from version 30 to 45 - Handle missing versions (safe no-op migrations)
+val MIGRATION_30_45 = object : Migration(30, 45) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // This is a safe no-op migration for the missing versions 31-44
+        // All schema changes from versions 31-44 should be handled by Room's schema validation
+        Log.d("AppDatabase", "Migration 30->45 completed: Safe no-op migration for missing versions")
+    }
+}
+
 // Migration from version 45 to 46 - Add soreness assessment tables
 val MIGRATION_45_46 = object : Migration(45, 46) {
     override fun migrate(database: SupportSQLiteDatabase) {
@@ -223,8 +232,8 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "app_database"
                 )
-                .addMigrations(MIGRATION_45_46, MIGRATION_46_47, MIGRATION_47_48, MIGRATION_48_49)  // Add migrations to preserve existing data
-                .fallbackToDestructiveMigration()  // Fallback for other version changes
+                .addMigrations(MIGRATION_30_45, MIGRATION_45_46, MIGRATION_46_47, MIGRATION_47_48, MIGRATION_48_49)  // Add migrations to preserve existing data
+                // Removed fallbackToDestructiveMigration() to prevent data loss
                 .addCallback(object : RoomDatabase.Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)

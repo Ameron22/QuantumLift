@@ -187,6 +187,12 @@ interface ExerciseDao {
     @Query("UPDATE exercise_alternatives SET isActive = 1 WHERE id = :alternativeId")
     suspend fun activateAlternative(alternativeId: Int)
 
+    @Query("DELETE FROM exercise_alternatives WHERE workoutExerciseId = :workoutExerciseId")
+    suspend fun deleteAllAlternativesForWorkoutExercise(workoutExerciseId: Int)
+
+    @Query("DELETE FROM exercise_alternatives WHERE workoutExerciseId IN (SELECT id FROM workout_exercises WHERE workoutId = :workoutId)")
+    suspend fun deleteAllAlternativesForWorkout(workoutId: Int)
+
     @Query("UPDATE workout_exercises SET exerciseId = :newExerciseId WHERE id = :workoutExerciseId")
     suspend fun updateWorkoutExerciseId(workoutExerciseId: Int, newExerciseId: Int)
 

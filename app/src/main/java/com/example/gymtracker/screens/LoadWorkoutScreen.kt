@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -48,6 +49,7 @@ import com.example.gymtracker.data.WarmUpTemplateWithExercises
 import com.example.gymtracker.data.WorkoutWithExercises
 import com.example.gymtracker.data.XPSystem
 import com.example.gymtracker.navigation.Screen
+import com.example.gymtracker.services.WarmUpManager
 import com.example.gymtracker.viewmodels.GeneralViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -133,6 +135,10 @@ fun LoadWorkoutScreen(
     // State for workout deletion confirmation dialog
     var showDeleteConfirmationDialog by remember { mutableStateOf(false) }
     var workoutToDelete by remember { mutableStateOf<EntityWorkout?>(null) }
+
+    // State for warmup deletion confirmation dialog
+    var showDeleteWarmupConfirmationDialog by remember { mutableStateOf(false) }
+    var warmupToDelete by remember { mutableStateOf<WarmUpTemplateWithExercises?>(null) }
 
     // State for filter dialog
     var showFilterDialog by remember { mutableStateOf(false) }
@@ -237,7 +243,10 @@ fun LoadWorkoutScreen(
         scope.launch(Dispatchers.IO) {
             val dao = AppDatabase.getDatabase(context).exerciseDao()
 
-            // Delete all workout exercises first (foreign key constraint)
+            // Clean up all alternatives for this workout first
+            dao.deleteAllAlternativesForWorkout(workout.id)
+
+            // Delete all workout exercises (foreign key constraint)
             dao.deleteWorkoutExercisesForWorkout(workout.id)
 
             // Delete the workout
@@ -264,60 +273,64 @@ fun LoadWorkoutScreen(
         }
     }
 
+    // Function to show warmup delete confirmation dialog
+    fun showDeleteWarmupConfirmation(warmup: WarmUpTemplateWithExercises) {
+        warmupToDelete = warmup
+        showDeleteWarmupConfirmationDialog = true
+    }
+
+    // Function to delete warmup template
+    fun deleteWarmupTemplate(warmup: WarmUpTemplateWithExercises) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val warmUpManager = WarmUpManager(AppDatabase.getDatabase(context).warmUpDao())
+                warmUpManager.deleteWarmUpTemplate(warmup.template)
+                
+                // Refresh the warmup templates list
+                withContext(Dispatchers.Main) {
+                    // The flow will automatically update the UI
+                    Log.d("LoadWorkoutScreen", "Warmup template '${warmup.template.name}' deleted successfully")
+                }
+            } catch (e: Exception) {
+                Log.e("LoadWorkoutScreen", "Error deleting warmup template: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.Black),
-                verticalArrangement = Arrangement.spacedBy(0.dp)
-            ) {
-                // Top padding area
-                Spacer(modifier = Modifier.height(60.dp))
-                // Main tab bar as the primary top bar
-                ScrollableTabRow(
+            Column {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "Workouts",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    actions = {
+                        WorkoutIndicator(generalViewModel = generalViewModel, navController = navController)
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                    )
+                )
+                
+                // Tab bar under TopAppBar
+                TabRow(
                     selectedTabIndex = selectedTabIndex,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(60.dp),
-                    containerColor = Color.Black,
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    edgePadding = 0.dp,
-                    divider = {}
+                    modifier = Modifier.fillMaxWidth(),
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.primary
                 ) {
                     tabs.forEachIndexed { index, title ->
                         Tab(
                             selected = selectedTabIndex == index,
                             onClick = { selectedTabIndex = index },
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .padding(horizontal = 8.dp, vertical = 12.dp),
-                            text = {
-                                Text(
-                                    text = title,
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selectedTabIndex == index)
-                                        MaterialTheme.colorScheme.primary
-                                    else
-                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                )
-                            }
+                            text = { Text(title) }
                         )
                     }
-                }
-
-                // WorkoutIndicator in a separate row below tabs
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 0.dp),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    WorkoutIndicator(
-                        generalViewModel = generalViewModel,
-                        navController = navController
-                    )
                 }
             }
         },
@@ -375,7 +388,8 @@ fun LoadWorkoutScreen(
                 1 -> {
                     WarmUpsTab(
                         navController = navController,
-                        paddingValues = paddingValues
+                        paddingValues = paddingValues,
+                        onDeleteWarmup = { showDeleteWarmupConfirmation(it) }
                     )
                 }
 
@@ -439,7 +453,7 @@ fun LoadWorkoutScreen(
             },
             title = { Text("Delete Workout") },
             text = {
-                Text("Are you sure you want to delete '${workoutToDelete!!.name}'? This action cannot be undone and will also remove all exercises in this workout.")
+                Text("Are you sure you want to delete '${workoutToDelete!!.name}'?")
             },
             confirmButton = {
                 TextButton(
@@ -457,6 +471,42 @@ fun LoadWorkoutScreen(
                     onClick = {
                         showDeleteConfirmationDialog = false
                         workoutToDelete = null
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
+    // Delete Warmup Confirmation Dialog
+    if (showDeleteWarmupConfirmationDialog && warmupToDelete != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showDeleteWarmupConfirmationDialog = false
+                warmupToDelete = null
+            },
+            title = { Text("Delete Warm-up Template") },
+            text = {
+                Text("Are you sure you want to delete '${warmupToDelete!!.template.name}'? ")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deleteWarmupTemplate(warmupToDelete!!)
+                        showDeleteWarmupConfirmationDialog = false
+                        warmupToDelete = null
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteWarmupConfirmationDialog = false
+                        warmupToDelete = null
                     }
                 ) {
                     Text("Cancel")
@@ -537,7 +587,8 @@ fun LoadWorkoutScreen(
 @Composable
 fun WarmUpsTab(
     navController: NavController,
-    paddingValues: PaddingValues
+    paddingValues: PaddingValues,
+    onDeleteWarmup: (WarmUpTemplateWithExercises) -> Unit
 ) {
     val context = LocalContext.current
     val db = remember { AppDatabase.getDatabase(context) }
@@ -600,7 +651,9 @@ fun WarmUpsTab(
     fun WarmUpTemplateCard(
         templateWithExercises: WarmUpTemplateWithExercises,
         exerciseDao: com.example.gymtracker.data.ExerciseDao,
-        onClick: () -> Unit
+        onClick: () -> Unit,
+        navController: NavController,
+        onDelete: (WarmUpTemplateWithExercises) -> Unit
     ) {
         var exerciseNames by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
         var exerciseDetails by remember { mutableStateOf<Map<Int, EntityExercise>>(emptyMap()) }
@@ -856,6 +909,41 @@ fun WarmUpsTab(
                         }
                     }
                 }
+
+                // Action buttons row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    // Modify button
+                    IconButton(
+                        onClick = {
+                            // Navigate to warm-up edit screen
+                            navController.navigate(Screen.CreateWarmUp.route)
+                        }
+                    ) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Modify Warm-up",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    // Delete button
+                    IconButton(
+                        onClick = {
+                            onDelete(templateWithExercises)
+                        }
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete Warm-up",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
             }
         }
     }
@@ -892,12 +980,17 @@ fun WarmUpsTab(
                 shape = RoundedCornerShape(16.dp)
             )
 
-            Button(
+            IconButton(
                 onClick = { showFilterDialog = true },
-                modifier = Modifier.height(56.dp),
-                shape = RoundedCornerShape(16.dp)
+                modifier = Modifier
+                    .height(56.dp)
+                    .width(56.dp)
             ) {
-                Text("Filter")
+                Icon(
+                    imageVector = Icons.Default.FilterList,
+                    contentDescription = "Filter",
+                    tint = MaterialTheme.colorScheme.primary
+                )
             }
         }
 
@@ -923,7 +1016,9 @@ fun WarmUpsTab(
                         onClick = {
                             // Navigate to warm-up details or edit
                             navController.navigate(Screen.CreateWarmUp.route)
-                        }
+                        },
+                        navController = navController,
+                        onDelete = { onDeleteWarmup(it) }
                     )
                 }
             }
@@ -1065,12 +1160,17 @@ fun WorkoutsTab(
                     shape = RoundedCornerShape(16.dp)
                 )
 
-                Button(
+                IconButton(
                     onClick = { showFilterDialog = true },
-                    modifier = Modifier.height(56.dp),
-                    shape = RoundedCornerShape(16.dp)
+                    modifier = Modifier
+                        .height(56.dp)
+                        .width(56.dp)
                 ) {
-                    Text("Filter")
+                    Icon(
+                        imageVector = Icons.Default.FilterList,
+                        contentDescription = "Filter",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }
@@ -1437,12 +1537,17 @@ fun ExercisesTab(
                 shape = RoundedCornerShape(16.dp)
             )
 
-            Button(
+            IconButton(
                 onClick = { showFilterDialog = true },
-                modifier = Modifier.height(56.dp),
-                shape = RoundedCornerShape(16.dp)
+                modifier = Modifier
+                    .height(56.dp)
+                    .width(56.dp)
             ) {
-                Text("Filter")
+                Icon(
+                    imageVector = Icons.Default.FilterList,
+                    contentDescription = "Filter",
+                    tint = MaterialTheme.colorScheme.primary
+                )
             }
         }
 

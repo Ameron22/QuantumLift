@@ -16,27 +16,27 @@ object GifUtils {
         return try {
             Log.d(TAG, "Getting GIF URI for path: $gifPath")
             
-            // Check if it's an asset path (numbered GIFs like "0001_", "0002_")
+            // Check if it's an asset path (numbered images like "0001_", "0002_")
             val filename = gifPath.substringAfterLast("/")
-            if (gifPath.startsWith("exercise_gifs/") && filename.matches(Regex("\\d{4}_.*\\.gif"))) {
-                Log.d(TAG, "Loading GIF from assets: $filename")
+            if (gifPath.startsWith("exercise_gifs/") && filename.matches(Regex("\\d{4}_.*\\.(gif|jpg|jpeg|png)", RegexOption.IGNORE_CASE))) {
+                Log.d(TAG, "Loading image from assets: $filename")
                 
                 // Create a temporary file to copy the asset
                 val tempFile = File(context.cacheDir, filename)
                 if (!tempFile.exists()) {
-                    Log.d(TAG, "Copying GIF from assets to cache: $filename")
+                    Log.d(TAG, "Copying image from assets to cache: $filename")
                     context.assets.open(gifPath).use { input ->
                         FileOutputStream(tempFile).use { output ->
                             input.copyTo(output)
                         }
                     }
-                    Log.d(TAG, "Successfully copied GIF to cache: $filename")
+                    Log.d(TAG, "Successfully copied image to cache: $filename")
                 } else {
-                    Log.d(TAG, "Using cached GIF: $filename")
+                    Log.d(TAG, "Using cached image: $filename")
                 }
                 
                 val uri = Uri.fromFile(tempFile)
-                Log.d(TAG, "Created URI for asset GIF: $uri")
+                Log.d(TAG, "Created URI for asset image: $uri")
                 uri
             } else {
                 // Handle saved file-based GIFs (including those saved by the app)

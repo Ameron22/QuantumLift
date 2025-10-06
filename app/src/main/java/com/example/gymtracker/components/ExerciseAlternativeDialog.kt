@@ -26,6 +26,57 @@ import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.ExerciseAlternativeWithDetails
 import com.example.gymtracker.data.ExerciseDao
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Arrangement
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun FilterChipFlowRow(
+    items: List<String>,
+    selectedItems: List<String>,
+    onItemClick: (String) -> Unit,
+    onAllClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    spacing: Int = 8
+) {
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(spacing.dp),
+        verticalArrangement = Arrangement.spacedBy(spacing.dp)
+    ) {
+        FilterChip(
+            selected = selectedItems.isEmpty(),
+            onClick = onAllClick,
+            label = { 
+                Text(
+                    "All", 
+                    maxLines = 1,
+                    color = Color(0xFF2196F3) // Blue color for the first "All"
+                ) 
+            },
+        )
+        items.forEach { item ->
+            FilterChip(
+                selected = selectedItems.contains(item),
+                onClick = { onItemClick(item) },
+                label = {
+                    Text(
+                        text = item,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        color = when (item) {
+                            "Beginner" -> Color(0xFF4CAF50)
+                            "Intermediate" -> Color(0xFFFFA000)
+                            "Advanced" -> Color(0xFFF44336)
+                            else -> MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                }
+            )
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,27 +91,104 @@ fun ExerciseAlternativeDialog(
     var showFilters by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
-    // Filter states - start with no filters applied
-    var selectedEquipment by remember { mutableStateOf("") }
-    var selectedDifficulty by remember { mutableStateOf("") }
+    // Filter states - start with no filters applied (using lists for multiple selection)
+    var selectedEquipment by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selectedDifficulty by remember { mutableStateOf<List<String>>(emptyList()) }
     
-    // Dropdown expansion states
-    var equipmentExpanded by remember { mutableStateOf(false) }
-    var difficultyExpanded by remember { mutableStateOf(false) }
-    
-    // Get unique values for filter dropdowns
+    // Get unique values for filter chips - from all exercises in the muscle group
     var allEquipments by remember { mutableStateOf<List<String>>(emptyList()) }
     var allDifficulties by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    // Load filter options
-    LaunchedEffect(Unit) {
+    // Load filter options based on all exercises in the muscle group (not filtered results)
+    LaunchedEffect(currentExercise) {
         coroutineScope.launch {
             try {
-                val allExercises = dao.getAllExercises()
-                allEquipments = allExercises.map { it.equipment }.distinct().sorted()
-                allDifficulties = allExercises.map { it.difficulty }.distinct().sorted()
+                // Get all exercises for this muscle group to populate filter options
+                val muscleGroupExercises = dao.getExercisesByMuscleGroup(
+                    muscleGroup = currentExercise.muscle,
+                    excludeId = currentExercise.id,
+                    limit = 1000 // Get a large number to ensure we have all options
+                )
+                
+                // Split equipment combinations into individual items
+                allEquipments = muscleGroupExercises.flatMap { exercise ->
+                    if (exercise.equipment.isNotBlank()) {
+                        exercise.equipment.split(",").map { it.trim() }
+                    } else {
+                        listOf("None")
+                    }
+                }.distinct().sorted()
+                allDifficulties = muscleGroupExercises.map { it.difficulty }.distinct().sorted()
             } catch (e: Exception) {
-                // Handle error
+                // Handle error - keep empty lists
+                allEquipments = emptyList()
+                allDifficulties = emptyList()
+            }
+        }
+    }
+
+    // Update available filter options based on current selections (cross-filtering)
+    LaunchedEffect(selectedEquipment, selectedDifficulty) {
+        coroutineScope.launch {
+            try {
+                // Get all exercises for this muscle group
+                val muscleGroupExercises = dao.getExercisesByMuscleGroup(
+                    muscleGroup = currentExercise.muscle,
+                    excludeId = currentExercise.id,
+                    limit = 1000
+                )
+                
+                // Apply cross-filtering based on current selections
+                val filteredForOptions = muscleGroupExercises.filter { exercise ->
+                    val exerciseEquipment = if (exercise.equipment.isNotBlank()) {
+                        exercise.equipment.split(",").map { it.trim() }
+                    } else {
+                        listOf("None")
+                    }
+                    
+                    val matchesEquipment = selectedEquipment.isEmpty() || 
+                        selectedEquipment.any { selected -> exerciseEquipment.contains(selected) }
+                    val matchesDifficulty = selectedDifficulty.isEmpty() || 
+                        selectedDifficulty.contains(exercise.difficulty)
+                    
+                    matchesEquipment && matchesDifficulty
+                }
+                
+                // Update available equipment options based on current difficulty selection
+                if (selectedDifficulty.isNotEmpty()) {
+                    // Difficulty is selected - filter equipment options
+                    allEquipments = filteredForOptions.flatMap { exercise ->
+                        if (exercise.equipment.isNotBlank()) {
+                            exercise.equipment.split(",").map { it.trim() }
+                        } else {
+                            listOf("None")
+                        }
+                    }.distinct().sorted()
+                } else {
+                    // Difficulty is "All" - show all equipment options
+                    allEquipments = muscleGroupExercises.flatMap { exercise ->
+                        if (exercise.equipment.isNotBlank()) {
+                            exercise.equipment.split(",").map { it.trim() }
+                        } else {
+                            listOf("None")
+                        }
+                    }.distinct().sorted()
+                }
+                
+                // Update available difficulty options based on current equipment selection
+                if (selectedEquipment.isNotEmpty()) {
+                    // Equipment is selected - filter difficulty options
+                    allDifficulties = filteredForOptions.map { it.difficulty }.distinct().sorted()
+                } else {
+                    // Equipment is "All" - show all difficulty options
+                    allDifficulties = muscleGroupExercises.map { it.difficulty }.distinct().sorted()
+                }
+                
+                // Clear invalid selections that are no longer available
+                selectedEquipment = selectedEquipment.filter { it in allEquipments }
+                selectedDifficulty = selectedDifficulty.filter { it in allDifficulties }
+            } catch (e: Exception) {
+                // Handle error - keep current options
             }
         }
     }
@@ -73,15 +201,29 @@ fun ExerciseAlternativeDialog(
                 
                 // Get exercises - use filtered method only if filters are applied
                 val filteredExercises = if (selectedEquipment.isNotEmpty() || selectedDifficulty.isNotEmpty()) {
-                    // Use filtered method when user applies filters
-                    dao.getFilteredSimilarExercisesWithParsedParts(
+                    // For multiple selections, we need to get all exercises and filter them manually
+                    // since the DAO method only supports single equipment/difficulty
+                    val allMuscleGroupExercises = dao.getExercisesByMuscleGroup(
                         muscleGroup = currentExercise.muscle,
-                        muscleParts = currentExercise.parts,
-                        equipment = selectedEquipment,
-                        difficulty = selectedDifficulty,
                         excludeId = currentExercise.id,
-                        limit = 20
+                        limit = 1000
                     )
+                    
+                    // Apply manual filtering for multiple selections
+                    allMuscleGroupExercises.filter { exercise ->
+                        val matchesEquipment = selectedEquipment.isEmpty() || 
+                            selectedEquipment.any { selected -> 
+                                val exerciseEquipment = if (exercise.equipment.isNotBlank()) {
+                                    exercise.equipment.split(",").map { it.trim() }
+                                } else {
+                                    listOf("None")
+                                }
+                                exerciseEquipment.contains(selected)
+                            }
+                        val matchesDifficulty = selectedDifficulty.isEmpty() || 
+                            selectedDifficulty.contains(exercise.difficulty)
+                        matchesEquipment && matchesDifficulty
+                    }.take(20)
                 } else {
                     // Use simple method for initial load (no filters applied)
                     dao.getSimilarExercisesWithParsedParts(
@@ -129,12 +271,6 @@ fun ExerciseAlternativeDialog(
                         fontWeight = FontWeight.Bold
                     )
                     Row {
-                        IconButton(onClick = { showFilters = !showFilters }) {
-                            Icon(
-                                imageVector = Icons.Default.FilterList,
-                                contentDescription = "Filters"
-                            )
-                        }
                         IconButton(onClick = onDismiss) {
                             Icon(
                                 imageVector = Icons.Default.Close,
@@ -195,102 +331,92 @@ fun ExerciseAlternativeDialog(
                     ) {
                         Column(
                             modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Filters",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                IconButton(onClick = { showFilters = false }) {
+                                    Icon(
+                                        imageVector = Icons.Default.FilterList,
+                                        contentDescription = "Hide Filters",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                            
+                            // Equipment filter chips
                             Text(
-                                text = "Filters",
-                                style = MaterialTheme.typography.titleSmall,
+                                text = "Equipment",
+                                style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium
                             )
-                            
-                            // Equipment filter
-                            ExposedDropdownMenuBox(
-                                expanded = equipmentExpanded,
-                                onExpandedChange = { equipmentExpanded = it }
-                            ) {
-                                OutlinedTextField(
-                                    value = if (selectedEquipment.isEmpty()) "All Equipment" else selectedEquipment,
-                                    onValueChange = { },
-                                    readOnly = true,
-                                    label = { Text("Equipment") },
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = equipmentExpanded) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .menuAnchor()
-                                )
-                                ExposedDropdownMenu(
-                                    expanded = equipmentExpanded,
-                                    onDismissRequest = { equipmentExpanded = false }
-                                ) {
-                                    // Add "All" option
-                                    DropdownMenuItem(
-                                        text = { Text("All Equipment") },
-                                        onClick = { 
-                                            selectedEquipment = ""
-                                            equipmentExpanded = false
-                                        }
-                                    )
-                                    allEquipments.forEach { equipment ->
-                                        DropdownMenuItem(
-                                            text = { Text(equipment) },
-                                            onClick = { 
-                                                selectedEquipment = equipment
-                                                equipmentExpanded = false
-                                            }
-                                        )
+                            FilterChipFlowRow(
+                                items = allEquipments,
+                                selectedItems = selectedEquipment,
+                                onItemClick = { equipment ->
+                                    if (selectedEquipment.contains(equipment)) {
+                                        selectedEquipment = selectedEquipment.filter { it != equipment }
+                                    } else {
+                                        selectedEquipment = selectedEquipment + equipment
                                     }
-                                }
-                            }
+                                },
+                                onAllClick = { selectedEquipment = emptyList() },
+                                modifier = Modifier.fillMaxWidth(),
+                                spacing = 8
+                            )
                             
-                            // Difficulty filter
-                            ExposedDropdownMenuBox(
-                                expanded = difficultyExpanded,
-                                onExpandedChange = { difficultyExpanded = it }
-                            ) {
-                                OutlinedTextField(
-                                    value = if (selectedDifficulty.isEmpty()) "All Difficulties" else selectedDifficulty,
-                                    onValueChange = { },
-                                    readOnly = true,
-                                    label = { Text("Difficulty") },
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = difficultyExpanded) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .menuAnchor()
-                                )
-                                ExposedDropdownMenu(
-                                    expanded = difficultyExpanded,
-                                    onDismissRequest = { difficultyExpanded = false }
-                                ) {
-                                    // Add "All" option
-                                    DropdownMenuItem(
-                                        text = { Text("All Difficulties") },
-                                        onClick = { 
-                                            selectedDifficulty = ""
-                                            difficultyExpanded = false
-                                        }
-                                    )
-                                    allDifficulties.forEach { difficulty ->
-                                        DropdownMenuItem(
-                                            text = { Text(difficulty) },
-                                            onClick = { 
-                                                selectedDifficulty = difficulty
-                                                difficultyExpanded = false
-                                            }
-                                        )
+                            // Difficulty filter chips
+                            Text(
+                                text = "Difficulty",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            FilterChipFlowRow(
+                                items = allDifficulties,
+                                selectedItems = selectedDifficulty,
+                                onItemClick = { difficulty ->
+                                    if (selectedDifficulty.contains(difficulty)) {
+                                        selectedDifficulty = selectedDifficulty.filter { it != difficulty }
+                                    } else {
+                                        selectedDifficulty = selectedDifficulty + difficulty
                                     }
-                                }
-                            }
+                                },
+                                onAllClick = { selectedDifficulty = emptyList() },
+                                modifier = Modifier.fillMaxWidth(),
+                                spacing = 8
+                            )
                         }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                 }
                 
-                // Show similar exercises
-                Text(
-                    text = "Similar Exercises (${similarExercises.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium
-                )
+                // Show similar exercises with filter icon
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Similar Exercises (${similarExercises.size})",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    IconButton(onClick = { showFilters = !showFilters }) {
+                        Icon(
+                            imageVector = Icons.Default.FilterList,
+                            contentDescription = "Filters",
+                            tint = if (showFilters) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(8.dp))
                 
                 LazyColumn(

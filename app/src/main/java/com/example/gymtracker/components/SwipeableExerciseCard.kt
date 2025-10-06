@@ -31,6 +31,7 @@ import androidx.compose.ui.zIndex
 import com.example.gymtracker.R
 import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.data.WorkoutExercise
+import com.example.gymtracker.components.ExerciseGif
 import kotlin.math.abs
 
 @Composable
