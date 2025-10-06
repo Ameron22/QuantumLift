@@ -1,14 +1,18 @@
 package com.example.gymtracker.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,11 +21,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
 import com.example.gymtracker.classes.HistoryViewModel
 import com.example.gymtracker.classes.MuscleSorenessData
 import com.example.gymtracker.classes.SessionWorkoutWithMuscles
 import com.example.gymtracker.data.SessionEntityExercise
+import com.example.gymtracker.data.EntityExercise
 import com.example.gymtracker.components.BottomNavBar
 import com.example.gymtracker.components.WorkoutHistoryCard
 import com.example.gymtracker.components.WorkoutIndicator
@@ -29,6 +37,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.gymtracker.viewmodels.GeneralViewModel
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.Calendar
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.gymtracker.classes.WeightProgressionData
 import com.example.gymtracker.classes.VolumeProgressionData
@@ -62,7 +71,7 @@ fun LoadHistoryScreen(
     
     // State for tab selection
     var selectedTabIndex by remember { mutableStateOf(0) }
-    val tabs = listOf("Workouts", "Graphs", "Trends", "Heatmap", "Weight", "Volume")
+    val tabs = listOf("Workouts", "Graphs", "Weight", "Volume")
     
     // Debug logging
     LaunchedEffect(workoutSessions) {
@@ -76,22 +85,27 @@ fun LoadHistoryScreen(
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text("History") },
+                    title = {
+                        Text(
+                            text = "History",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    },
                     actions = {
                         WorkoutIndicator(generalViewModel = generalViewModel, navController = navController)
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
                     )
                 )
                 
                 // Tab bar under TopAppBar
-                ScrollableTabRow(
+                TabRow(
                     selectedTabIndex = selectedTabIndex,
                     modifier = Modifier.fillMaxWidth(),
                     containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    edgePadding = 16.dp
+                    contentColor = MaterialTheme.colorScheme.primary
                 ) {
                     tabs.forEachIndexed { index, title ->
                         Tab(
@@ -124,41 +138,33 @@ fun LoadHistoryScreen(
             }
         } else {
             when (selectedTabIndex) {
-            0 -> WorkoutsTab(
-                workoutSessions = workoutSessions,
-                muscleSoreness = muscleSoreness,
-                paddingValues = paddingValues
-            )
+            0 -> {
+                val exerciseSessions by viewModel.exerciseSessions.collectAsState()
+                WorkoutsTab(
+                    workoutSessions = workoutSessions,
+                    muscleSoreness = muscleSoreness,
+                    paddingValues = paddingValues,
+                    exerciseSessions = exerciseSessions,
+                    viewModel = viewModel
+                )
+            }
             1 -> {
                 val exerciseSessions by viewModel.exerciseSessions.collectAsState()
                 GraphsTab(
                     workoutSessions = workoutSessions,
                     exerciseSessions = exerciseSessions,
-                    paddingValues = paddingValues
+                    paddingValues = paddingValues,
+                    viewModel = viewModel
                 )
             }
             2 -> {
-                val exerciseSessions by viewModel.exerciseSessions.collectAsState()
-                WorkoutDurationTrendsTab(
-                    workoutSessions = workoutSessions,
-                    paddingValues = paddingValues
-                )
-            }
-            3 -> {
-                val exerciseSessions by viewModel.exerciseSessions.collectAsState()
-                WeeklyActivityHeatmapTab(
-                    workoutSessions = workoutSessions,
-                    paddingValues = paddingValues
-                )
-            }
-            4 -> {
                 val weightProgression by viewModel.weightProgression.collectAsState()
                 WeightProgressionTab(
                     weightProgression = weightProgression,
                     paddingValues = paddingValues
                 )
             }
-            5 -> {
+            3 -> {
                 val volumeProgression by viewModel.volumeProgression.collectAsState()
                 VolumeProgressionTab(
                     volumeProgression = volumeProgression,
@@ -174,8 +180,12 @@ fun LoadHistoryScreen(
 fun WorkoutsTab(
     workoutSessions: List<SessionWorkoutWithMuscles>,
     muscleSoreness: Map<String, MuscleSorenessData>,
-    paddingValues: PaddingValues
+    paddingValues: PaddingValues,
+    exerciseSessions: List<SessionEntityExercise>,
+    viewModel: HistoryViewModel
 ) {
+    var selectedSession by remember { mutableStateOf<SessionWorkoutWithMuscles?>(null) }
+    
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -183,53 +193,23 @@ fun WorkoutsTab(
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Display muscle soreness section
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    Text(
-                        text = "Muscle Recovery Status",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    muscleSoreness.forEach { (muscle, soreness) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(text = muscle)
-                            Text(
-                                text = soreness.sorenessLevel,
-                                color = when (soreness.sorenessLevel) {
-                                    "Very Sore" -> Color.Red
-                                    "Slightly Sore" -> Color.Yellow
-                                    else -> Color.Green
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
         // Display workout history
         items(workoutSessions) { session ->
             WorkoutHistoryCard(
                 session = session,
-                onClick = { /* Handle click if needed */ }
+                onClick = { selectedSession = session }
             )
         }
+    }
+    
+    // Show workout detail dialog
+    selectedSession?.let { session ->
+        WorkoutDetailDialog(
+            session = session,
+            exerciseSessions = exerciseSessions,
+            onDismiss = { selectedSession = null },
+            viewModel = viewModel
+        )
     }
 }
 
@@ -237,43 +217,41 @@ fun WorkoutsTab(
 fun GraphsTab(
     workoutSessions: List<SessionWorkoutWithMuscles>,
     exerciseSessions: List<SessionEntityExercise>,
-    paddingValues: PaddingValues
+    paddingValues: PaddingValues,
+    viewModel: HistoryViewModel
 ) {
+    // Use the complete muscle frequency functions that include all muscles
+    val muscleGroupFrequency = viewModel.getCompleteMuscleGroupFrequency(workoutSessions)
+    val musclePartsFrequency = viewModel.getCompleteMusclePartsFrequency(exerciseSessions)
     
-    // Calculate muscle group training frequency
-    val muscleGroupFrequency = workoutSessions
-        .flatMap { session -> session.muscleGroups.keys }
-        .groupingBy { it }
-        .eachCount()
-        .toList()
-        .sortedByDescending { it.second }
-    
-    // Calculate muscle parts training frequency from exercise sessions
-    val musclePartsFrequency = exerciseSessions
-        .flatMap { exercise -> 
-            exercise.muscleParts.split(", ").map { it.trim() }.filter { it.isNotEmpty() }
+    // Calculate workout durations for the duration chart
+    val workoutDurations = workoutSessions
+        .map { session ->
+            val duration = session.endTime - session.startTime
+            val date = Date(session.startTime)
+            Triple(session.workoutName ?: "Unnamed", date, duration)
         }
-        .groupingBy { it }
-        .eachCount()
-        .toList()
-        .sortedByDescending { it.second }
+        .sortedBy { it.second }
     
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .padding(paddingValues)
-            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
     ) {
         Text(
-            text = "Muscle Group Training Frequency",
+            text = "Muscle Training Analysis",
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 16.dp)
+            modifier = Modifier.padding(16.dp, 16.dp, 16.dp, 0.dp)
         )
         
-        if (muscleGroupFrequency.isEmpty()) {
+        if (workoutSessions.isEmpty()) {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -286,6 +264,31 @@ fun GraphsTab(
             CompactBarChart(
                 muscleGroupFrequency = muscleGroupFrequency,
                 musclePartsFrequency = musclePartsFrequency
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Add undertrained muscles section
+            UndertrainedMusclesSection(
+                muscleGroupFrequency = muscleGroupFrequency,
+                musclePartsFrequency = musclePartsFrequency
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Add Duration Over Time chart under undertrained muscles
+            if (workoutDurations.isNotEmpty()) {
+                WorkoutDurationChart(
+                    workoutDurations = workoutDurations
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Add Weekly Activity Heatmap
+            WeeklyActivityHeatmapTab(
+                workoutSessions = workoutSessions,
+                paddingValues = PaddingValues(0.dp) // No padding since we're inside the scrollable column
             )
         }
     }
@@ -354,10 +357,10 @@ fun CompactBarChart(
                 }
             }
             
-            LazyColumn(
+            Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(currentData) { (muscleGroup, frequency) ->
+                currentData.forEach { (muscleGroup, frequency) ->
                     CompactBarItem(
                         muscleGroup = muscleGroup,
                         frequency = frequency,
@@ -377,7 +380,13 @@ fun CompactBarItem(
 ) {
     val barHeight = 24.dp
     val maxBarWidth = 150.dp
-    val barWidth = (frequency.toFloat() / maxFrequency.toFloat() * maxBarWidth.value).dp
+    val barWidth = if (frequency > 0) {
+        (frequency.toFloat() / maxFrequency.toFloat() * maxBarWidth.value).dp
+    } else {
+        0.dp
+    }
+    
+    val isUndertrained = frequency <= 1
     
     Row(
         modifier = Modifier
@@ -389,7 +398,8 @@ fun CompactBarItem(
         Text(
             text = muscleGroup.replaceFirstChar { it.uppercase() },
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = if (isUndertrained) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+            fontWeight = if (isUndertrained) FontWeight.Medium else FontWeight.Normal,
             modifier = Modifier.width(60.dp)
         )
         
@@ -399,25 +409,33 @@ fun CompactBarItem(
                 .height(barHeight)
                 .padding(horizontal = 8.dp)
                 .background(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    color = if (isUndertrained) 
+                        MaterialTheme.colorScheme.error.copy(alpha = 0.1f) 
+                    else 
+                        MaterialTheme.colorScheme.surfaceVariant,
                     shape = RoundedCornerShape(2.dp)
                 )
         ) {
+            if (frequency > 0) {
             Box(
                 modifier = Modifier
                     .width(barWidth)
                     .height(barHeight)
                     .background(
-                        color = MaterialTheme.colorScheme.primary,
+                            color = if (isUndertrained) 
+                                MaterialTheme.colorScheme.error 
+                            else 
+                                MaterialTheme.colorScheme.primary,
                         shape = RoundedCornerShape(2.dp)
                     )
             )
+            }
         }
         
         Text(
             text = "$frequency",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
+            color = if (isUndertrained) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.width(30.dp),
             textAlign = TextAlign.End
@@ -522,9 +540,17 @@ fun WorkoutDurationTrendsTab(
 fun WorkoutDurationChart(
     workoutDurations: List<Triple<String, Date, Long>>
 ) {
+    var isExpanded by remember { mutableStateOf(false) }
     val maxDuration = workoutDurations.maxOfOrNull { it.third } ?: 1L
     val minDuration = workoutDurations.minOfOrNull { it.third } ?: 0L
     val durationRange = maxDuration - minDuration
+    
+    // Show only last 3 workouts when not expanded, all when expanded
+    val displayedWorkouts = if (isExpanded) {
+        workoutDurations
+    } else {
+        workoutDurations.takeLast(3)
+    }
     
     Card(
         modifier = Modifier
@@ -571,11 +597,11 @@ fun WorkoutDurationChart(
                     )
                 }
                 
-                // Simple bar chart for duration
+                // Bar chart row
                 Row(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(start = 50.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                        .fillMaxWidth()
+                        .padding(start = 50.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.Bottom
                 ) {
@@ -594,20 +620,95 @@ fun WorkoutDurationChart(
                         )
                     }
                 }
+                
+                // Month labels row at the BOTTOM - below the bars
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 50.dp, end = 8.dp, top = 4.dp, bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    var currentMonth = ""
+                    workoutDurations.forEach { (_, date, duration) ->
+                        val monthName = SimpleDateFormat("MMM", Locale.getDefault()).format(date)
+                        
+                        if (monthName != currentMonth) {
+                            currentMonth = monthName
+                            Text(
+                                text = monthName,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.width(24.dp),
+                                textAlign = TextAlign.Center
+                            )
+                        } else {
+                            // Empty space to maintain alignment
+                            Spacer(modifier = Modifier.width(24.dp))
+                        }
+                    }
+                }
             }
             
             Spacer(modifier = Modifier.height(16.dp))
             
+            // Show "See Less" button at top when expanded
+            if (isExpanded && workoutDurations.size > 3) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    TextButton(
+                        onClick = { isExpanded = false }
+                    ) {
+                        Text("See Less")
+                    }
+                }
+            }
+            
             // Workout list
-            LazyColumn(
+            Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(workoutDurations) { (workoutName, date, duration) ->
+                displayedWorkouts.forEach { (workoutName, date, duration) ->
                     WorkoutDurationItem(
                         workoutName = workoutName,
                         date = date,
                         duration = duration
                     )
+                }
+            }
+            
+            // Show expand button when not expanded and there are more than 3 workouts
+            if (!isExpanded && workoutDurations.size > 3) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    TextButton(
+                        onClick = { isExpanded = true }
+                    ) {
+                        Text("Show All (${workoutDurations.size} workouts)")
+                    }
+                }
+            }
+            
+            // Show "See Less" button at bottom when expanded
+            if (isExpanded && workoutDurations.size > 3) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    TextButton(
+                        onClick = { isExpanded = false }
+                    ) {
+                        Text("See Less")
+                    }
                 }
             }
         }
@@ -680,10 +781,7 @@ fun WeeklyActivityHeatmapTab(
     val maxFrequency = allDays.values.maxOrNull() ?: 1
     
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(paddingValues)
-            .padding(16.dp)
+        modifier = Modifier.fillMaxWidth()
     ) {
         Text(
             text = "Weekly Activity Heatmap",
@@ -1241,6 +1339,603 @@ fun VolumeProgressionTab(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun UndertrainedMusclesSection(
+    muscleGroupFrequency: List<Pair<String, Int>>,
+    musclePartsFrequency: List<Pair<String, Int>>
+) {
+    // Find muscles with 0 or very low training frequency
+    val undertrainedGroups = muscleGroupFrequency.filter { it.second <= 1 }
+    val undertrainedParts = musclePartsFrequency.filter { it.second <= 1 }
+    
+    if (undertrainedGroups.isNotEmpty() || undertrainedParts.isNotEmpty()) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f)
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    text = "Undertrained Muscles",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                
+                if (undertrainedGroups.isNotEmpty()) {
+                    Text(
+                        text = "Muscle Groups:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    ) {
+                        items(undertrainedGroups) { (muscle, count) ->
+                            UndertrainedMuscleChip(
+                                muscleName = muscle,
+                                count = count
+                            )
+                        }
+                    }
+                }
+                
+                if (undertrainedParts.isNotEmpty()) {
+                    Text(
+                        text = "Muscle Parts:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(undertrainedParts) { (muscle, count) ->
+                            UndertrainedMuscleChip(
+                                muscleName = muscle,
+                                count = count
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun UndertrainedMuscleChip(
+    muscleName: String,
+    count: Int
+) {
+    Box(
+        modifier = Modifier
+            .background(
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = muscleName,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = "$count times",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+            )
+        }
+    }
+}
+
+@Composable
+fun WorkoutDetailDialog(
+    session: SessionWorkoutWithMuscles,
+    exerciseSessions: List<SessionEntityExercise>,
+    onDismiss: () -> Unit,
+    viewModel: HistoryViewModel
+) {
+    // Filter exercises for this specific session
+    val sessionExercises = exerciseSessions.filter { it.sessionId == session.sessionId }
+    
+    // State for exercise names
+    var exerciseNames by remember { mutableStateOf<Map<Long, String>>(emptyMap()) }
+    
+    // Fetch exercise names
+    LaunchedEffect(sessionExercises) {
+        val names = mutableMapOf<Long, String>()
+        sessionExercises.forEach { exerciseSession ->
+            try {
+                val exercise = viewModel.getExerciseById(exerciseSession.exerciseId)
+                names[exerciseSession.exerciseId] = exercise?.name ?: "Unknown Exercise"
+            } catch (e: Exception) {
+                names[exerciseSession.exerciseId] = "Unknown Exercise"
+            }
+        }
+        exerciseNames = names
+    }
+    
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF1A1A2E),
+                            Color(0xFF16213E),
+                            Color(0xFF0F3460)
+                        )
+                    )
+                ),
+            color = Color.Transparent
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                // Header with close button
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF2D3748).copy(alpha = 0.8f)
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = session.workoutName ?: "Workout Details",
+                            style = MaterialTheme.typography.headlineLarge,
+                            color = Color(0xFFE2E8F0),
+                            fontWeight = FontWeight.Bold
+                        )
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color(0xFFE53E3E)
+                            ),
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            IconButton(
+                                onClick = onDismiss,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Workout summary with improved design
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF4A5568).copy(alpha = 0.9f)
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp)
+                    ) {
+                        val duration = session.endTime - session.startTime
+                        val formattedDate = SimpleDateFormat("MMM dd, yyyy 'at' HH:mm", Locale.getDefault())
+                            .format(Date(session.startTime))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Date & Time",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color(0xFFE2E8F0),
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = formattedDate,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = Color(0xFFCBD5E0),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Duration",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color(0xFFE2E8F0),
+                                fontWeight = FontWeight.Bold
+                            )
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color(0xFF38B2AC)
+                                )
+                            ) {
+                                Text(
+                                    text = formatDuration(duration),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        
+                        if (session.muscleGroups.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Muscles worked: ${session.muscleGroups.keys.joinToString(", ") { it.replaceFirstChar { char -> char.uppercase() } }}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color(0xFFCBD5E0),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Exercises list
+                Text(
+                    text = "Exercises (${sessionExercises.size})",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color(0xFFE2E8F0),
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                if (sessionExercises.isEmpty()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Text(
+                            text = "No exercises recorded for this session",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        sessionExercises.forEach { exercise ->
+                            val exerciseName = exerciseNames[exercise.exerciseId] ?: "Unknown Exercise"
+                            ExerciseDetailCard(
+                                exercise = exercise,
+                                exerciseName = exerciseName
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ExerciseDetailCard(
+    exercise: SessionEntityExercise,
+    exerciseName: String
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF2D3748).copy(alpha = 0.8f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp)
+        ) {
+            // Exercise name and muscle group
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = exerciseName,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color(0xFF38B2AC),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFE53E3E)
+                    ),
+                    modifier = Modifier.padding(start = 8.dp)
+                ) {
+                    Text(
+                        text = exercise.muscleGroup.replaceFirstChar { it.uppercase() },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+            
+            if (exercise.muscleParts.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF4A5568).copy(alpha = 0.7f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Target: ${exercise.muscleParts}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFFCBD5E0),
+                        modifier = Modifier.padding(12.dp),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Sets information with better styling
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Sets Completed",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color(0xFFE2E8F0),
+                    fontWeight = FontWeight.SemiBold
+                )
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (exercise.completedSets == exercise.sets) 
+                            Color(0xFF38B2AC)
+                        else 
+                            Color(0xFFE53E3E)
+                    )
+                ) {
+                    Text(
+                        text = "${exercise.completedSets}/${exercise.sets}",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Sets details with improved design
+            if (exercise.repsOrTime.isNotEmpty() && exercise.weight.isNotEmpty()) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF4A5568).copy(alpha = 0.6f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Set Details",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF38B2AC)
+                        )
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        exercise.repsOrTime.forEachIndexed { index, repsOrTime ->
+                            val weight = exercise.weight.getOrNull(index)
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color(0xFF2D3748).copy(alpha = 0.8f)
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Set ${index + 1}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color(0xFFCBD5E0),
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = buildString {
+                                            if (weight != null) append("${weight}kg")
+                                            if (repsOrTime != null) {
+                                                if (weight != null) append(" × ")
+                                                append("$repsOrTime")
+                                                // Assume it's reps if < 60, otherwise time in seconds
+                                                if (repsOrTime >= 60) append("s")
+                                            }
+                                        },
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = Color(0xFF38B2AC),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Additional details
+            if (exercise.notes.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF4A5568).copy(alpha = 0.7f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Notes",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF38B2AC)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = exercise.notes,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFFCBD5E0)
+                        )
+                    }
+                }
+            }
+            
+            // Recovery factors with improved design
+            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFF4A5568).copy(alpha = 0.8f)
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Recovery Metrics",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF38B2AC)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        RecoveryMetricCard(
+                            label = "RPE",
+                            value = "${exercise.rpe}",
+                            color = Color(0xFF38B2AC)
+                        )
+                        RecoveryMetricCard(
+                            label = "Soreness",
+                            value = "${exercise.subjectiveSoreness}",
+                            color = Color(0xFFE53E3E)
+                        )
+                        RecoveryMetricCard(
+                            label = "Novelty",
+                            value = "${exercise.noveltyFactor}",
+                            color = Color(0xFF9F7AEA)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun RecoveryMetricCard(
+    label: String,
+    value: String,
+    color: Color
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF2D3748).copy(alpha = 0.8f)
+        ),
+        modifier = Modifier.padding(4.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(12.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = Color(0xFFCBD5E0),
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.headlineSmall,
+                color = color,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }

@@ -30,9 +30,11 @@ import com.example.gymtracker.data.ShareWorkoutRequest
 import com.example.gymtracker.data.ShareWorkoutResponse
 import com.example.gymtracker.data.CopyWorkoutRequest
 import com.example.gymtracker.data.CopyWorkoutResponse
+import com.example.gymtracker.data.*
 import retrofit2.http.DELETE
 import retrofit2.http.PUT
 import retrofit2.http.Query
+import retrofit2.http.Path
 import kotlin.jvm.JvmSuppressWildcards
 
 /**
@@ -301,5 +303,90 @@ interface ApiService {
         @Header("Authorization") authorization: String
     ): Response<CopyWorkoutResponse>
     
+    // Body tracking API endpoints
+    
+    /**
+     * Get all physical parameters for a user endpoint
+     * @param limit Number of parameters to return
+     * @param offset Number of parameters to skip
+     * @param authorization Bearer token for authentication
+     * @return Response containing list of physical parameters
+     */
+    @GET("api/body/parameters")
+    suspend fun getPhysicalParameters(
+        @Query("limit") limit: Int = 50,
+        @Query("offset") offset: Int = 0,
+        @Header("Authorization") authorization: String
+    ): Response<PhysicalParametersListResponse>
+    
+    /**
+     * Get latest physical parameters for a user endpoint
+     * @param authorization Bearer token for authentication
+     * @return Response containing latest physical parameters
+     */
+    @GET("api/body/parameters/latest")
+    suspend fun getLatestPhysicalParameters(
+        @Header("Authorization") authorization: String
+    ): Response<PhysicalParametersResponse>
+    
+    /**
+     * Create or update physical parameters endpoint
+     * @param request Physical parameters data
+     * @param authorization Bearer token for authentication
+     * @return Response containing saved physical parameters
+     */
+    @POST("api/body/parameters")
+    suspend fun savePhysicalParameters(
+        @Body request: PhysicalParametersRequest,
+        @Header("Authorization") authorization: String
+    ): Response<PhysicalParametersResponse>
+    
+    /**
+     * Get body measurements for specific parameters endpoint
+     * @param parametersId The parameters ID to get measurements for
+     * @param authorization Bearer token for authentication
+     * @return Response containing list of body measurements
+     */
+    @GET("api/body/measurements/{parametersId}")
+    suspend fun getBodyMeasurements(
+        @Path("parametersId") parametersId: Long,
+        @Header("Authorization") authorization: String
+    ): Response<BodyMeasurementsResponse>
+    
+    /**
+     * Create or update body measurements endpoint
+     * @param request Body measurements data
+     * @param authorization Bearer token for authentication
+     * @return Response containing saved body measurements
+     */
+    @POST("api/body/measurements")
+    suspend fun saveBodyMeasurements(
+        @Body request: BodyMeasurementsRequest,
+        @Header("Authorization") authorization: String
+    ): Response<BodyMeasurementsResponse>
+    
+    /**
+     * Delete physical parameters and associated measurements endpoint
+     * @param id The parameters ID to delete
+     * @param authorization Bearer token for authentication
+     * @return Response containing success/error message
+     */
+    @DELETE("api/body/parameters/{id}")
+    suspend fun deletePhysicalParameters(
+        @Path("id") id: Long,
+        @Header("Authorization") authorization: String
+    ): Response<PostActionResponse>
+    
+    /**
+     * Sync body data (bulk operations) endpoint
+     * @param request Body sync data
+     * @param authorization Bearer token for authentication
+     * @return Response containing sync results
+     */
+    @POST("api/body/sync")
+    suspend fun syncBodyData(
+        @Body request: BodySyncRequest,
+        @Header("Authorization") authorization: String
+    ): Response<BodySyncResponse>
 
 } 

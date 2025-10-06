@@ -8,6 +8,7 @@ import androidx.lifecycle.Lifecycle
 import com.example.gymtracker.data.ExerciseDao
 import com.example.gymtracker.data.RecoveryFactors
 import com.example.gymtracker.data.SessionEntityExercise
+import com.example.gymtracker.data.EntityExercise
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -55,7 +56,7 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
                     dao.getAllWorkoutSessionsFlow().collectLatest { workoutSessions ->
                         Log.d("HistoryViewModel", "Loaded ${workoutSessions.size} workout sessions")
 
-                    // Create a map to store aggregated results
+                                            // Create a map to store aggregated results
                     val sessionMap = mutableMapOf<Long, SessionWorkoutWithMuscles>()
                         val muscleDataMap = mutableMapOf<String, MuscleData>()
 
@@ -90,14 +91,24 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
                                 // Calculate muscle stress using the new formula
                                 val muscleStress = calculateMuscleStress(session)
                                 
-                                // Update muscle data
-                                val existingData = muscleDataMap[session.muscleGroup] ?: MuscleData()
-                                existingData.totalStress += muscleStress
-                                existingData.lastWorkoutTime = max(existingData.lastWorkoutTime, session.sessionId)
-                                existingData.exercises.add(session)
-                                muscleDataMap[session.muscleGroup] = existingData
+                                // Parse individual muscle parts from the session
+                                val muscleParts = session.muscleParts.split(", ").map { it.trim() }.filter { it.isNotEmpty() }
+                                
+                                // If no specific muscle parts are defined, fall back to muscle group
+                                val partsToProcess = if (muscleParts.isNotEmpty()) muscleParts else listOf(session.muscleGroup)
+                                
+                                // Update muscle data for each individual muscle part
+                                for (musclePart in partsToProcess) {
+                                    // Normalize muscle part names to handle capitalization inconsistencies
+                                    val normalizedMusclePart = normalizeMusclePartName(musclePart)
+                                    val existingData = muscleDataMap[normalizedMusclePart] ?: MuscleData()
+                                    existingData.totalStress += muscleStress / partsToProcess.size // Distribute stress evenly
+                                    existingData.lastWorkoutTime = max(existingData.lastWorkoutTime, session.sessionId)
+                                    existingData.exercises.add(session)
+                                    muscleDataMap[normalizedMusclePart] = existingData
+                                }
 
-                                // Add muscle group stress data
+                                // Add muscle group stress data (keep for backward compatibility)
                                 (existingSession.muscleGroups as MutableMap)[session.muscleGroup] =
                                     (existingSession.muscleGroups[session.muscleGroup] ?: 0) + muscleStress.toInt()
                             }
@@ -145,7 +156,7 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
      * Simplified formula: Stress = k * (Load * Volume)
      */
     private fun calculateMuscleStress(session: SessionEntityExercise): Float {
-        val k = 0.1f // Individual sensitivity constant
+        val k = 0.15f // Increased sensitivity constant
         
         // Calculate average load and volume
         val avgLoad = session.weight.filterNotNull().average().toFloat()
@@ -161,11 +172,11 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
         return if (hasDetailedData) {
             // Complete formula with all factors
             val baseImpact = avgLoad * totalVolume
-            val eccentricMultiplier = 1 + (session.eccentricFactor / 10f)
-            val noveltyMultiplier = 1 + (session.noveltyFactor / 10f)
-            val adaptationMultiplier = 1 - (session.adaptationLevel / 10f)
-            val rpeMultiplier = 1 + (session.rpe / 10f)
-            val sorenessMultiplier = 1 + (session.subjectiveSoreness / 10f)
+            val eccentricMultiplier = 1 + (session.eccentricFactor - 1.0f) / 2.0f // More sensitive to eccentric factor
+            val noveltyMultiplier = 1 + (session.noveltyFactor - 5.0f) / 10.0f // More sensitive to novelty
+            val adaptationMultiplier = 1 - (session.adaptationLevel - 5.0f) / 10.0f // More sensitive to adaptation
+            val rpeMultiplier = 1 + (session.rpe - 5.0f) / 10.0f // More sensitive to RPE
+            val sorenessMultiplier = 1 + (session.subjectiveSoreness - 5.0f) / 10.0f // More sensitive to soreness
             val recoveryMultiplier = calculateRecoveryMultiplier(session.recoveryFactors)
             
             k * baseImpact * 
@@ -176,8 +187,8 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
             sorenessMultiplier * 
             recoveryMultiplier
         } else {
-            // Simplified formula without detailed factors
-            k * avgLoad * totalVolume * calculateRecoveryMultiplier(session.recoveryFactors)
+            // Simplified formula with increased sensitivity
+            k * avgLoad * totalVolume * 1.2f // Add 20% to account for missing detailed data
         }
     }
 
@@ -267,6 +278,7 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
 
     /**
      * Determines the soreness level based on various factors
+     * Lowered thresholds for more sensitive soreness detection
      */
     private fun determineSorenessLevel(
         daysSinceLastWorkout: Long,
@@ -274,10 +286,24 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
         avgRPE: Int,
         avgSubjectiveSoreness: Int
     ): String {
+        // Lowered thresholds for more sensitive soreness detection
         return when {
-            daysSinceLastWorkout < 1 && totalStress > 50 && avgRPE > 7 && avgSubjectiveSoreness > 7 -> "Very Sore"
-            daysSinceLastWorkout < 2 && totalStress > 30 && avgRPE > 6 && avgSubjectiveSoreness > 5 -> "Sore"
-            daysSinceLastWorkout < 3 && totalStress > 20 && avgRPE > 5 && avgSubjectiveSoreness > 3 -> "Slightly Sore"
+            // Very Sore: Lowered thresholds for high stress, recent workout, high RPE and soreness
+            daysSinceLastWorkout < 1 && totalStress > 15 && avgRPE > 5 && avgSubjectiveSoreness > 5 -> "Very Sore"
+            daysSinceLastWorkout < 1 && totalStress > 10 && avgRPE > 6 -> "Very Sore"
+            daysSinceLastWorkout < 1 && avgSubjectiveSoreness > 6 -> "Very Sore"
+            
+            // Sore: Lowered thresholds for moderate stress, recent workout, moderate RPE and soreness
+            daysSinceLastWorkout < 2 && totalStress > 8 && avgRPE > 4 && avgSubjectiveSoreness > 3 -> "Sore"
+            daysSinceLastWorkout < 2 && totalStress > 5 && avgRPE > 5 -> "Sore"
+            daysSinceLastWorkout < 2 && avgSubjectiveSoreness > 4 -> "Sore"
+            
+            // Slightly Sore: Lowered thresholds for low stress, recent workout, or moderate indicators
+            daysSinceLastWorkout < 3 && totalStress > 3 && avgRPE > 3 -> "Slightly Sore"
+            daysSinceLastWorkout < 3 && avgSubjectiveSoreness > 2 -> "Slightly Sore"
+            daysSinceLastWorkout < 1 && totalStress > 2 -> "Slightly Sore"
+            
+            // Fresh: No recent stress or low indicators
             else -> "Fresh"
         }
     }
@@ -406,6 +432,99 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
         )
     }*/
 
+    /**
+     * Get all possible muscle groups for complete display
+     */
+    private fun getAllMuscleGroups(): List<String> {
+        return listOf(
+            "Arms", "Back", "Chest", "Core", "Legs", "Neck", "Shoulder"
+        )
+    }
+
+    /**
+     * Get all possible muscle parts for complete display
+     */
+    private fun getAllMuscleParts(): List<String> {
+        return listOf(
+            "Abs", "Adductors", "Biceps", "Calves", "Deltoids", 
+            "Forearms", "Glutes", "Hamstrings", "Lats", "Lower Back", 
+            "Neck", "Obliques", "Chest", "Quadriceps", 
+            "Upper Back", "Upper Traps", "Triceps"
+        )
+    }
+    
+    /**
+     * Normalize muscle part names to handle capitalization inconsistencies from CSV data
+     */
+    private fun normalizeMusclePartName(musclePart: String): String {
+        return when (musclePart.lowercase()) {
+            "upper traps" -> "Upper Traps"
+            "upper back" -> "Upper Back"
+            "lower back" -> "Lower Back"
+            "latissimus dorsi" -> "Lats"
+            "adductors" -> "Adductors"
+            "adductor" -> "Adductors"
+            "quadriceps" -> "Quadriceps"
+            "quands" -> "Quadriceps"
+            "forearms" -> "Forearms"
+            "forearm" -> "Forearms"
+            "calves" -> "Calves"
+            "calf" -> "Calves"
+            "deltoids" -> "Deltoids"
+            "deltoid" -> "Deltoids"
+            "abs" -> "Abs"
+            "obliques" -> "Obliques"
+            "pectorals" -> "Chest"
+            "chest" -> "Chest"
+            "glutes" -> "Glutes"
+            "biceps" -> "Biceps"
+            "triceps" -> "Triceps"
+            "hamstrings" -> "Hamstrings"
+            "neck" -> "Neck"
+            else -> musclePart // Return as-is if no normalization needed
+        }
+    }
+
+    /**
+     * Calculate complete muscle group frequency including zero counts
+     */
+    fun getCompleteMuscleGroupFrequency(workoutSessions: List<SessionWorkoutWithMuscles>): List<Pair<String, Int>> {
+        val allMuscleGroups = getAllMuscleGroups()
+        val muscleGroupFrequency = workoutSessions
+            .flatMap { session -> session.muscleGroups.keys }
+            .groupingBy { it }
+            .eachCount()
+        
+        // Create complete list with all muscle groups, including those with 0 count
+        return allMuscleGroups.map { muscleGroup ->
+            muscleGroup to (muscleGroupFrequency[muscleGroup] ?: 0)
+        }.sortedByDescending { it.second }
+    }
+
+    /**
+     * Calculate complete muscle parts frequency including zero counts
+     */
+    fun getCompleteMusclePartsFrequency(exerciseSessions: List<SessionEntityExercise>): List<Pair<String, Int>> {
+        val allMuscleParts = getAllMuscleParts()
+        val musclePartsFrequency = exerciseSessions
+            .flatMap { exercise -> 
+                exercise.muscleParts.split(", ").map { it.trim() }.filter { it.isNotEmpty() }
+                    .map { normalizeMusclePartName(it) } // Normalize muscle part names
+            }
+            .groupingBy { it }
+            .eachCount()
+        
+        // Create complete list with all muscle parts, including those with 0 count
+        return allMuscleParts.map { musclePart ->
+            musclePart to (musclePartsFrequency[musclePart] ?: 0)
+        }.sortedByDescending { it.second }
+    }
+    
+    suspend fun getExerciseById(exerciseId: Long): EntityExercise? {
+        return withContext(Dispatchers.IO) {
+            dao.getExerciseById(exerciseId.toInt())
+        }
+    }
 }
 
 /**

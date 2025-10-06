@@ -252,6 +252,7 @@ class TimerService : Service() {
                 windowManager.addView(view, layoutParams)
                 updateFloatingTimerDisplay()
                 updatePausePlayButton()
+                Log.d(TAG, "Floating timer view added and updated")
             }
             
             Log.d(TAG, "Floating timer started, isPaused: $isPaused, isTimerRunning: $isTimerRunning")
@@ -373,8 +374,13 @@ class TimerService : Service() {
             }
             view.clipToOutline = true
 
-            // Custom touch logic for drag vs click
-            val dragClickTouchListener = View.OnTouchListener { _, event ->
+            // Custom touch logic for drag vs click - exclude pause button
+            val dragClickTouchListener = View.OnTouchListener { touchView, event ->
+                // Don't handle touch events on the pause button - let it handle its own clicks
+                if (touchView == pausePlayButton) {
+                    return@OnTouchListener false
+                }
+                
                 val CLICK_DRAG_TOLERANCE = 8
                 val density = resources.displayMetrics.density
                 val threshold = CLICK_DRAG_TOLERANCE * density
@@ -415,24 +421,6 @@ class TimerService : Service() {
                         true
                     }
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        val isPauseButton = pausePlayButton?.let { button ->
-                            val location = IntArray(2)
-                            button.getLocationOnScreen(location)
-                            val left = location[0]
-                            val top = location[1]
-                            val right = left + button.width
-                            val bottom = top + button.height
-                            val x = event.rawX.toInt()
-                            val y = event.rawY.toInt()
-                            x in left..right && y in top..bottom
-                        } ?: false
-                        
-                        if (isPauseButton) {
-                            togglePausePlay()
-                            isDragging = false
-                            dragStarted = false
-                            return@OnTouchListener true
-                        }
                         if (dragStarted) {
                             if (isInDeleteZone()) {
                                 onTimerDeleted?.invoke()
@@ -446,6 +434,11 @@ class TimerService : Service() {
                             val startTime = view.getTag(FLOATING_TIMER_TOUCH_START_TIME) as? Long ?: 0L
                             val duration = System.currentTimeMillis() - startTime
                             if (duration < 300) {
+                                // Prevent navigation if timer has completed
+                                if (remainingTime <= 0) {
+                                    Log.d(TAG, "Timer completed, preventing navigation on tap")
+                                    return@OnTouchListener true
+                                }
                                 view.animate().alpha(0.7f).setDuration(100).withEndAction {
                                     view.animate().alpha(1.0f).setDuration(100).start()
                                 }.start()
@@ -459,10 +452,23 @@ class TimerService : Service() {
                     else -> true
                 }
             }
-            setTouchListenerRecursively(view, dragClickTouchListener)
             
-            // Pause/play button functionality
+            // Apply touch listener to all views except the pause button
+            fun setTouchListenerRecursivelyExcludingButton(view: View, listener: View.OnTouchListener, excludeView: View?) {
+                if (view != excludeView) {
+                    view.setOnTouchListener(listener)
+                }
+                if (view is ViewGroup) {
+                    for (i in 0 until view.childCount) {
+                        setTouchListenerRecursivelyExcludingButton(view.getChildAt(i), listener, excludeView)
+                    }
+                }
+            }
+            setTouchListenerRecursivelyExcludingButton(view, dragClickTouchListener, pausePlayButton)
+            
+            // Pause/play button functionality with improved click handling
             pausePlayButton?.setOnClickListener {
+                Log.d(TAG, "Pause button clicked, current state: isPaused=$isPaused")
                 togglePausePlay()
             }
         }
@@ -558,22 +564,32 @@ class TimerService : Service() {
     }
     
     private fun togglePausePlay() {
+        Log.d(TAG, "togglePausePlay called, current isPaused: $isPaused")
         if (isPaused) {
+            Log.d(TAG, "Resuming timer from floating button")
             resumeTimer()
         } else {
+            Log.d(TAG, "Pausing timer from floating button")
             pauseTimer()
         }
+        // Force update the button immediately
+        updatePausePlayButton()
     }
     
     private fun updatePausePlayButton() {
         pausePlayButton?.let { button ->
+            Log.d(TAG, "Updating pause button icon, isPaused: $isPaused")
             if (isPaused) {
                 button.setImageResource(android.R.drawable.ic_media_play)
-                button.setColorFilter(android.graphics.Color.BLACK)
+                button.setColorFilter(android.graphics.Color.WHITE) // Better visibility on dark background
+                Log.d(TAG, "Set button to PLAY icon")
             } else {
                 button.setImageResource(android.R.drawable.ic_media_pause)
-                button.setColorFilter(android.graphics.Color.BLACK)
+                button.setColorFilter(android.graphics.Color.WHITE) // Better visibility on dark background
+                Log.d(TAG, "Set button to PAUSE icon")
             }
+        } ?: run {
+            Log.w(TAG, "pausePlayButton is null, cannot update button")
         }
     }
     
@@ -601,6 +617,12 @@ class TimerService : Service() {
         try {
             // Stop the floating timer when user taps it to navigate back to app
             stopFloatingTimer()
+            
+            // Check if timer has completed (remainingTime <= 0) and prevent navigation
+            if (remainingTime <= 0) {
+                Log.d(TAG, "Timer completed, preventing navigation back to exercise screen")
+                return
+            }
             
             val intent = Intent(this, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -665,7 +687,7 @@ class TimerService : Service() {
             return NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle(title)
                 .setContentText(content)
-                .setSmallIcon(R.drawable.new_clock)
+                .setSmallIcon(R.drawable.timer_icon)
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .setSilent(true)
@@ -678,7 +700,7 @@ class TimerService : Service() {
             return NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("Timer")
                 .setContentText("Timer is running")
-                .setSmallIcon(R.drawable.new_clock)
+                .setSmallIcon(R.drawable.timer_icon)
                 .setOngoing(true)
                 .setSilent(true)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)

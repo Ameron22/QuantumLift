@@ -1,0 +1,74 @@
+[33mcommit 1f88cba4cc541c4ba695bc5d8ad4629fc667f9c1[m
+Author: Marcel <htrpmarck@gmail.com>
+Date:   Sun Jul 6 15:35:37 2025 +0100
+
+    TopBarWithWorkoutIndicators
+
+[1mdiff --git a/app/src/main/java/com/example/gymtracker/screens/LoadWorkoutScreen.kt b/app/src/main/java/com/example/gymtracker/screens/LoadWorkoutScreen.kt[m
+[1mindex 0b5a2b8..2d0dad4 100644[m
+[1m--- a/app/src/main/java/com/example/gymtracker/screens/LoadWorkoutScreen.kt[m
+[1m+++ b/app/src/main/java/com/example/gymtracker/screens/LoadWorkoutScreen.kt[m
+[36m@@ -11,6 +11,7 @@[m [mimport androidx.compose.runtime.Composable[m
+ import androidx.compose.ui.Modifier[m
+ import androidx.compose.ui.unit.dp[m
+ import androidx.compose.runtime.*[m
+[32m+[m[32mimport androidx.compose.runtime.collectAsState[m
+ import androidx.navigation.NavController[m
+ import androidx.compose.ui.platform.LocalContext[m
+ import com.example.gymtracker.data.AppDatabase[m
+[36m@@ -33,10 +34,16 @@[m [mimport com.example.gymtracker.navigation.Screen[m
+ import androidx.compose.ui.graphics.Color[m
+ import kotlinx.coroutines.withContext[m
+ import com.example.gymtracker.components.LoadingSpinner[m
+[32m+[m[32mimport androidx.lifecycle.viewmodel.compose.viewModel[m
+[32m+[m[32mimport com.example.gymtracker.viewmodels.GeneralViewModel[m
+[32m+[m[32mimport com.example.gymtracker.components.WorkoutIndicator[m
+ [m
+ @OptIn(ExperimentalMaterial3Api::class)[m
+ @Composable[m
+[31m-fun LoadWorkoutScreen(navController: NavController) {[m
+[32m+[m[32mfun LoadWorkoutScreen([m
+[32m+[m[32m    navController: NavController,[m
+[32m+[m[32m    generalViewModel: GeneralViewModel[m
+[32m+[m[32m) {[m
+     val context = LocalContext.current[m
+     val workouts = remember { mutableStateOf(listOf<WorkoutWithExercises>()) }[m
+     val filteredWorkouts = remember { mutableStateOf(listOf<WorkoutWithExercises>()) }[m
+[36m@@ -153,6 +160,9 @@[m [mfun LoadWorkoutScreen(navController: NavController) {[m
+             Column {[m
+                 TopAppBar([m
+                     title = { Text("Workouts") },[m
+[32m+[m[32m                    actions = {[m
+[32m+[m[32m                        WorkoutIndicator(generalViewModel = generalViewModel, navController = navController)[m
+[32m+[m[32m                    },[m
+                     colors = TopAppBarDefaults.topAppBarColors([m
+                         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)[m
+                     )[m
+[36m@@ -201,7 +211,6 @@[m [mfun LoadWorkoutScreen(navController: NavController) {[m
+                         )[m
+                     }[m
+                 }[m
+[31m-[m
+             }[m
+         },[m
+         bottomBar = { BottomNavBar(navController) },[m
+[36m@@ -282,6 +291,9 @@[m [mfun LoadWorkoutScreen(navController: NavController) {[m
+ [m
+             // Existing workout cards[m
+             items(filteredWorkouts.value) { workoutWithExercises ->[m
+[32m+[m[32m                val currentWorkout by generalViewModel.currentWorkout.collectAsState()[m
+[32m+[m[32m                val isActive = currentWorkout?.workoutId == workoutWithExercises.workout.id && currentWorkout?.isActive == true[m
+[32m+[m[41m                [m
+                 WorkoutCard([m
+                     workout = workoutWithExercises.workout,[m
+                     muscleGroups = workoutWithExercises.exercises.map { it.muscle }.distinct(),[m
+[36m@@ -292,7 +304,8 @@[m [mfun LoadWorkoutScreen(navController: NavController) {[m
+                             )[m
+                         )[m
+                     },[m
+[31m-                    onDelete = { showDeleteConfirmation(workoutWithExercises.workout) }[m
+[32m+[m[32m                    onDelete = { showDeleteConfirmation(workoutWithExercises.workout) },[m
+[32m+[m[32m                    isActive = isActive[m
+                 )[m
+             }[m
+         }[m

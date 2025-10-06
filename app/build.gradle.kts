@@ -42,6 +42,11 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"
     }
+    sourceSets {
+        named("main") {
+            jniLibs.srcDirs("libs")
+        }
+    }
 }
 
 dependencies {
@@ -75,24 +80,33 @@ dependencies {
     //implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.core.splashscreen) // Latest stable version
 
-    implementation("com.google.code.gson:gson:2.10.1")
-    implementation("androidx.core:core-ktx:1.12.0")
+    implementation(libs.gson)
+    implementation(libs.androidx.core.ktx.v1120)
     
     // Retrofit for API calls
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter.gson)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
     
     // JWT token handling
-    implementation("com.auth0.android:jwtdecode:2.0.1")
+    implementation(libs.jwtdecode)
     
     // DataStore for secure token storage
-    implementation("androidx.datastore:datastore-preferences:1.0.0")
+    implementation(libs.datastore.preferences)
+    
+    // Android Security for encrypted credential storage
+    implementation(libs.androidx.security.crypto)
 
     implementation(libs.coil)
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
     implementation(libs.android.gif.drawable)
     implementation(libs.material.icons.extended)
+
+    implementation(files("libs/filament-v1.62.1-android.aar"))
+    implementation(files("libs/filament-utils-v1.62.1-android.aar"))
+    implementation(files("libs/gltfio-v1.62.1-android.aar"))
+
+    implementation("androidx.core:core-ktx:1.13.1")
 }

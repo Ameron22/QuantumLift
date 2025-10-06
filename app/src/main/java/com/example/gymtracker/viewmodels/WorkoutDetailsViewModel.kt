@@ -123,8 +123,9 @@ class WorkoutDetailsViewModel : ViewModel() {
     fun resetWorkoutSession() {
         Log.d("WorkoutViewModel", "Resetting workout session")
         _workoutSession.value = null
-        _recoveryFactors.value = TempRecoveryFactors()
-        _hasSetRecoveryFactors.value = false
+        // Don't clear recovery factors - they should persist across navigation
+        // _recoveryFactors.value = TempRecoveryFactors()
+        // _hasSetRecoveryFactors.value = false
         // Don't clear completed exercises here - they should persist during the workout
     }
 
@@ -139,6 +140,12 @@ class WorkoutDetailsViewModel : ViewModel() {
     fun clearCompletedExercises() {
         Log.d("WorkoutViewModel", "Clearing completed exercises")
         _completedExercises.value = emptySet()
+    }
+
+    fun clearRecoveryFactors() {
+        Log.d("WorkoutViewModel", "Clearing recovery factors")
+        _recoveryFactors.value = TempRecoveryFactors()
+        _hasSetRecoveryFactors.value = false
     }
 
     // Exercise management methods for existing workouts

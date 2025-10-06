@@ -1,5 +1,6 @@
 package com.example.gymtracker.components
 
+import android.content.Context
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import androidx.compose.foundation.layout.*
@@ -29,18 +30,37 @@ fun ExerciseGif(
     modifier: Modifier = Modifier,
     cornerRadius: Float = 24f
 ) {
+    ExerciseImage(
+        imagePath = gifPath,
+        modifier = modifier,
+        cornerRadius = cornerRadius
+    )
+}
+
+@Composable
+fun ExerciseImage(
+    imagePath: String,
+    modifier: Modifier = Modifier,
+    cornerRadius: Float = 24f
+) {
     val context = LocalContext.current
-    val gifUri = GifUtils.getGifUri(context, gifPath)
+    var imageUri by remember { mutableStateOf<Uri?>(null) }
     var hasError by remember { mutableStateOf(false) }
+    var isGif by remember { mutableStateOf(false) }
 
     // Debug logging
-    LaunchedEffect(gifPath) {
-        Log.d("ExerciseGif", "GIF path: $gifPath")
-        Log.d("ExerciseGif", "GIF URI: $gifUri")
-        Log.d("ExerciseGif", "Has error: $hasError")
+    LaunchedEffect(imagePath) {
+        Log.d("ExerciseImage", "Image path: $imagePath")
+        
+        // Try to find the image in different formats
+        val foundUri = findImageUri(context, imagePath)
+        imageUri = foundUri.first
+        isGif = foundUri.second
+        
+        Log.d("ExerciseImage", "Found URI: $imageUri, isGif: $isGif")
     }
 
-    if (gifUri != null && !hasError) {
+    if (imageUri != null && !hasError) {
         Card(
             modifier = modifier,
             shape = RoundedCornerShape(cornerRadius.dp),
@@ -48,40 +68,114 @@ fun ExerciseGif(
                 containerColor = androidx.compose.ui.graphics.Color.White
             )
         ) {
-            AndroidView(
-                factory = { context ->
-                    GifImageView(context).apply {
+            if (isGif) {
+                // Use GifImageView for GIF files
+                AndroidView(
+                    factory = { context ->
+                        GifImageView(context).apply {
+                            try {
+                                setImageURI(imageUri)
+                                Log.d("ExerciseImage", "Successfully set GIF URI: $imageUri")
+                            } catch (e: Exception) {
+                                Log.e("ExerciseImage", "Error loading GIF: ${e.message}", e)
+                                hasError = true
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                    update = { view ->
                         try {
-                            setImageURI(gifUri)
-                            Log.d("ExerciseGif", "Successfully set GIF URI: $gifUri")
+                            view.setImageURI(imageUri)
                         } catch (e: Exception) {
-                            Log.e("ExerciseGif", "Error loading GIF: ${e.message}", e)
+                            Log.e("ExerciseImage", "Error updating GIF: ${e.message}", e)
                             hasError = true
                         }
                     }
-                },
-                modifier = Modifier.fillMaxSize(),
-                update = { view ->
-                    try {
-                        view.setImageURI(gifUri)
-                    } catch (e: Exception) {
-                        Log.e("ExerciseGif", "Error updating GIF: ${e.message}", e)
+                )
+            } else {
+                // Use Coil for static images (JPEG, PNG)
+                SubcomposeAsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(imageUri)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    loading = {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Loading...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                    },
+                    error = {
+                        Log.e("ExerciseImage", "Error loading static image: $imageUri")
                         hasError = true
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Failed to load image",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     } else {
-        // Fallback: show error message
-        Box(
+        // Fallback: show blank card with same styling (no error message to avoid ugly flashing)
+        Card(
             modifier = modifier,
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = if (gifUri == null) "GIF not found: $gifPath" else "Failed to load GIF",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall
+            shape = RoundedCornerShape(cornerRadius.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = androidx.compose.ui.graphics.Color.White
             )
+        ) {
+            // Empty - no content, just maintains the card shape
         }
     }
+}
+
+/**
+ * Find image URI by trying different formats in order of preference
+ * Returns Pair<Uri?, Boolean> where Boolean indicates if it's a GIF
+ */
+private fun findImageUri(context: Context, imagePath: String): Pair<Uri?, Boolean> {
+    // Try GIF first (original behavior) - case insensitive
+    val gifUri = GifUtils.getGifUri(context, imagePath)
+    if (gifUri != null) {
+        Log.d("ExerciseImage", "Found GIF: $gifUri")
+        return Pair(gifUri, true)
+    }
+    
+    // Define all possible extensions to try (case insensitive)
+    val extensions = listOf(
+        "gif", "GIF", "Gif",
+        "jpeg", "JPEG", "Jpeg", "Jpeg",
+        "jpg", "JPG", "Jpg", "Jpg",
+        "png", "PNG", "Png", "Png"
+    )
+    
+    // Try each extension
+    for (ext in extensions) {
+        val testPath = imagePath.replaceAfterLast(".", ext)
+        val testUri = GifUtils.getGifUri(context, testPath)
+        if (testUri != null) {
+            val isGif = ext.lowercase() == "gif"
+            Log.d("ExerciseImage", "Found ${ext.uppercase()}: $testUri")
+            return Pair(testUri, isGif)
+        }
+    }
+    
+    Log.w("ExerciseImage", "No image found for path: $imagePath")
+    return Pair(null, false)
 } 

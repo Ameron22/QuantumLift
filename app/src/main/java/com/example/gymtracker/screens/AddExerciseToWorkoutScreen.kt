@@ -65,7 +65,13 @@ fun FilterChipFlowRow(
         FilterChip(
             selected = selectedItems.isEmpty(),
             onClick = onAllClick,
-            label = { Text("All", maxLines = 1) },
+            label = { 
+                Text(
+                    "All", 
+                    maxLines = 1,
+                    color = Color(0xFF2196F3) // Blue color for the first "All"
+                ) 
+            },
         )
         items.forEach { item ->
             FilterChip(
@@ -119,16 +125,238 @@ fun AddExerciseToWorkoutScreen(
     // Create a single interaction source for all cards
     val interactionSource = remember { MutableInteractionSource() }
 
-    // Load all exercises
+    // Use the same muscle parts map as CreateExerciseScreen
+    val musclePartsMap = mapOf(
+        "All" to listOf(" "), // "All" for showing all exercises
+        "Neck" to listOf("Neck", "Upper Traps"),
+        "Chest" to listOf("Chest"),
+        "Shoulders" to listOf("Deltoids"),
+        "Arms" to listOf("Biceps", "Triceps", "Forearms"),
+        "Core" to listOf("Abs", "Obliques", "Lower Back"),
+        "Back" to listOf("Upper Back", "Lats", "Lower Back"),
+        "Legs" to listOf("Quadriceps", "Hamstrings", "Adductors", "Glutes", "Calves")
+    )
+
+    // Function to extract muscle groups from workout name
+    // Examples of workout names and expected muscle groups:
+    // "Chest & Abs" -> ["Chest", "Core"]
+    // "Back + Biceps" -> ["Back", "Arms"] 
+    // "Push Day" -> ["Chest", "Shoulders", "Arms"]
+    // "Pull Day" -> ["Back", "Arms"]
+    // "Upper Body" -> ["Chest", "Back", "Shoulders", "Arms", "Core"]
+    // "Lower Body" -> ["Legs", "Core"]
+    // "Full Body" -> ["All"]
+    // "Leg Day" -> ["Legs"]
+    // "Core & Cardio" -> ["Core"]
+    // "Shoulder Press" -> ["Shoulders"]
+    // "Bench Press" -> ["Chest"]
+    fun extractMuscleGroupsFromName(workoutName: String): List<String> {
+        val name = workoutName.lowercase()
+        val extractedGroups = mutableListOf<String>()
+        
+        Log.d("AddExerciseToWorkoutScreen", "Analyzing workout name: '$workoutName'")
+        
+        // First, check for explicit muscle group combinations (e.g., "Chest & Abs", "Back + Biceps")
+        val muscleGroupPatterns = listOf(
+            "chest" to "Chest",
+            "back" to "Back", 
+            "shoulder" to "Shoulders",
+            "arm" to "Arms",
+            "bicep" to "Arms",
+            "tricep" to "Arms",
+            "core" to "Core",
+            "ab" to "Core",
+            "abs" to "Core",
+            "oblique" to "Core",
+            "leg" to "Legs",
+            "quad" to "Legs",
+            "hamstring" to "Legs",
+            "glute" to "Legs",
+            "calf" to "Legs",
+            "neck" to "Neck",
+            "trap" to "Neck"
+        )
+        
+        // Check for explicit muscle group mentions first
+        muscleGroupPatterns.forEach { (pattern, muscleGroup) ->
+            if (name.contains(pattern)) {
+                extractedGroups.add(muscleGroup)
+                Log.d("AddExerciseToWorkoutScreen", "Found muscle group '$muscleGroup' from pattern '$pattern'")
+            }
+        }
+        
+        Log.d("AddExerciseToWorkoutScreen", "Explicit muscle groups found: $extractedGroups")
+        
+        // Check for specific workout types (push/pull splits) - only if no explicit muscle groups found
+        if (extractedGroups.isEmpty()) {
+            if (name.contains("push") && !name.contains("pull")) {
+                extractedGroups.addAll(listOf("Chest", "Shoulders", "Arms"))
+                Log.d("AddExerciseToWorkoutScreen", "Detected push workout - adding: Chest, Shoulders, Arms")
+                return extractedGroups.distinct()
+            }
+            if (name.contains("pull") && !name.contains("push")) {
+                extractedGroups.addAll(listOf("Back", "Arms"))
+                Log.d("AddExerciseToWorkoutScreen", "Detected pull workout - adding: Back, Arms")
+                return extractedGroups.distinct()
+            }
+        }
+        
+        // Check for workout type keywords if no explicit muscle groups found
+        if (extractedGroups.isEmpty()) {
+            if (name.contains("bench") || name.contains("pec") || name.contains("incline") || 
+                name.contains("decline") || name.contains("fly") || name.contains("dumbbell") || 
+                name.contains("barbell")) {
+                extractedGroups.add("Chest")
+                Log.d("AddExerciseToWorkoutScreen", "Detected chest workout from exercise keywords")
+            }
+            if (name.contains("row") || name.contains("lat") || name.contains("rhomboid") || 
+                name.contains("chin") || name.contains("pullup") || name.contains("pulldown")) {
+                extractedGroups.add("Back")
+                Log.d("AddExerciseToWorkoutScreen", "Detected back workout from exercise keywords")
+            }
+            if (name.contains("press") || name.contains("deltoid") || name.contains("lateral") || 
+                name.contains("rear") || name.contains("military") || name.contains("arnold") || 
+                name.contains("upright") || name.contains("shrug")) {
+                extractedGroups.add("Shoulders")
+                Log.d("AddExerciseToWorkoutScreen", "Detected shoulder workout from exercise keywords")
+            }
+            if (name.contains("curl") || name.contains("extension") || name.contains("forearm") ||
+                name.contains("hammer") || name.contains("concentration") || name.contains("skull")) {
+                extractedGroups.add("Arms")
+                Log.d("AddExerciseToWorkoutScreen", "Detected arm workout from exercise keywords")
+            }
+            if (name.contains("crunch") || name.contains("plank") || name.contains("situp") ||
+                name.contains("leg") || name.contains("raise") || name.contains("twist")) {
+                extractedGroups.add("Core")
+                Log.d("AddExerciseToWorkoutScreen", "Detected core workout from exercise keywords")
+            }
+            if (name.contains("squat") || name.contains("deadlift") || name.contains("lunge") || 
+                name.contains("extension") || name.contains("curl") || name.contains("adduction") ||
+                name.contains("abduction") || name.contains("step") || name.contains("jump")) {
+                extractedGroups.add("Legs")
+                Log.d("AddExerciseToWorkoutScreen", "Detected leg workout from exercise keywords")
+            }
+        }
+        
+        // Check for general workout types
+        if (name.contains("full") || name.contains("body") || name.contains("total") || 
+            name.contains("complete") || name.contains("whole") || name.contains("upper") || 
+            name.contains("lower") || name.contains("split") || name.contains("circuit") ||
+            name.contains("hiit") || name.contains("cardio") || name.contains("strength")) {
+            // For split workouts, we'll need to analyze more carefully
+            if (name.contains("upper")) {
+                extractedGroups.addAll(listOf("Chest", "Back", "Shoulders", "Arms", "Core"))
+                Log.d("AddExerciseToWorkoutScreen", "Detected upper body workout")
+            } else if (name.contains("lower")) {
+                extractedGroups.addAll(listOf("Legs", "Core"))
+                Log.d("AddExerciseToWorkoutScreen", "Detected lower body workout")
+            } else if (extractedGroups.isEmpty()) {
+                extractedGroups.add("All")
+                Log.d("AddExerciseToWorkoutScreen", "Detected full body workout")
+            }
+        }
+        
+        val finalGroups = extractedGroups.distinct()
+        Log.d("AddExerciseToWorkoutScreen", "Final extracted muscle groups: $finalGroups")
+        return finalGroups
+    }
+
+    // Function to get muscle groups from existing exercises in workout
+    suspend fun getMuscleGroupsFromExistingExercises(workoutId: Int): List<String> {
+        return try {
+            val workoutExercises = dao.getWorkoutExercisesForWorkout(workoutId)
+            val muscleGroups = workoutExercises.mapNotNull { workoutExercise ->
+                val exercise = dao.getExerciseById(workoutExercise.exerciseId)
+                exercise?.muscle
+            }.distinct()
+            
+            // Map exercise muscle values to our muscle group categories
+            muscleGroups.mapNotNull { muscle ->
+                when (muscle) {
+                    "Neck" -> "Neck"
+                    "Chest" -> "Chest"
+                    "Shoulder" -> "Shoulders"
+                    "Arms" -> "Arms"
+                    "Core" -> "Core"
+                    "Back" -> "Back"
+                    "Legs" -> "Legs"
+                    "All" -> "All"
+                    else -> null
+                }
+            }.distinct()
+        } catch (e: Exception) {
+            Log.e("AddExerciseToWorkoutScreen", "Error getting muscle groups from existing exercises: ${e.message}")
+            emptyList()
+        }
+    }
+
+    // Load all exercises and auto-select muscle groups for workouts
     LaunchedEffect(Unit) {
         try {
             Log.d("AddExerciseToWorkoutScreen", "Starting to load exercises")
             withContext(Dispatchers.IO) {
                 val allExercises = dao.getAllExercises()
                 Log.d("AddExerciseToWorkoutScreen", "Loaded ${allExercises.size} exercises from database")
-                withContext(Dispatchers.Main) {
-                    exercises = allExercises
-                    Log.d("AddExerciseToWorkoutScreen", "Updated UI with exercises")
+                
+                // Auto-select muscle groups if this is for a workout (not warm-up creation)
+                if (workoutId != -1) {
+                    try {
+                        Log.d("AddExerciseToWorkoutScreen", "Auto-selecting muscle groups for workout ID: $workoutId")
+                        
+                        // Get workout name
+                        val workout = dao.getAllWorkouts().find { it.id == workoutId }
+                        val workoutName = workout?.name ?: ""
+                        
+                        Log.d("AddExerciseToWorkoutScreen", "Found workout: '$workoutName' (ID: $workoutId)")
+                        
+                        // Extract muscle groups from workout name
+                        val nameBasedGroups = extractMuscleGroupsFromName(workoutName)
+                        
+                        // Get muscle groups from existing exercises
+                        val exerciseBasedGroups = getMuscleGroupsFromExistingExercises(workoutId)
+                        
+                        // Combine both sources, prioritizing exercise-based groups
+                        val combinedGroups = if (exerciseBasedGroups.isNotEmpty()) {
+                            Log.d("AddExerciseToWorkoutScreen", "Using exercise-based muscle groups (priority)")
+                            exerciseBasedGroups
+                        } else {
+                            Log.d("AddExerciseToWorkoutScreen", "Using name-based muscle groups")
+                            nameBasedGroups
+                        }
+                        
+                        Log.d("AddExerciseToWorkoutScreen", "Workout name: '$workoutName'")
+                        Log.d("AddExerciseToWorkoutScreen", "Name-based muscle groups: $nameBasedGroups")
+                        Log.d("AddExerciseToWorkoutScreen", "Exercise-based muscle groups: $exerciseBasedGroups")
+                        Log.d("AddExerciseToWorkoutScreen", "Final selected muscle groups: $combinedGroups")
+                        
+                        withContext(Dispatchers.Main) {
+                            exercises = allExercises
+                            selectedMuscleGroups = combinedGroups
+                            
+                            // Also update muscle parts if muscle groups are selected
+                            if (combinedGroups.isNotEmpty() && !combinedGroups.contains("All")) {
+                                val availableParts = combinedGroups.flatMap { muscleGroup ->
+                                    musclePartsMap[muscleGroup] ?: emptyList()
+                                }.filter { it.isNotBlank() && it != " " }.distinct().sorted()
+                                Log.d("AddExerciseToWorkoutScreen", "Auto-updating available muscle parts: $availableParts")
+                            }
+                            
+                            Log.d("AddExerciseToWorkoutScreen", "Updated UI with exercises and auto-selected muscle groups")
+                        }
+                    } catch (e: Exception) {
+                        Log.e("AddExerciseToWorkoutScreen", "Error auto-selecting muscle groups: ${e.message}")
+                        e.printStackTrace()
+                        withContext(Dispatchers.Main) {
+                            exercises = allExercises
+                        }
+                    }
+                } else {
+                    // This is for warm-up creation, just load exercises
+                    Log.d("AddExerciseToWorkoutScreen", "Warm-up creation mode - no auto-selection")
+                    withContext(Dispatchers.Main) {
+                        exercises = allExercises
+                        Log.d("AddExerciseToWorkoutScreen", "Updated UI with exercises (warm-up mode)")
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -137,35 +365,113 @@ fun AddExerciseToWorkoutScreen(
         }
     }
 
-    // Get unique muscle groups, difficulties, and equipment
-    val muscleGroups = exercises.map { it.muscle }.distinct().sorted()
-    val difficulties = listOf("Beginner", "Intermediate", "Advanced")
-    val equipmentList = exercises.flatMap { exercise ->
+    // Get muscle groups from the musclePartsMap
+    val muscleGroups = musclePartsMap.keys.toList()
+    
+    // Filter exercises based on all current selections for dynamic filtering
+    val filteredExercisesForOptions = exercises.filter { exercise ->
+        // Muscle group filtering
+        val matchesMuscleGroup = if (selectedMuscleGroups.isEmpty()) {
+            true
+        } else {
+            val exerciseMuscleGroup = when (exercise.muscle) {
+                "Neck" -> "Neck"
+                "Chest" -> "Chest"
+                "Shoulder" -> "Shoulders"
+                "Arms" -> "Arms"
+                "Core" -> "Core"
+                "Back" -> "Back"
+                "Legs" -> "Legs"
+                else -> exercise.muscle
+            }
+            
+            if (selectedMuscleGroups.contains("All")) {
+                // When "All" is selected, show only exercises with muscle="All"
+                exercise.muscle == "All"
+            } else {
+                selectedMuscleGroups.contains(exerciseMuscleGroup)
+            }
+        }
+        
+        // Difficulty filtering
+        val matchesDifficulty = selectedDifficulties.isEmpty() || selectedDifficulties.contains(exercise.difficulty)
+        
+        // Equipment filtering
+        val matchesEquipment = selectedEquipment.isEmpty() || run {
+            val exerciseEquipment = if (exercise.equipment.isNotBlank()) {
+                exercise.equipment.split(",").map { it.trim() }
+            } else {
+                listOf("None")
+            }
+            selectedEquipment.any { selected -> exerciseEquipment.contains(selected) }
+        }
+        
+        matchesMuscleGroup && matchesDifficulty && matchesEquipment
+    }
+    
+    // Dynamic equipment list based on filtered exercises
+    val equipmentList = filteredExercisesForOptions.flatMap { exercise ->
         if (exercise.equipment.isNotBlank()) {
             exercise.equipment.split(",").map { it.trim() }
         } else {
             listOf("None")
         }
-    }.distinct().sorted()
+    }.distinct().let { equipment ->
+        // Put "None" and "Other" at the top of the list
+        val noneAndOther = equipment.filter { it in listOf("None", "Other") }
+        val others = equipment.filter { it !in listOf("None", "Other") }.sorted()
+        noneAndOther + others
+    }
+    
+    // Dynamic difficulties list based on filtered exercises
+    val difficulties = filteredExercisesForOptions.map { it.difficulty }.distinct().sorted()
     
     // Filter muscle parts based on selected muscle groups
     val availableMuscleParts = if (selectedMuscleGroups.isEmpty()) {
-        exercises.flatMap { Converter().fromString(it.parts) }.filter { it.isNotBlank() }.distinct().sorted()
+        // Show all muscle parts when no muscle group is selected
+        musclePartsMap.values.flatten().filter { it.isNotBlank() && it != " " }.distinct().sorted()
+    } else if (selectedMuscleGroups.contains("All")) {
+        // Show no muscle parts when "All" is selected
+        emptyList()
     } else {
-        exercises.filter { it.muscle in selectedMuscleGroups }
-            .flatMap { Converter().fromString(it.parts) }
-            .filter { it.isNotBlank() }
-            .distinct()
-            .sorted()
+        // Show only muscle parts from selected muscle groups
+        selectedMuscleGroups.flatMap { muscleGroup ->
+            musclePartsMap[muscleGroup] ?: emptyList()
+        }.filter { it.isNotBlank() && it != " " }.distinct().sorted()
+    }
+    
+    // Debug logging for muscle parts availability
+    if (selectedMuscleGroups.isNotEmpty()) {
+        Log.d("AddExerciseToWorkoutScreen", "Selected muscle groups: $selectedMuscleGroups")
+        Log.d("AddExerciseToWorkoutScreen", "Available muscle parts: $availableMuscleParts")
+        Log.d("AddExerciseToWorkoutScreen", "Selected muscle parts: $selectedMuscleParts")
+    }
+    
+    // Debug logging for Upper Back filter
+    if (selectedMuscleParts.contains("Upper Back")) {
+        Log.d("AddExerciseToWorkoutScreen", "Upper Back selected - Available muscle parts: $availableMuscleParts")
+        Log.d("AddExerciseToWorkoutScreen", "Selected muscle parts: $selectedMuscleParts")
+        Log.d("AddExerciseToWorkoutScreen", "Selected muscle groups: $selectedMuscleGroups")
+    }
+    
+    // Debug logging for muscle parts availability
+    if (selectedMuscleGroups.contains("Back")) {
+        Log.d("AddExerciseToWorkoutScreen", "Back muscle group selected - Available muscle parts: $availableMuscleParts")
+        Log.d("AddExerciseToWorkoutScreen", "Back muscle parts from map: ${musclePartsMap["Back"]}")
     }
     
     // Clear muscle parts when muscle groups change
     LaunchedEffect(selectedMuscleGroups) {
-        if (selectedMuscleGroups.isNotEmpty()) {
-            val validMuscleParts = exercises.filter { it.muscle in selectedMuscleGroups }
-                .flatMap { Converter().fromString(it.parts) }
-                .distinct()
+        if (selectedMuscleGroups.isNotEmpty() && !selectedMuscleGroups.contains("All")) {
+            val validMuscleParts = selectedMuscleGroups.flatMap { muscleGroup ->
+                musclePartsMap[muscleGroup] ?: emptyList()
+            }.filter { it.isNotBlank() && it != " " }
             selectedMuscleParts = selectedMuscleParts.filter { it in validMuscleParts }
+            Log.d("AddExerciseToWorkoutScreen", "Muscle groups changed - Updated muscle parts: $selectedMuscleParts")
+        } else if (selectedMuscleGroups.contains("All")) {
+            // Clear muscle parts when "All" is selected
+            selectedMuscleParts = emptyList()
+            Log.d("AddExerciseToWorkoutScreen", "All muscle groups selected - Cleared muscle parts")
         }
     }
 
@@ -178,9 +484,52 @@ fun AddExerciseToWorkoutScreen(
             val exerciseNameLower = exercise.name.lowercase()
             searchTerms.all { term -> exerciseNameLower.contains(term) }
         }
-        val matchesMuscle = selectedMuscleGroups.isEmpty() || selectedMuscleGroups.contains(exercise.muscle)
+        
+        // TODO: REMOVE THIS MAPPING ONCE CSV FILE IS UPDATED WITH NEW MUSCLE GROUP NAMES
+        // This mapping is needed for backward compatibility with old exercise data
+        // that uses "Shoulder" instead of "Shoulders"
+        val exerciseMuscleGroup = when (exercise.muscle) {
+            "Neck" -> "Neck"
+            "Chest" -> "Chest"
+            "Shoulder" -> "Shoulders"
+            "Arms" -> "Arms"
+            "Core" -> "Core"
+            "Back" -> "Back"
+            "Legs" -> "Legs"
+            else -> exercise.muscle // Fallback for any other muscle groups
+        }
+        
+        // Handle "All" filter: when selected shows only exercises with muscle="All"
+        val matchesMuscle = if (selectedMuscleGroups.isEmpty()) {
+            true // Show all exercises when no filter is selected
+        } else if (selectedMuscleGroups.contains("All")) {
+            // When "All" is selected, show only exercises with muscle="All"
+            exercise.muscle == "All"
+        } else {
+            selectedMuscleGroups.contains(exerciseMuscleGroup)
+        }
+        
         val matchesDifficulty = selectedDifficulties.isEmpty() || selectedDifficulties.contains(exercise.difficulty)
-        val matchesMusclePart = selectedMuscleParts.isEmpty() || Converter().fromString(exercise.parts).any { it in selectedMuscleParts }
+        val exerciseParts = try {
+            Converter().fromString(exercise.parts)
+        } catch (e: Exception) {
+            Log.e("AddExerciseToWorkoutScreen", "Error parsing exercise parts for ${exercise.name}: ${e.message}")
+            emptyList<String>()
+        }
+        Log.d("AddExerciseToWorkoutScreen", "Exercise: ${exercise.name}, Parts JSON: ${exercise.parts}, Parsed parts: $exerciseParts")
+        val matchesMusclePart = selectedMuscleParts.isEmpty() || exerciseParts.any { exercisePart -> 
+            selectedMuscleParts.any { selectedPart -> 
+                val matches = when (selectedPart.lowercase()) {
+                    "adductors" -> exercisePart.equals("adductors", ignoreCase = true) || exercisePart.equals("adductor", ignoreCase = true)
+                    "adductor" -> exercisePart.equals("adductors", ignoreCase = true) || exercisePart.equals("adductor", ignoreCase = true)
+                    else -> exercisePart.equals(selectedPart, ignoreCase = true)
+                }
+                if (selectedMuscleParts.contains("Upper Back")) {
+                    Log.d("AddExerciseToWorkoutScreen", "Checking Upper Back filter - Exercise part: '$exercisePart', Selected part: '$selectedPart', Matches: $matches")
+                }
+                matches
+            }
+        }
         val matchesEquipment = selectedEquipment.isEmpty() || run {
             val exerciseEquipment = if (exercise.equipment.isNotBlank()) {
                 exercise.equipment.split(",").map { it.trim() }
@@ -189,7 +538,14 @@ fun AddExerciseToWorkoutScreen(
             }
             selectedEquipment.any { selected -> exerciseEquipment.contains(selected) }
         }
-        matchesSearch && matchesMuscle && matchesDifficulty && matchesMusclePart && matchesEquipment
+        val finalMatch = matchesSearch && matchesMuscle && matchesDifficulty && matchesMusclePart && matchesEquipment
+        
+        // Debug logging for Upper Back filter
+        if (selectedMuscleParts.contains("Upper Back") && exercise.muscle == "Back") {
+            Log.d("AddExerciseToWorkoutScreen", "Upper Back filter - Exercise: ${exercise.name}, Matches: search=$matchesSearch, muscle=$matchesMuscle, difficulty=$matchesDifficulty, musclePart=$matchesMusclePart, equipment=$matchesEquipment, final=$finalMatch")
+        }
+        
+        finalMatch
     }
 
     // Add LaunchedEffect to check returnTo state
@@ -205,7 +561,7 @@ fun AddExerciseToWorkoutScreen(
                 TopAppBar(
                     title = {
                         Text(
-                            text = "Add Exercise",
+                            text = if (workoutId == -1) "Select Exercise for Warm-Up" else "Add Exercise",
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -260,6 +616,16 @@ fun AddExerciseToWorkoutScreen(
                             .padding(horizontal = 16.dp, vertical = 2.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
+                        // Show auto-selection indicator for workouts
+                        if (workoutId != -1 && selectedMuscleGroups.isNotEmpty()) {
+                            Text(
+                                text = "Auto-selected based on workout",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            )
+                        }
+                        
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             contentPadding = PaddingValues(vertical = 4.dp)
@@ -504,41 +870,72 @@ fun AddExerciseToWorkoutScreen(
                                 coroutineScope.launch {
                                     val entityExercise = dao.getExerciseById(selectedExercise!!.id)
                                     if (entityExercise != null) {
-                                        val workoutExercise = WorkoutExercise(
-                                            exerciseId = selectedExercise!!.id,
-                                            workoutId = workoutId,
-                                            sets = sets,
-                                            reps = if (selectedExercise!!.useTime) (minutes * 60 + seconds) else reps,
-                                            weight = if (selectedExercise!!.useTime) 0 else weight,
-                                            order = 0 // order will be set when saving workout
-                                        )
-                                        val combined = WorkoutExerciseWithDetails(
-                                            workoutExercise = workoutExercise,
-                                            entityExercise = entityExercise
-                                        )
-                                        
-                                        withContext(Dispatchers.IO) {
-                                            // Get the next order for this workout
-                                            val existingExercises = dao.getWorkoutExercisesForWorkout(workoutId)
-                                            val nextOrder = existingExercises.size
+                                        if (workoutId == -1) {
+                                            // This is for warm-up creation, pass exercise ID and configuration
+                                            val exerciseReps = if (selectedExercise!!.useTime) (minutes * 60 + seconds) else reps
+                                            val exerciseWeight = if (selectedExercise!!.useTime) 0 else weight
                                             
-                                            // Update the order
-                                            val updatedWorkoutExercise = workoutExercise.copy(order = nextOrder)
-                                            val updatedCombined = combined.copy(workoutExercise = updatedWorkoutExercise)
+                                            // Debug logging
+                                            Log.d("AddExerciseToWorkoutScreen", "Setting warm-up exercise config:")
+                                            Log.d("AddExerciseToWorkoutScreen", "  Exercise ID: ${selectedExercise!!.id}")
+                                            Log.d("AddExerciseToWorkoutScreen", "  Sets: $sets")
+                                            Log.d("AddExerciseToWorkoutScreen", "  Reps: $exerciseReps")
+                                            Log.d("AddExerciseToWorkoutScreen", "  Weight: $exerciseWeight")
+                                            Log.d("AddExerciseToWorkoutScreen", "  IsTimeBased: ${selectedExercise!!.useTime}")
                                             
-                                            // Save to database
-                                            dao.insertWorkoutExercise(updatedWorkoutExercise)
+                                            navController.previousBackStackEntry
+                                                ?.savedStateHandle
+                                                ?.set("newExerciseId", selectedExercise!!.id)
+                                            navController.previousBackStackEntry
+                                                ?.savedStateHandle
+                                                ?.set("exerciseSets", sets)
+                                            navController.previousBackStackEntry
+                                                ?.savedStateHandle
+                                                ?.set("exerciseReps", exerciseReps)
+                                            navController.previousBackStackEntry
+                                                ?.savedStateHandle
+                                                ?.set("exerciseWeight", exerciseWeight)
+                                            navController.previousBackStackEntry
+                                                ?.savedStateHandle
+                                                ?.set("exerciseIsTimeBased", selectedExercise!!.useTime)
+                                        } else {
+                                            // Normal workout exercise addition
+                                            val workoutExercise = WorkoutExercise(
+                                                exerciseId = selectedExercise!!.id,
+                                                workoutId = workoutId,
+                                                sets = sets,
+                                                reps = if (selectedExercise!!.useTime) (minutes * 60 + seconds) else reps,
+                                                weight = if (selectedExercise!!.useTime) 0 else weight,
+                                                order = 0 // order will be set when saving workout
+                                            )
+                                            val combined = WorkoutExerciseWithDetails(
+                                                workoutExercise = workoutExercise,
+                                                entityExercise = entityExercise
+                                            )
                                             
-                                            withContext(Dispatchers.Main) {
-                                                // Add to ViewModel for UI updates
-                                                detailsViewModel.addExercise(updatedCombined)
-                                                Log.d("AddExerciseToWorkoutScreen", "Added exercise to database and DetailsViewModel: $updatedCombined")
+                                            withContext(Dispatchers.IO) {
+                                                // Get the next order for this workout
+                                                val existingExercises = dao.getWorkoutExercisesForWorkout(workoutId)
+                                                val nextOrder = existingExercises.size
+                                                
+                                                // Update the order
+                                                val updatedWorkoutExercise = workoutExercise.copy(order = nextOrder)
+                                                val updatedCombined = combined.copy(workoutExercise = updatedWorkoutExercise)
+                                                
+                                                // Save to database
+                                                dao.insertWorkoutExercise(updatedWorkoutExercise)
+                                                
+                                                withContext(Dispatchers.Main) {
+                                                    // Add to ViewModel for UI updates
+                                                    detailsViewModel.addExercise(updatedCombined)
+                                                    Log.d("AddExerciseToWorkoutScreen", "Added exercise to database and DetailsViewModel: $updatedCombined")
+                                                }
                                             }
+                                            
+                                            navController.previousBackStackEntry
+                                                ?.savedStateHandle
+                                                ?.set("newExerciseId", combined.workoutExercise.exerciseId)
                                         }
-                                        
-                                        navController.previousBackStackEntry
-                                            ?.savedStateHandle
-                                            ?.set("newExerciseId", combined.workoutExercise.exerciseId)
                                     } else {
                                         Log.e("AddExerciseToWorkoutScreen", "EntityExercise not found for id: ${selectedExercise!!.id}")
                                     }
@@ -547,7 +944,7 @@ fun AddExerciseToWorkoutScreen(
                                 }
                             }
                         ) {
-                            Text("Add")
+                            Text(if (workoutId == -1) "Select" else "Add")
                         }
                     },
                     dismissButton = {

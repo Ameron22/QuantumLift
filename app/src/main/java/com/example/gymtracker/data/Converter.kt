@@ -75,4 +75,18 @@ class Converter {
         val listType = object : TypeToken<List<Long>>() {}.type
         return Gson().fromJson(value, listType)
     }
+
+    @TypeConverter
+    fun fromStringIntMap(map: Map<String, Int>): String {
+        return Gson().toJson(map)
+    }
+
+    @TypeConverter
+    fun toStringIntMap(value: String?): Map<String, Int> {
+        if (value == null || value.isEmpty()) {
+            return emptyMap()
+        }
+        val mapType = object : TypeToken<Map<String, Int>>() {}.type
+        return Gson().fromJson(value, mapType)
+    }
 }

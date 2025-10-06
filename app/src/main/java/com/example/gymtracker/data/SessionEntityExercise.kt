@@ -1,6 +1,7 @@
 package com.example.gymtracker.data
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
 
@@ -8,7 +9,13 @@ import androidx.room.TypeConverters
  * Entity class to store details for each exercise performed during a workout session.
  * Includes new fields for muscle soreness tracking.
  */
-@Entity(tableName = "exercise_sessions")
+@Entity(
+    tableName = "exercise_sessions",
+    indices = [
+        Index(value = ["sessionId"]),
+        Index(value = ["exerciseId"])
+    ]
+)
 @TypeConverters(RecoveryFactorsConverters::class)
 data class SessionEntityExercise(
     @PrimaryKey(autoGenerate = true) val exerciseSessionId: Long = 0,

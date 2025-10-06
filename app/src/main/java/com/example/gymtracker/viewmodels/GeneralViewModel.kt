@@ -12,7 +12,18 @@ data class CurrentWorkoutState(
     val sessionId: Long = 0,
     val isActive: Boolean = false,
     val startTime: Long = 0,
-    val completedExercises: Set<Int> = emptySet()
+    val completedExercises: Set<Int> = emptySet(),
+    val completedExercisesOrder: List<Int> = emptyList() // Track completion order
+)
+
+// XP Buffer data class to store newly earned XP
+data class XPBuffer(
+    val xpGained: Int,
+    val previousLevel: Int,
+    val newLevel: Int,
+    val previousTotalXP: Int,
+    val newTotalXP: Int,
+    val timestamp: Long
 )
 
 class GeneralViewModel : ViewModel() {
@@ -20,8 +31,27 @@ class GeneralViewModel : ViewModel() {
     private val _currentWorkout = MutableStateFlow<CurrentWorkoutState?>(null)
     val currentWorkout: StateFlow<CurrentWorkoutState?> = _currentWorkout.asStateFlow()
 
+    // XP Buffer for newly earned XP
+    private val _xpBuffer = MutableStateFlow<XPBuffer?>(null)
+    val xpBuffer: StateFlow<XPBuffer?> = _xpBuffer.asStateFlow()
+
     // General app state can be added here in the future
     // For example: user preferences, app settings, etc.
+
+    // XP Buffer management methods
+    fun setXPBuffer(xpBuffer: XPBuffer) {
+        Log.d("GeneralViewModel", "Setting XP buffer: $xpBuffer")
+        _xpBuffer.value = xpBuffer
+    }
+
+    fun clearXPBuffer() {
+        Log.d("GeneralViewModel", "Clearing XP buffer")
+        _xpBuffer.value = null
+    }
+
+    fun getXPBuffer(): XPBuffer? {
+        return _xpBuffer.value
+    }
 
     // Workout management methods
     fun startWorkout(workoutId: Int, workoutName: String) {
@@ -34,7 +64,8 @@ class GeneralViewModel : ViewModel() {
             sessionId = sessionId,
             isActive = true,
             startTime = startTime,
-            completedExercises = emptySet()
+            completedExercises = emptySet(),
+            completedExercisesOrder = emptyList()
         )
     }
 
@@ -47,7 +78,8 @@ class GeneralViewModel : ViewModel() {
             sessionId = sessionId,
             isActive = false, // Not active until first exercise is started
             startTime = 0, // Will be set when workout actually starts
-            completedExercises = emptySet()
+            completedExercises = emptySet(),
+            completedExercisesOrder = emptyList()
         )
         Log.d("GeneralViewModel", "Workout initialized - new state: ${_currentWorkout.value}")
     }
@@ -58,11 +90,20 @@ class GeneralViewModel : ViewModel() {
         if (currentState != null) {
             Log.d("GeneralViewModel", "Marking exercise $exerciseId as completed")
             val updatedCompletedExercises = currentState.completedExercises.toMutableSet()
-            updatedCompletedExercises.add(exerciseId)
+            val updatedCompletedExercisesOrder = currentState.completedExercisesOrder.toMutableList()
+            
+            // Only add to order if not already completed
+            if (!updatedCompletedExercises.contains(exerciseId)) {
+                updatedCompletedExercises.add(exerciseId)
+                updatedCompletedExercisesOrder.add(exerciseId)
+            }
+            
             _currentWorkout.value = currentState.copy(
-                completedExercises = updatedCompletedExercises
+                completedExercises = updatedCompletedExercises,
+                completedExercisesOrder = updatedCompletedExercisesOrder
             )
             Log.d("GeneralViewModel", "Updated completed exercises: ${_currentWorkout.value?.completedExercises}")
+            Log.d("GeneralViewModel", "Updated completion order: ${_currentWorkout.value?.completedExercisesOrder}")
         } else {
             Log.e("GeneralViewModel", "Cannot mark exercise as completed - no active workout")
         }
@@ -134,7 +175,8 @@ class GeneralViewModel : ViewModel() {
         if (currentState != null) {
             Log.d("GeneralViewModel", "Clearing completed exercises")
             _currentWorkout.value = currentState.copy(
-                completedExercises = emptySet()
+                completedExercises = emptySet(),
+            completedExercisesOrder = emptyList()
             )
         }
     }
@@ -166,7 +208,8 @@ class GeneralViewModel : ViewModel() {
             sessionId = sessionId,
             isActive = false, // Not active until first exercise is started
             startTime = 0, // Will be set when workout actually starts
-            completedExercises = emptySet()
+            completedExercises = emptySet(),
+            completedExercisesOrder = emptyList()
         )
         Log.d("GeneralViewModel", "Workout initialized with name - new state: ${_currentWorkout.value}")
     }

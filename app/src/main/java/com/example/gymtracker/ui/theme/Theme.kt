@@ -19,7 +19,7 @@ import androidx.core.view.WindowCompat
 private val LightColorScheme = lightColorScheme(
     primary = Color(0xFF6200EE), // purple_500
     secondary = Color(0xFF03DAC5), // teal_200
-    background = Color.Transparent, // Transparent background
+    background = Color.Transparent, // Transparent background to allow gradients
     surface = Color(0xFFFFFFFF), // White surface for cards
     onPrimary = Color(0xFFFFFFFF), // white
     onSecondary = Color(0xFF000000), // black
@@ -30,7 +30,7 @@ private val LightColorScheme = lightColorScheme(
 private val DarkColorScheme = darkColorScheme(
     primary = Color(0xFFBB86FC), // purple_200
     secondary = Color(0xFF03DAC5), // teal_200
-    background = Color.Transparent, // Transparent background
+    background = Color.Transparent, // Transparent background to allow gradients
     surface = Color(0xFF1A1A1A), // Dark surface for cards
     onPrimary = Color(0xFF000000), // black
     onSecondary = Color(0xFFFFFFFF), // white

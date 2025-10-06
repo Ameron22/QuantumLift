@@ -3,7 +3,10 @@ package com.example.gymtracker.components
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.gymtracker.classes.SessionWorkoutWithMuscles
 import java.time.Instant
@@ -41,53 +44,129 @@ fun WorkoutHistoryCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 6.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF2D3748).copy(alpha = 0.8f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
         onClick = onClick
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(20.dp)
         ) {
+            // Header with workout name and date
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = session.workoutName ?: "Unnamed Workout",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color(0xFF38B2AC),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
                 )
-                Text(
-                    text = formattedDate,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF4A5568).copy(alpha = 0.7f)
+                    ),
+                    modifier = Modifier.padding(start = 8.dp)
+                ) {
+                    Text(
+                        text = formattedDate,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFFCBD5E0),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
             
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             
+            // Duration and time info
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Duration: ${formatDuration(session.endTime - session.startTime)}",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = "Time: $formattedTime",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Column {
+                    Text(
+                        text = "Duration",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color(0xFFCBD5E0),
+                        fontWeight = FontWeight.Medium
+                    )
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFF38B2AC)
+                        ),
+                        modifier = Modifier.padding(top = 4.dp)
+                    ) {
+                        Text(
+                            text = formatDuration(session.endTime - session.startTime),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "Time",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color(0xFFCBD5E0),
+                        fontWeight = FontWeight.Medium
+                    )
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFF4A5568).copy(alpha = 0.8f)
+                        ),
+                        modifier = Modifier.padding(top = 4.dp)
+                    ) {
+                        Text(
+                            text = formattedTime,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color(0xFFE2E8F0),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
             
+            // Muscle groups
             if (session.muscleGroups.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Muscles worked: ${session.muscleGroups.keys.joinToString(", ") { it.replaceFirstChar { char -> char.uppercase() } }}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF4A5568).copy(alpha = 0.6f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp)
+                    ) {
+                        Text(
+                            text = "Muscles Worked",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color(0xFF38B2AC),
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = session.muscleGroups.keys.joinToString(", ") { it.replaceFirstChar { char -> char.uppercase() } },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFFCBD5E0),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
             }
         }
     }

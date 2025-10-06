@@ -37,6 +37,8 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import android.util.Log
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.forEach
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -122,14 +124,33 @@ fun CreateExerciseScreen(navController: NavController) {
     }
 
     val musclePartsMap = mapOf(
-        "Chest" to listOf("Upper Chest", "Middle Chest", "Lower Chest"),
-        "Shoulder" to listOf("Front Shoulders", "Side Shoulders", "Rear Shoulders"),
-        "Back" to listOf("Upper Back", "Lats", "Lower Back"),
+        "All" to listOf(" "),
+        "Neck" to listOf("Neck", "Upper Traps"),
+        "Chest" to listOf("Chest"),
+        "Shoulders" to listOf("Deltoids"),
         "Arms" to listOf("Biceps", "Triceps", "Forearms"),
-        "Legs" to listOf("Quadriceps", "Hamstrings", "Glutes", "Calves"),
         "Core" to listOf("Abs", "Obliques", "Lower Back"),
-        "Neck" to listOf("Side neck muscle", "Upper Traps")
+        "Back" to listOf("Upper Back", "Lats", "Lower Back"),
+        "Legs" to listOf("Quadriceps", "Hamstrings", "Adductors", "Glutes", "Calves")
     )
+
+    // Auto-expand muscle parts dropdown when muscle group is selected
+    LaunchedEffect(currentMuscle) {
+        if (currentMuscle.isNotEmpty() && !isMuscleGroupDropdownExpanded) {
+            // Reset current part when muscle group changes
+            currentPart = ""
+            
+            // Check if the muscle group has only one part, auto-select it
+            val muscleParts = musclePartsMap[currentMuscle]
+            if (muscleParts != null && muscleParts.size == 1) {
+                currentPart = muscleParts[0]
+                // Don't expand dropdown since there's only one option
+            } else {
+                delay(150) // Small delay for smooth transition
+                isPartDropdownExpanded = true
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -584,10 +605,18 @@ fun CreateExerciseScreen(navController: NavController) {
                             .fillMaxWidth()
                             .clickable { 
                                 focusManager.clearFocus()
-                                isPartDropdownExpanded = true 
+                                if (currentMuscle.isNotEmpty()) {
+                                    isPartDropdownExpanded = true 
+                                }
                             },
                         shape = MaterialTheme.shapes.medium,
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (currentMuscle.isNotEmpty()) 
+                                MaterialTheme.colorScheme.surface 
+                            else 
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+                        )
                     ) {
                         Row(
                             modifier = Modifier.padding(12.dp),
@@ -595,8 +624,16 @@ fun CreateExerciseScreen(navController: NavController) {
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = if (currentPart.isNotEmpty()) currentPart else "Specific Part",
-                                style = MaterialTheme.typography.bodyMedium
+                                text = when {
+                                    currentPart.isNotEmpty() -> currentPart
+                                    currentMuscle.isNotEmpty() -> "Specific Part"
+                                    else -> "Select Muscle Group First"
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (currentMuscle.isNotEmpty()) 
+                                    MaterialTheme.colorScheme.onSurface 
+                                else 
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
                             Icon(
                                 imageVector = Icons.Default.ArrowDropDown,
@@ -690,6 +727,7 @@ fun CreateExerciseScreen(navController: NavController) {
                             val exercise = EntityExercise(
                                 name = currentExercise,
                                 description = currentDescription,
+                                category = "Strength", // Default category for custom exercises
                                 muscle = currentMuscle,
                                 parts = Converter().fromList(selectedParts),
                                 equipment = currentEquipment,

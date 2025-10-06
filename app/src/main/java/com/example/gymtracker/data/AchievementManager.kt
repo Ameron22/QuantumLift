@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.compose.runtime.mutableStateOf
 import com.example.gymtracker.R
 import com.example.gymtracker.services.AchievementNotificationService
+import com.example.gymtracker.data.XPSystem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +19,7 @@ class AchievementManager private constructor(context: Context) {
     private val achievementDao = db.achievementDao()
     private val scope = CoroutineScope(Dispatchers.Main)
     val notificationService = AchievementNotificationService(context)
+    private val xpSystem = XPSystem(db.userXPDao())
 
     private val _achievements = MutableStateFlow<List<Achievement>>(emptyList())
     val achievements: StateFlow<List<Achievement>> = _achievements.asStateFlow()
@@ -133,6 +135,39 @@ class AchievementManager private constructor(context: Context) {
         "night_owl" -> AchievementCategory.SPECIAL_CHALLENGES
         else -> AchievementCategory.WORKOUT_MILESTONES
     }
+    
+    /**
+     * Award XP for unlocking an achievement
+     */
+    private suspend fun awardXPForAchievement(achievementId: String) {
+        val xpAmount = when (achievementId) {
+            "first_workout" -> 100
+            "workout_warrior" -> 200
+            "workout_master" -> 500
+            "bench_press_100" -> 250
+            "consistency_week" -> 150
+            "consistency_month" -> 500
+            "night_owl" -> 100
+            else -> 50 // Default XP for unknown achievements
+        }
+        
+        val userId = "current_user" // Default user ID
+        val achievementTitle = getAchievementTitle(achievementId)
+        
+        val xpAwarded = xpSystem.awardXP(
+            userId = userId,
+            xpAmount = xpAmount,
+            source = "achievement_unlock",
+            sourceId = achievementId,
+            description = "Unlocked achievement: $achievementTitle"
+        )
+        
+        if (xpAwarded) {
+            Log.d("AchievementManager", "Awarded $xpAmount XP for unlocking achievement: $achievementId")
+        } else {
+            Log.e("AchievementManager", "Failed to award XP for achievement: $achievementId")
+        }
+    }
 
     private fun getAchievementIcon(id: String, status: AchievementStatus): Int = when {
         status != AchievementStatus.UNLOCKED -> R.drawable.trophy  // Show trophy for locked/in-progress
@@ -162,6 +197,8 @@ class AchievementManager private constructor(context: Context) {
                         )
                     )
                     _newlyUnlockedAchievements.value += "first_workout"
+                    // Award XP for first workout achievement
+                    awardXPForAchievement("first_workout")
                     // Show notification for first workout achievement
                     notificationService.showAchievementNotification("first_workout")
                 }
@@ -205,6 +242,8 @@ class AchievementManager private constructor(context: Context) {
             )
             if (newStatus == AchievementStatus.UNLOCKED && achievement?.status != AchievementStatus.UNLOCKED) {
                 _newlyUnlockedAchievements.value += id
+                // Award XP for newly unlocked achievement
+                awardXPForAchievement(id)
                 // Show notification for newly unlocked achievement
                 notificationService.showAchievementNotification(id)
             }
@@ -250,6 +289,8 @@ class AchievementManager private constructor(context: Context) {
                 if (wasUnlocked) {
                     _newlyUnlockedAchievements.value += "bench_press_100"
                     Log.d("AchievementManager", "Bench press achievement unlocked!")
+                    // Award XP for bench press achievement
+                    awardXPForAchievement("bench_press_100")
                     // Show notification for bench press achievement
                     notificationService.showAchievementNotification("bench_press_100")
                 }
@@ -269,6 +310,8 @@ class AchievementManager private constructor(context: Context) {
                     )
                 )
                 _newlyUnlockedAchievements.value += challengeId
+                // Award XP for special challenge achievement
+                awardXPForAchievement(challengeId)
                 // Show notification for special challenge achievement
                 notificationService.showAchievementNotification(challengeId)
             }
@@ -323,6 +366,8 @@ class AchievementManager private constructor(context: Context) {
                     )
                 )
                 _newlyUnlockedAchievements.value += achievementId
+                // Award XP for test achievement unlock
+                awardXPForAchievement(achievementId)
                 notificationService.showAchievementNotification(achievementId)
             }
         }
