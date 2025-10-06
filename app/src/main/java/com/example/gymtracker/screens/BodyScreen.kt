@@ -31,6 +31,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Sync
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 
@@ -88,13 +91,108 @@ fun BodyScreen(
             .padding(paddingValues)
             .padding(16.dp)
     ) {
-        // Header
-        Text(
-            text = "Body Tracking",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
+        // Header with sync buttons
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Body Tracking",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold
+            )
+            
+            // Sync buttons (only show if cloud sync is available)
+            if (viewModel.isCloudSyncAvailable()) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Sync from cloud button
+                    IconButton(
+                        onClick = { viewModel.syncFromCloud("current_user") },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudDownload,
+                            contentDescription = "Sync from cloud",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    
+                    // Sync to cloud button
+                    IconButton(
+                        onClick = { viewModel.syncToCloud("current_user") },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudUpload,
+                            contentDescription = "Sync to cloud",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        }
+        
+        // Sync status and error display
+        val isSyncing by viewModel.isSyncing.collectAsState()
+        val syncError by viewModel.syncError.collectAsState()
+        
+        if (isSyncing) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Syncing with cloud...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        
+        if (syncError != null) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Sync Error: $syncError",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    TextButton(
+                        onClick = { viewModel.clearSyncError() }
+                    ) {
+                        Text(
+                            text = "Dismiss",
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+        }
 
         // Tab Row
         TabRow(selectedTabIndex = selectedTabIndex) {

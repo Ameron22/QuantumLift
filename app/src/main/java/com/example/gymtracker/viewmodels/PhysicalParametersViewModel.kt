@@ -2,8 +2,10 @@ package com.example.gymtracker.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.content.Context
 import com.example.gymtracker.data.*
 import com.example.gymtracker.data.MeasurementDataPoint
+import com.example.gymtracker.services.BodySyncRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,7 +14,8 @@ import java.util.*
 import android.util.Log
 
 class PhysicalParametersViewModel(
-    private val physicalParametersDao: PhysicalParametersDao
+    private val physicalParametersDao: PhysicalParametersDao,
+    private val context: Context? = null
 ) : ViewModel() {
 
     private val _physicalParameters = MutableStateFlow<List<PhysicalParameters>>(emptyList())
@@ -26,6 +29,17 @@ class PhysicalParametersViewModel(
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+
+    private val _syncError = MutableStateFlow<String?>(null)
+    val syncError: StateFlow<String?> = _syncError.asStateFlow()
+
+    // Initialize BodySyncRepository if context is available
+    private val bodySyncRepository by lazy {
+        if (context != null) BodySyncRepository(context) else null
+    }
 
     fun loadPhysicalParameters(userId: String) {
         Log.d("PhysicalParametersViewModel", "Loading physical parameters for userId: $userId")
@@ -263,5 +277,184 @@ class PhysicalParametersViewModel(
                 Log.e("PhysicalParametersViewModel", "Error checking table existence", e)
             }
         }
+    }
+
+    // Cloud sync methods
+    
+    fun syncFromCloud(userId: String) {
+        if (bodySyncRepository == null) {
+            Log.w("PhysicalParametersViewModel", "Cannot sync - no context available")
+            _syncError.value = "Cloud sync not available - no context"
+            return
+        }
+        
+        viewModelScope.launch {
+            _isSyncing.value = true
+            _syncError.value = null
+            
+            try {
+                Log.d("PhysicalParametersViewModel", "Starting sync from cloud for userId: $userId")
+                
+                // Sync physical parameters
+                val parametersResult = bodySyncRepository.getPhysicalParameters()
+                if (parametersResult.isSuccess) {
+                    val cloudParameters = parametersResult.getOrNull() ?: emptyList()
+                    Log.d("PhysicalParametersViewModel", "Retrieved ${cloudParameters.size} parameters from cloud")
+                    
+                    // Save cloud data to local database
+                    cloudParameters.forEach { cloudParam ->
+                        try {
+                            val localParam = bodySyncRepository.convertToPhysicalParameters(cloudParam)
+                            if (localParam.id > 0) {
+                                // Update existing
+                                physicalParametersDao.updatePhysicalParameters(localParam)
+                            } else {
+                                // Insert new
+                                physicalParametersDao.insertPhysicalParameters(localParam)
+                            }
+                        } catch (e: Exception) {
+                            Log.e("PhysicalParametersViewModel", "Error saving cloud parameter ${cloudParam.id}", e)
+                        }
+                    }
+                } else {
+                    Log.w("PhysicalParametersViewModel", "Failed to sync parameters from cloud: ${parametersResult.exceptionOrNull()?.message}")
+                }
+                
+                // Sync body measurements for each parameter
+                val localParameters = _physicalParameters.value
+                localParameters.forEach { param ->
+                    try {
+                        val measurementsResult = bodySyncRepository.getBodyMeasurements(param.id)
+                        if (measurementsResult.isSuccess) {
+                            val cloudMeasurements = measurementsResult.getOrNull() ?: emptyList()
+                            Log.d("PhysicalParametersViewModel", "Retrieved ${cloudMeasurements.size} measurements for parameter ${param.id}")
+                            
+                            // Save cloud measurements to local database
+                            cloudMeasurements.forEach { cloudMeasurement ->
+                                try {
+                                    val localMeasurement = bodySyncRepository.convertToBodyMeasurement(cloudMeasurement)
+                                    if (localMeasurement.id > 0) {
+                                        // Update existing
+                                        physicalParametersDao.updateBodyMeasurement(localMeasurement)
+                                    } else {
+                                        // Insert new
+                                        physicalParametersDao.insertBodyMeasurement(localMeasurement)
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("PhysicalParametersViewModel", "Error saving cloud measurement ${cloudMeasurement.id}", e)
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("PhysicalParametersViewModel", "Error syncing measurements for parameter ${param.id}", e)
+                    }
+                }
+                
+                // Reload local data
+                loadPhysicalParameters(userId)
+                loadAllBodyMeasurements(userId)
+                
+                Log.d("PhysicalParametersViewModel", "Sync from cloud completed successfully")
+                
+            } catch (e: Exception) {
+                Log.e("PhysicalParametersViewModel", "Error during sync from cloud", e)
+                _syncError.value = "Sync failed: ${e.message}"
+            } finally {
+                _isSyncing.value = false
+            }
+        }
+    }
+    
+    fun syncToCloud(userId: String) {
+        if (bodySyncRepository == null) {
+            Log.w("PhysicalParametersViewModel", "Cannot sync - no context available")
+            _syncError.value = "Cloud sync not available - no context"
+            return
+        }
+        
+        viewModelScope.launch {
+            _isSyncing.value = true
+            _syncError.value = null
+            
+            try {
+                Log.d("PhysicalParametersViewModel", "Starting sync to cloud for userId: $userId")
+                
+                // Convert local data to cloud format
+                val localParameters = _physicalParameters.value
+                val localMeasurements = _bodyMeasurements.value
+                
+                val parametersRequests = localParameters.map { param ->
+                    bodySyncRepository.convertToPhysicalParametersRequest(param)
+                }
+                
+                val measurementsRequests = localMeasurements.map { measurement ->
+                    bodySyncRepository.convertToBodyMeasurementRequest(measurement)
+                }
+                
+                Log.d("PhysicalParametersViewModel", "Syncing ${parametersRequests.size} parameters and ${measurementsRequests.size} measurements to cloud")
+                
+                // Perform bulk sync
+                val syncResult = bodySyncRepository.syncBodyData(parametersRequests, measurementsRequests)
+                
+                if (syncResult.isSuccess) {
+                    val syncResponse = syncResult.getOrNull()
+                    if (syncResponse != null) {
+                        Log.d("PhysicalParametersViewModel", "Successfully synced to cloud: ${syncResponse.parameters.size} parameters, ${syncResponse.measurements.size} measurements")
+                        
+                        if (syncResponse.errors.isNotEmpty()) {
+                            Log.w("PhysicalParametersViewModel", "Sync completed with ${syncResponse.errors.size} errors")
+                            _syncError.value = "Sync completed with ${syncResponse.errors.size} errors"
+                        }
+                        
+                        // Update local IDs with cloud IDs for newly created items
+                        syncResponse.parameters.forEach { cloudParam ->
+                            val localParam = localParameters.find { it.date == cloudParam.date }
+                            if (localParam != null && localParam.id != cloudParam.id) {
+                                // Update local parameter with cloud ID
+                                val updatedParam = localParam.copy(id = cloudParam.id)
+                                physicalParametersDao.updatePhysicalParameters(updatedParam)
+                            }
+                        }
+                        
+                        syncResponse.measurements.forEach { cloudMeasurement ->
+                            val localMeasurement = localMeasurements.find { 
+                                it.parametersId == cloudMeasurement.parametersId && 
+                                it.measurementType == cloudMeasurement.measurementType &&
+                                it.value == cloudMeasurement.value
+                            }
+                            if (localMeasurement != null && localMeasurement.id != cloudMeasurement.id) {
+                                // Update local measurement with cloud ID
+                                val updatedMeasurement = localMeasurement.copy(id = cloudMeasurement.id)
+                                physicalParametersDao.updateBodyMeasurement(updatedMeasurement)
+                            }
+                        }
+                        
+                        // Reload local data to reflect any ID updates
+                        loadPhysicalParameters(userId)
+                        loadAllBodyMeasurements(userId)
+                    }
+                } else {
+                    Log.e("PhysicalParametersViewModel", "Failed to sync to cloud: ${syncResult.exceptionOrNull()?.message}")
+                    _syncError.value = "Sync failed: ${syncResult.exceptionOrNull()?.message}"
+                }
+                
+                Log.d("PhysicalParametersViewModel", "Sync to cloud completed")
+                
+            } catch (e: Exception) {
+                Log.e("PhysicalParametersViewModel", "Error during sync to cloud", e)
+                _syncError.value = "Sync failed: ${e.message}"
+            } finally {
+                _isSyncing.value = false
+            }
+        }
+    }
+    
+    fun clearSyncError() {
+        _syncError.value = null
+    }
+    
+    // Method to check if cloud sync is available
+    fun isCloudSyncAvailable(): Boolean {
+        return bodySyncRepository != null
     }
 } 

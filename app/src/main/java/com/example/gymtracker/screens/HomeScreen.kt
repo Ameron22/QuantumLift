@@ -90,7 +90,7 @@ fun HomeScreen(
     val db = remember { AppDatabase.getDatabase(context) }
     val dao = remember { db.exerciseDao() }
     val physicalParametersDao = remember { db.physicalParametersDao() }
-    val physicalParametersViewModel = remember { PhysicalParametersViewModel(physicalParametersDao) }
+    val physicalParametersViewModel = remember { PhysicalParametersViewModel(physicalParametersDao, context) }
 
     var selectedTabIndex by remember { mutableStateOf(0) }
     val tabs = listOf("Welcome", "Body")
