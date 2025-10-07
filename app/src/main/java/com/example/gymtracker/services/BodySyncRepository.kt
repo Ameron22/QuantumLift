@@ -40,7 +40,11 @@ class BodySyncRepository(private val context: Context) {
     
     // Physical Parameters sync methods
     
-    suspend fun getPhysicalParameters(limit: Int = 50, offset: Int = 0): Result<List<PhysicalParametersData>> {
+    suspend fun getPhysicalParameters(
+        limit: Int = 50, 
+        offset: Int = 0,
+        since: Long? = null  // Delta sync: only fetch data updated after this timestamp
+    ): Result<List<PhysicalParametersData>> {
         return try {
             val authHeader = getAuthHeader()
             if (authHeader == null) {
@@ -48,8 +52,13 @@ class BodySyncRepository(private val context: Context) {
                 return Result.failure(Exception("No authentication token"))
             }
             
-            Log.d("BodySyncRepository", "Fetching physical parameters from cloud")
-            val response = apiService.getPhysicalParameters(limit, offset, authHeader)
+            if (since != null) {
+                Log.d("BodySyncRepository", "Fetching physical parameters from cloud (delta sync since: ${java.util.Date(since)})")
+            } else {
+                Log.d("BodySyncRepository", "Fetching physical parameters from cloud (full sync)")
+            }
+            
+            val response = apiService.getPhysicalParameters(limit, offset, since, authHeader)
             
             if (response.isSuccessful) {
                 val body = response.body()

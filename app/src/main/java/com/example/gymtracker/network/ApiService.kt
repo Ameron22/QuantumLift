@@ -316,6 +316,7 @@ interface ApiService {
     suspend fun getPhysicalParameters(
         @Query("limit") limit: Int = 50,
         @Query("offset") offset: Int = 0,
+        @Query("since") since: Long? = null,  // Delta sync: only fetch data updated after this timestamp
         @Header("Authorization") authorization: String
     ): Response<PhysicalParametersListResponse>
     
