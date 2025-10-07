@@ -44,26 +44,71 @@ fun CreateWarmUpScreen(
 
     // Get saved state handle for persistence
     val savedStateHandle = navController.currentBackStackEntry?.savedStateHandle
-    
+
     // Form state with persistence using savedStateHandle
-    var templateName by rememberSaveable { mutableStateOf(savedStateHandle?.get<String>("templateName") ?: "") }
-    var description by rememberSaveable { mutableStateOf(savedStateHandle?.get<String>("description") ?: "") }
-    var selectedCategory by rememberSaveable { mutableStateOf(savedStateHandle?.get<String>("selectedCategory") ?: "General") }
-    var selectedDifficulty by rememberSaveable { mutableStateOf(savedStateHandle?.get<String>("selectedDifficulty") ?: "Beginner") }
+    var templateName by rememberSaveable {
+        mutableStateOf(
+            savedStateHandle?.get<String>("templateName") ?: ""
+        )
+    }
+    var description by rememberSaveable {
+        mutableStateOf(
+            savedStateHandle?.get<String>("description") ?: ""
+        )
+    }
+    var selectedCategory by rememberSaveable {
+        mutableStateOf(
+            savedStateHandle?.get<String>("selectedCategory") ?: "General"
+        )
+    }
+    var selectedDifficulty by rememberSaveable {
+        mutableStateOf(
+            savedStateHandle?.get<String>("selectedDifficulty") ?: "Beginner"
+        )
+    }
     var estimatedDuration by rememberSaveable { mutableStateOf(savedStateHandle?.get<Int?>("estimatedDuration")) }
-    var selectedMuscleGroups by rememberSaveable { mutableStateOf(savedStateHandle?.get<List<String>>("selectedMuscleGroups") ?: emptyList()) }
-    
+    var selectedMuscleGroups by rememberSaveable {
+        mutableStateOf(
+            savedStateHandle?.get<List<String>>(
+                "selectedMuscleGroups"
+            ) ?: emptyList()
+        )
+    }
+
     // Exercise list state with persistence
-    var warmUpExercises by rememberSaveable { mutableStateOf(savedStateHandle?.get<List<WarmUpExercise>>("warmUpExercises") ?: emptyList()) }
-    var exerciseDetails by rememberSaveable { mutableStateOf(savedStateHandle?.get<Map<Int, EntityExercise>>("exerciseDetails") ?: emptyMap()) }
-    
+    var warmUpExercises by rememberSaveable {
+        mutableStateOf(
+            savedStateHandle?.get<List<WarmUpExercise>>(
+                "warmUpExercises"
+            ) ?: emptyList()
+        )
+    }
+    var exerciseDetails by rememberSaveable {
+        mutableStateOf(
+            savedStateHandle?.get<Map<Int, EntityExercise>>(
+                "exerciseDetails"
+            ) ?: emptyMap()
+        )
+    }
+
     // Local state for UI
     var showDeleteConfirmation by remember { mutableStateOf<WarmUpExercise?>(null) }
-    
+
     // Categories and difficulties
     val categories = listOf("General", "Muscle-Specific", "Cardio", "Stretching", "Equipment-Based")
-    val difficulties = listOf("Beginner", "Intermediate", "Advanced") 
-    val muscleGroups = listOf("Full Body", "Neck", "Chest", "Shoulders", "Arms", "Core", "Back", "Legs", "Glutes", "Cardio")
+    val difficulties = listOf("Beginner", "Intermediate", "Advanced")
+    val muscleGroups = listOf(
+        "Full Body",
+        "Neck",
+        "Chest",
+        "Shoulders",
+        "Arms",
+        "Core",
+        "Back",
+        "Legs",
+        "Glutes",
+        "Cardio"
+    )
 
     Scaffold(
         topBar = {
@@ -113,11 +158,11 @@ fun CreateWarmUpScreen(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    
+
                     // Template Name
                     OutlinedTextField(
                         value = templateName,
-                        onValueChange = { 
+                        onValueChange = {
                             templateName = it
                             savedStateHandle?.set("templateName", it)
                         },
@@ -125,11 +170,11 @@ fun CreateWarmUpScreen(
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
-                    
+
                     // Description
                     OutlinedTextField(
                         value = description,
-                        onValueChange = { 
+                        onValueChange = {
                             description = it
                             savedStateHandle?.set("description", it)
                         },
@@ -138,7 +183,7 @@ fun CreateWarmUpScreen(
                         minLines = 2,
                         maxLines = 3
                     )
-                    
+
                     // Category and Difficulty Row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -159,7 +204,7 @@ fun CreateWarmUpScreen(
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) },
                                 modifier = Modifier.menuAnchor()
                             )
-                            
+
                             ExposedDropdownMenu(
                                 expanded = categoryExpanded,
                                 onDismissRequest = { categoryExpanded = false }
@@ -167,7 +212,7 @@ fun CreateWarmUpScreen(
                                 categories.forEach { category ->
                                     DropdownMenuItem(
                                         text = { Text(category) },
-                                        onClick = { 
+                                        onClick = {
                                             selectedCategory = category
                                             savedStateHandle?.set("selectedCategory", category)
                                             categoryExpanded = false
@@ -176,7 +221,7 @@ fun CreateWarmUpScreen(
                                 }
                             }
                         }
-                        
+
                         // Difficulty Dropdown
                         var difficultyExpanded by remember { mutableStateOf(false) }
                         ExposedDropdownMenuBox(
@@ -192,7 +237,7 @@ fun CreateWarmUpScreen(
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = difficultyExpanded) },
                                 modifier = Modifier.menuAnchor()
                             )
-                            
+
                             ExposedDropdownMenu(
                                 expanded = difficultyExpanded,
                                 onDismissRequest = { difficultyExpanded = false }
@@ -200,7 +245,7 @@ fun CreateWarmUpScreen(
                                 difficulties.forEach { difficulty ->
                                     DropdownMenuItem(
                                         text = { Text(difficulty) },
-                                        onClick = { 
+                                        onClick = {
                                             selectedDifficulty = difficulty
                                             savedStateHandle?.set("selectedDifficulty", difficulty)
                                             difficultyExpanded = false
@@ -210,7 +255,7 @@ fun CreateWarmUpScreen(
                             }
                         }
                     }
-                    
+
                     // Duration and Muscle Groups Row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -219,7 +264,7 @@ fun CreateWarmUpScreen(
                         // Duration
                         OutlinedTextField(
                             value = if (estimatedDuration == null) "" else estimatedDuration.toString(),
-                            onValueChange = { 
+                            onValueChange = {
                                 val newDuration = it.toIntOrNull()
                                 estimatedDuration = newDuration
                                 savedStateHandle?.set("estimatedDuration", newDuration)
@@ -228,7 +273,7 @@ fun CreateWarmUpScreen(
                             modifier = Modifier.weight(1f),
                             singleLine = true
                         )
-                        
+
                         // Muscle Groups
                         var muscleGroupsExpanded by remember { mutableStateOf(false) }
                         ExposedDropdownMenuBox(
@@ -244,7 +289,7 @@ fun CreateWarmUpScreen(
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = muscleGroupsExpanded) },
                                 modifier = Modifier.menuAnchor()
                             )
-                            
+
                             ExposedDropdownMenu(
                                 expanded = muscleGroupsExpanded,
                                 onDismissRequest = { muscleGroupsExpanded = false }
@@ -254,13 +299,20 @@ fun CreateWarmUpScreen(
                                         text = { Text(muscleGroup) },
                                         onClick = {
                                             if (selectedMuscleGroups.contains(muscleGroup)) {
-                                                val newList = selectedMuscleGroups.filter { it != muscleGroup }
+                                                val newList =
+                                                    selectedMuscleGroups.filter { it != muscleGroup }
                                                 selectedMuscleGroups = newList
-                                                savedStateHandle?.set("selectedMuscleGroups", newList)
+                                                savedStateHandle?.set(
+                                                    "selectedMuscleGroups",
+                                                    newList
+                                                )
                                             } else {
                                                 val newList = selectedMuscleGroups + muscleGroup
                                                 selectedMuscleGroups = newList
-                                                savedStateHandle?.set("selectedMuscleGroups", newList)
+                                                savedStateHandle?.set(
+                                                    "selectedMuscleGroups",
+                                                    newList
+                                                )
                                             }
                                         }
                                     )
@@ -268,7 +320,7 @@ fun CreateWarmUpScreen(
                             }
                         }
                     }
-                    
+
                     // Selected Muscle Groups Chips
                     if (selectedMuscleGroups.isNotEmpty()) {
                         Row(
@@ -279,7 +331,8 @@ fun CreateWarmUpScreen(
                                 FilterChip(
                                     selected = true,
                                     onClick = {
-                                        val newList = selectedMuscleGroups.filter { it != muscleGroup }
+                                        val newList =
+                                            selectedMuscleGroups.filter { it != muscleGroup }
                                         selectedMuscleGroups = newList
                                         savedStateHandle?.set("selectedMuscleGroups", newList)
                                     },
@@ -290,7 +343,7 @@ fun CreateWarmUpScreen(
                     }
                 }
             }
-            
+
             // Exercises Section
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -311,9 +364,9 @@ fun CreateWarmUpScreen(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
-                        
+
                         Button(
-                            onClick = { 
+                            onClick = {
                                 // Navigate to AddExerciseToWorkoutScreen with a dummy workoutId
                                 // We'll use -1 to indicate this is for warm-up creation
                                 navController.navigate(
@@ -327,7 +380,7 @@ fun CreateWarmUpScreen(
                             Text("Add Exercise")
                         }
                     }
-                    
+
                     if (warmUpExercises.isEmpty()) {
                         Box(
                             modifier = Modifier
@@ -366,14 +419,13 @@ fun CreateWarmUpScreen(
                     }
                 }
             }
-            
+
             // Save Button
             Button(
                 onClick = {
                     if (templateName.isNotEmpty() && warmUpExercises.isNotEmpty()) {
                         coroutineScope.launch {
                             try {
-                                                                 val exercises = warmUpExercises
                                 val templateId = warmUpManager.createWarmUpTemplate(
                                     name = templateName,
                                     description = description,
@@ -382,9 +434,9 @@ fun CreateWarmUpScreen(
                                     difficulty = selectedDifficulty,
                                     estimatedDuration = estimatedDuration ?: 0, // Use 0 if null
                                     userId = "user", // TODO: Get actual user ID
-                                    exercises = exercises
+                                    exercises = warmUpExercises
                                 )
-                                
+
                                 withContext(Dispatchers.Main) {
                                     // Clear the saved state after successful save
                                     savedStateHandle?.remove<String>("templateName")
@@ -410,7 +462,7 @@ fun CreateWarmUpScreen(
             }
         }
     }
-    
+
     // Listen for new exercises added from AddExerciseToWorkoutScreen
     LaunchedEffect(Unit) {
         navController.currentBackStackEntry?.savedStateHandle?.getStateFlow<Int?>(
@@ -425,19 +477,31 @@ fun CreateWarmUpScreen(
                         val actualExercise = exerciseDao.getExerciseById(newExerciseId)
                         if (actualExercise != null) {
                             // Get exercise configuration from savedStateHandle
-                            val exerciseSets = navController.currentBackStackEntry?.savedStateHandle?.get<Int>("exerciseSets") ?: 1
-                            val exerciseReps = navController.currentBackStackEntry?.savedStateHandle?.get<Int>("exerciseReps") ?: (if (actualExercise.useTime) 30 else 10)
-                            val exerciseWeight = navController.currentBackStackEntry?.savedStateHandle?.get<Int>("exerciseWeight") ?: 0
-                            val exerciseIsTimeBased = navController.currentBackStackEntry?.savedStateHandle?.get<Boolean>("exerciseIsTimeBased") ?: actualExercise.useTime
-                            
+                            val exerciseSets =
+                                navController.currentBackStackEntry?.savedStateHandle?.get<Int>("exerciseSets")
+                                    ?: 1
+                            val exerciseReps =
+                                navController.currentBackStackEntry?.savedStateHandle?.get<Int>("exerciseReps")
+                                    ?: (if (actualExercise.useTime) 30 else 10)
+                            val exerciseWeight =
+                                navController.currentBackStackEntry?.savedStateHandle?.get<Int>("exerciseWeight")
+                                    ?: 0
+                            val exerciseIsTimeBased =
+                                navController.currentBackStackEntry?.savedStateHandle?.get<Boolean>(
+                                    "exerciseIsTimeBased"
+                                ) ?: actualExercise.useTime
+
                             // Debug logging
                             Log.d("CreateWarmUpScreen", "Exercise config from savedStateHandle:")
                             Log.d("CreateWarmUpScreen", "  Sets: $exerciseSets")
                             Log.d("CreateWarmUpScreen", "  Reps: $exerciseReps")
                             Log.d("CreateWarmUpScreen", "  Weight: $exerciseWeight")
                             Log.d("CreateWarmUpScreen", "  IsTimeBased: $exerciseIsTimeBased")
-                            Log.d("CreateWarmUpScreen", "  Exercise useTime: ${actualExercise.useTime}")
-                            
+                            Log.d(
+                                "CreateWarmUpScreen",
+                                "  Exercise useTime: ${actualExercise.useTime}"
+                            )
+
                             // Create WarmUpExercise with user-defined configuration
                             val warmUpExercise = WarmUpExercise(
                                 templateId = 0, // Will be set when template is saved
@@ -451,28 +515,47 @@ fun CreateWarmUpScreen(
                                 weight = exerciseWeight,
                                 notes = ""
                             )
-                            
+
                             // Debug logging for created WarmUpExercise
                             Log.d("CreateWarmUpScreen", "Created WarmUpExercise:")
                             Log.d("CreateWarmUpScreen", "  Sets: ${warmUpExercise.sets}")
                             Log.d("CreateWarmUpScreen", "  Reps: ${warmUpExercise.reps}")
                             Log.d("CreateWarmUpScreen", "  Duration: ${warmUpExercise.duration}")
                             Log.d("CreateWarmUpScreen", "  Weight: ${warmUpExercise.weight}")
-                            Log.d("CreateWarmUpScreen", "  IsTimeBased: ${warmUpExercise.isTimeBased}")
-                            
+                            Log.d(
+                                "CreateWarmUpScreen",
+                                "  IsTimeBased: ${warmUpExercise.isTimeBased}"
+                            )
+
                             val newWarmUpExercises = warmUpExercises + warmUpExercise
-                            val newExerciseDetails = exerciseDetails + (newExerciseId to actualExercise)
+                            val newExerciseDetails =
+                                exerciseDetails + (newExerciseId to actualExercise)
                             warmUpExercises = newWarmUpExercises
                             exerciseDetails = newExerciseDetails
                             savedStateHandle?.set("warmUpExercises", newWarmUpExercises)
                             savedStateHandle?.set("exerciseDetails", newExerciseDetails)
-                            
+
                             // Clear all exercise configuration flags AFTER successfully adding the exercise
-                            navController.currentBackStackEntry?.savedStateHandle?.set("newExerciseId", null)
-                            navController.currentBackStackEntry?.savedStateHandle?.set("exerciseSets", null)
-                            navController.currentBackStackEntry?.savedStateHandle?.set("exerciseReps", null)
-                            navController.currentBackStackEntry?.savedStateHandle?.set("exerciseWeight", null)
-                            navController.currentBackStackEntry?.savedStateHandle?.set("exerciseIsTimeBased", null)
+                            navController.currentBackStackEntry?.savedStateHandle?.set(
+                                "newExerciseId",
+                                null
+                            )
+                            navController.currentBackStackEntry?.savedStateHandle?.set(
+                                "exerciseSets",
+                                null
+                            )
+                            navController.currentBackStackEntry?.savedStateHandle?.set(
+                                "exerciseReps",
+                                null
+                            )
+                            navController.currentBackStackEntry?.savedStateHandle?.set(
+                                "exerciseWeight",
+                                null
+                            )
+                            navController.currentBackStackEntry?.savedStateHandle?.set(
+                                "exerciseIsTimeBased",
+                                null
+                            )
                         }
                     } catch (e: Exception) {
                         Log.e("CreateWarmUpScreen", "Error adding exercise: ${e.message}")
@@ -482,22 +565,23 @@ fun CreateWarmUpScreen(
             }
         }
     }
-    
+
     // Delete Confirmation Dialog
     if (showDeleteConfirmation != null) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirmation = null },
             title = { Text("Delete Exercise") },
-                         text = { 
-                 val exercise = exerciseDetails[showDeleteConfirmation!!.exerciseId]
-                 Text("Are you sure you want to remove '${exercise?.name ?: "Unknown Exercise"}' from this warm-up?") 
-             },
+            text = {
+                val exercise = exerciseDetails[showDeleteConfirmation!!.exerciseId]
+                Text("Are you sure you want to remove '${exercise?.name ?: "Unknown Exercise"}' from this warm-up?")
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
                         val exerciseToDelete = showDeleteConfirmation!!
                         val newWarmUpExercises = warmUpExercises.filter { it != exerciseToDelete }
-                        val newExerciseDetails = exerciseDetails.filterKeys { it != exerciseToDelete.exerciseId }
+                        val newExerciseDetails =
+                            exerciseDetails.filterKeys { it != exerciseToDelete.exerciseId }
                         warmUpExercises = newWarmUpExercises
                         exerciseDetails = newExerciseDetails
                         savedStateHandle?.set("warmUpExercises", newWarmUpExercises)
@@ -544,7 +628,7 @@ fun WarmUpExerciseCard(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Medium
                 )
-                
+
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -553,7 +637,7 @@ fun WarmUpExerciseCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
-                    
+
                     if (warmUpExercise.isTimeBased) {
                         Text(
                             text = "Duration: ${warmUpExercise.duration}s",
@@ -567,7 +651,7 @@ fun WarmUpExerciseCard(
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
                     }
-                    
+
                     if (warmUpExercise.restBetweenSets > 0) {
                         Text(
                             text = "Rest: ${warmUpExercise.restBetweenSets}s",
@@ -575,7 +659,7 @@ fun WarmUpExerciseCard(
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
                     }
-                    
+
                     if (warmUpExercise.weight > 0) {
                         Text(
                             text = "Weight: ${warmUpExercise.weight}kg",
@@ -585,7 +669,7 @@ fun WarmUpExerciseCard(
                     }
                 }
             }
-            
+
             IconButton(onClick = onDelete) {
                 Icon(
                     Icons.Default.Delete,

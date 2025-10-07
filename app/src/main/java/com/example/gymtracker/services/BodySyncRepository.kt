@@ -35,7 +35,7 @@ class BodySyncRepository(private val context: Context) {
     }
     
     private suspend fun getAuthHeader(): String? {
-        return tokenManager.getToken()?.let { "Bearer $it" }
+        return tokenManager.getStoredToken()?.let { "Bearer $it" }
     }
     
     // Physical Parameters sync methods
@@ -206,12 +206,12 @@ class BodySyncRepository(private val context: Context) {
             
             if (response.isSuccessful) {
                 val body = response.body()
-                if (body?.success == true) {
+                if (body != null) {
                     Log.d("BodySyncRepository", "Successfully deleted physical parameters: $id")
                     Result.success(true)
                 } else {
-                    Log.e("BodySyncRepository", "Server returned unsuccessful response")
-                    Result.failure(Exception("Server returned unsuccessful response"))
+                    Log.e("BodySyncRepository", "Server returned empty response")
+                    Result.failure(Exception("Server returned empty response"))
                 }
             } else {
                 Log.e("BodySyncRepository", "API call failed: ${response.code()} - ${response.message()}")

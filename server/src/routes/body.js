@@ -500,18 +500,27 @@ router.post('/sync', authenticateToken, async (req, res) => {
           const dateObj = new Date(param.date);
           let result;
 
-          if (param.id) {
-            // Update existing
+          // Use UPSERT logic: try to insert, update on conflict
+          // The unique constraint is on (user_id, DATE(date)), so we need to check if a record exists first
+          const existingCheck = await query(
+            `SELECT id FROM physical_parameters 
+             WHERE user_id = $1 AND DATE(date) = DATE($2)`,
+            [userId, dateObj]
+          );
+
+          if (existingCheck.rows.length > 0) {
+            // Update existing record
+            const existingId = existingCheck.rows[0].id;
             result = await query(
               `UPDATE physical_parameters 
                SET date = $2, weight = $3, height = $4, bmi = $5, 
                    body_fat_percentage = $6, muscle_mass = $7, notes = $8, updated_at = CURRENT_TIMESTAMP
-               WHERE id = $1 AND user_id = $9
+               WHERE id = $1
                RETURNING id, date, weight, height, bmi, body_fat_percentage, muscle_mass, notes, created_at, updated_at`,
-              [param.id, dateObj, param.weight, param.height, param.bmi, param.bodyFatPercentage, param.muscleMass, param.notes || '', userId]
+              [existingId, dateObj, param.weight, param.height, param.bmi, param.bodyFatPercentage, param.muscleMass, param.notes || '']
             );
           } else {
-            // Create new
+            // Insert new record
             result = await query(
               `INSERT INTO physical_parameters 
                (user_id, date, weight, height, bmi, body_fat_percentage, muscle_mass, notes) 

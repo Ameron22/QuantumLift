@@ -665,6 +665,10 @@ fun ExpandableMeasurementCard(
                     )
                     
                     measurementsForType.reversed().map { measurement ->
+                        // Find the associated physical parameters to get the actual date
+                        val associatedParameters = viewModel.physicalParameters.value.find { it.id == measurement.parametersId }
+                        val displayDate = associatedParameters?.date ?: measurement.parametersId
+                        
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -673,7 +677,7 @@ fun ExpandableMeasurementCard(
                         ) {
                             Text(
                                 text = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-                                    .format(Date(measurement.parametersId)),
+                                    .format(Date(displayDate)),
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
