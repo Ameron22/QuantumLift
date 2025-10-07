@@ -302,7 +302,7 @@ class BodySyncRepository(private val context: Context) {
     
     fun convertToBodyMeasurementRequest(local: BodyMeasurement): BodyMeasurementRequest {
         return BodyMeasurementRequest(
-            id = local.id,
+            id = if (local.id > 0) local.id else null, // Send null for new measurements (ID <= 0)
             parametersId = local.parametersId,
             measurementType = local.measurementType,
             value = local.value,
