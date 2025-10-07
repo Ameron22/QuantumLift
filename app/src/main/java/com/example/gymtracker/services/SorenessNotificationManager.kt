@@ -48,18 +48,18 @@ class SorenessNotificationManager(
     fun scheduleSorenessAssessment(sessionId: Long, muscleGroups: List<String>) {
         Log.d(TAG, "Scheduling soreness assessment for session $sessionId with muscles: $muscleGroups")
         
-        // Schedule 3 minute notification (for testing)
+        // Schedule 24 hour notification
         scheduleNotification(
-            delay = 3, // 3 minutes for testing (normally 24 hours)
+            delay = 24 * 60, // 24 hours in minutes
             sessionId = sessionId,
             muscleGroups = muscleGroups,
             assessmentDay = 1,
             notificationId = NOTIFICATION_ID_24HR + sessionId.toInt()
         )
         
-        // Schedule 6 minute notification (for testing)
+        // Schedule 48 hour notification
         scheduleNotification(
-            delay = 6, // 6 minutes for testing (normally 48 hours)
+            delay = 48 * 60, // 48 hours in minutes
             sessionId = sessionId,
             muscleGroups = muscleGroups,
             assessmentDay = 2,
@@ -79,7 +79,7 @@ class SorenessNotificationManager(
     ) {
         coroutineScope.launch {
             try {
-                // Calculate notification time (delay is in minutes for testing)
+                // Calculate notification time (delay is in minutes)
                 val notificationTime = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(delay)
                 
                 // Create notification intent
@@ -152,7 +152,7 @@ class SorenessNotificationManager(
      * Gets appropriate notification message based on muscle groups and day
      */
     private fun getNotificationMessage(muscleGroups: List<String>, assessmentDay: Int): String {
-        val timeText = if (assessmentDay == 1) "3 minutes ago" else "6 minutes ago"
+        val timeText = if (assessmentDay == 1) "24 hours ago" else "48 hours ago"
         val muscleText = when (muscleGroups.size) {
             1 -> muscleGroups[0]
             2 -> "${muscleGroups[0]} and ${muscleGroups[1]}"

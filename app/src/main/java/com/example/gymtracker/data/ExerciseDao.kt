@@ -295,8 +295,9 @@ interface ExerciseDao {
         val converter = Converter()
         val partsList = converter.fromString(muscleParts)
         
-        // Pad the list to 5 elements with empty strings
-        val paddedParts = partsList + List(5 - partsList.size) { "" }
+        // Safely pad the list to exactly 5 elements with empty strings
+        // Take first 5 elements if more than 5, pad with empty strings if less than 5
+        val paddedParts = (partsList.take(5) + List(5.coerceAtLeast(0)) { "" }).take(5)
         
         val allExercises = getFilteredSimilarExercises(
             muscleGroup = muscleGroup,
@@ -309,7 +310,7 @@ interface ExerciseDao {
             equipment = equipment,
             difficulty = difficulty,
             excludeId = excludeId,
-            limit = limit * 2 // Get more results to filter from
+            limit = limit * 3 // Get more results to ensure we can meet the limit after filtering
         )
         
         // Apply additional filtering to exclude exercises with conflicting muscle part names
@@ -326,8 +327,9 @@ interface ExerciseDao {
         val converter = Converter()
         val partsList = converter.fromString(muscleParts)
         
-        // Pad the list to 5 elements with empty strings
-        val paddedParts = partsList + List(5 - partsList.size) { "" }
+        // Safely pad the list to exactly 5 elements with empty strings
+        // Take first 5 elements if more than 5, pad with empty strings if less than 5
+        val paddedParts = (partsList.take(5) + List(5.coerceAtLeast(0)) { "" }).take(5)
         
         val allExercises = getSimilarExercises(
             muscleGroup = muscleGroup,
@@ -338,7 +340,7 @@ interface ExerciseDao {
             musclePart4 = paddedParts[3],
             musclePart5 = paddedParts[4],
             excludeId = excludeId,
-            limit = limit * 2 // Get more results to filter from
+            limit = limit * 3 // Get more results to ensure we can meet the limit after filtering
         )
         
         // Apply additional filtering to exclude exercises with conflicting muscle part names

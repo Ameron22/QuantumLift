@@ -158,37 +158,59 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
     private fun calculateMuscleStress(session: SessionEntityExercise): Float {
         val k = 0.15f // Increased sensitivity constant
         
-        // Calculate average load and volume
-        val avgLoad = session.weight.filterNotNull().average().toFloat()
-        val totalVolume = session.repsOrTime.filterNotNull().sum()
+        // Safely calculate average load and volume with validation
+        val validWeights = session.weight.filterNotNull()
+        val validReps = session.repsOrTime.filterNotNull()
         
-        // Check if user provided detailed data (all values are non-zero)
-        val hasDetailedData = session.eccentricFactor > 0f && 
-                            session.noveltyFactor > 0 && 
-                            session.adaptationLevel > 0 && 
-                            session.rpe > 0 && 
-                            session.subjectiveSoreness > 0
+        // Handle empty weight list to prevent crash
+        if (validWeights.isEmpty() || validReps.isEmpty()) {
+            Log.w("HistoryViewModel", "Empty weights or reps for session ${session.sessionId}, returning minimal stress")
+            return 0.1f // Return minimal stress for sessions without weight/rep data
+        }
+        
+        val avgLoad = validWeights.average().toFloat()
+        val totalVolume = validReps.sum()
+        
+        // Validate that we have meaningful data
+        if (avgLoad <= 0f || totalVolume <= 0) {
+            Log.w("HistoryViewModel", "Invalid load or volume data for session ${session.sessionId}, returning minimal stress")
+            return 0.1f
+        }
+        
+        // Check if user provided detailed data (all values are non-zero and within valid ranges)
+        val hasDetailedData = session.eccentricFactor > 0f && session.eccentricFactor <= 3.0f &&
+                            session.noveltyFactor > 0 && session.noveltyFactor <= 10 &&
+                            session.adaptationLevel > 0 && session.adaptationLevel <= 10 &&
+                            session.rpe > 0 && session.rpe <= 10 &&
+                            session.subjectiveSoreness > 0 && session.subjectiveSoreness <= 10
 
         return if (hasDetailedData) {
-            // Complete formula with all factors
+            // Complete formula with all factors and validation
             val baseImpact = avgLoad * totalVolume
-            val eccentricMultiplier = 1 + (session.eccentricFactor - 1.0f) / 2.0f // More sensitive to eccentric factor
-            val noveltyMultiplier = 1 + (session.noveltyFactor - 5.0f) / 10.0f // More sensitive to novelty
-            val adaptationMultiplier = 1 - (session.adaptationLevel - 5.0f) / 10.0f // More sensitive to adaptation
-            val rpeMultiplier = 1 + (session.rpe - 5.0f) / 10.0f // More sensitive to RPE
-            val sorenessMultiplier = 1 + (session.subjectiveSoreness - 5.0f) / 10.0f // More sensitive to soreness
+            
+            // Validate and clamp multipliers to reasonable ranges
+            val eccentricMultiplier = (1 + (session.eccentricFactor - 1.0f) / 2.0f).coerceIn(0.5f, 2.0f)
+            val noveltyMultiplier = (1 + (session.noveltyFactor - 5.0f) / 10.0f).coerceIn(0.5f, 1.5f)
+            val adaptationMultiplier = (1 - (session.adaptationLevel - 5.0f) / 10.0f).coerceIn(0.5f, 1.5f)
+            val rpeMultiplier = (1 + (session.rpe - 5.0f) / 10.0f).coerceIn(0.5f, 1.5f)
+            val sorenessMultiplier = (1 + (session.subjectiveSoreness - 5.0f) / 10.0f).coerceIn(0.5f, 1.5f)
             val recoveryMultiplier = calculateRecoveryMultiplier(session.recoveryFactors)
             
-            k * baseImpact * 
-            eccentricMultiplier * 
-            noveltyMultiplier * 
-            adaptationMultiplier * 
-            rpeMultiplier * 
-            sorenessMultiplier * 
-            recoveryMultiplier
+            val finalStress = k * baseImpact * 
+                eccentricMultiplier * 
+                noveltyMultiplier * 
+                adaptationMultiplier * 
+                rpeMultiplier * 
+                sorenessMultiplier * 
+                recoveryMultiplier
+            
+            // Clamp final result to reasonable range to prevent extreme values
+            finalStress.coerceIn(0.1f, 1000f)
         } else {
             // Simplified formula with increased sensitivity
-            k * avgLoad * totalVolume * 1.2f // Add 20% to account for missing detailed data
+            val finalStress = k * avgLoad * totalVolume * 1.2f // Add 20% to account for missing detailed data
+            // Clamp final result to reasonable range
+            finalStress.coerceIn(0.1f, 1000f)
         }
     }
 
@@ -200,41 +222,41 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
     private fun calculateRecoveryMultiplier(factors: RecoveryFactors?): Float {
         if (factors == null) return 1.0f
 
-        // Check if any recovery factors are provided
-        val hasRecoveryData = factors.sleepQuality > 0 || 
-                             factors.proteinIntake > 0 || 
-                             factors.hydration > 0 || 
-                             factors.stressLevel > 0
+        // Check if any recovery factors are provided and validate ranges
+        val hasRecoveryData = (factors.sleepQuality > 0 && factors.sleepQuality <= 10) || 
+                             (factors.proteinIntake > 0 && factors.proteinIntake <= 500) || 
+                             (factors.hydration > 0 && factors.hydration <= 10) || 
+                             (factors.stressLevel > 0 && factors.stressLevel <= 10)
 
         if (!hasRecoveryData) return 1.0f
 
-        // Calculate individual multipliers for each factor
-        val sleepMultiplier = if (factors.sleepQuality > 0) {
-            1.0f + (factors.sleepQuality - 5.0f) / 20.0f
+        // Calculate individual multipliers for each factor with validation
+        val sleepMultiplier = if (factors.sleepQuality > 0 && factors.sleepQuality <= 10) {
+            (1.0f + (factors.sleepQuality - 5.0f) / 20.0f).coerceIn(0.5f, 1.5f)
         } else 1.0f
 
-        val proteinMultiplier = if (factors.proteinIntake > 0) {
-            1.0f + (factors.proteinIntake - 100.0f) / 200.0f
+        val proteinMultiplier = if (factors.proteinIntake > 0 && factors.proteinIntake <= 500) {
+            (1.0f + (factors.proteinIntake - 100.0f) / 200.0f).coerceIn(0.5f, 1.5f)
         } else 1.0f
 
-        val hydrationMultiplier = if (factors.hydration > 0) {
-            1.0f + (factors.hydration - 5.0f) / 20.0f
+        val hydrationMultiplier = if (factors.hydration > 0 && factors.hydration <= 10) {
+            (1.0f + (factors.hydration - 5.0f) / 20.0f).coerceIn(0.5f, 1.5f)
         } else 1.0f
 
-        val stressMultiplier = if (factors.stressLevel > 0) {
-            1.0f - (factors.stressLevel - 5.0f) / 20.0f
+        val stressMultiplier = if (factors.stressLevel > 0 && factors.stressLevel <= 10) {
+            (1.0f - (factors.stressLevel - 5.0f) / 20.0f).coerceIn(0.5f, 1.5f)
         } else 1.0f
 
         // Calculate the average of all provided factors
         val providedFactors = listOfNotNull(
-            if (factors.sleepQuality > 0) sleepMultiplier else null,
-            if (factors.proteinIntake > 0) proteinMultiplier else null,
-            if (factors.hydration > 0) hydrationMultiplier else null,
-            if (factors.stressLevel > 0) stressMultiplier else null
+            if (factors.sleepQuality > 0 && factors.sleepQuality <= 10) sleepMultiplier else null,
+            if (factors.proteinIntake > 0 && factors.proteinIntake <= 500) proteinMultiplier else null,
+            if (factors.hydration > 0 && factors.hydration <= 10) hydrationMultiplier else null,
+            if (factors.stressLevel > 0 && factors.stressLevel <= 10) stressMultiplier else null
         )
 
         return if (providedFactors.isNotEmpty()) {
-            providedFactors.average().toFloat()
+            providedFactors.average().toFloat().coerceIn(0.5f, 1.5f)
         } else {
             1.0f
         }
@@ -254,9 +276,17 @@ class HistoryViewModel(private val dao: ExerciseDao) : ViewModel() {
                 (currentTime - it.sessionId) < (7 * 24 * 60 * 60 * 1000) // Last 7 days
             }
 
-            // Calculate average RPE and subjective soreness
-            val avgRPE = recentExercises.map { it.rpe }.average().toInt()
-            val avgSubjectiveSoreness = recentExercises.map { it.subjectiveSoreness }.average().toInt()
+            // Calculate average RPE and subjective soreness with validation
+            val avgRPE = if (recentExercises.isNotEmpty()) {
+                recentExercises.map { it.rpe }.average().toInt()
+            } else {
+                5 // Default neutral value
+            }
+            val avgSubjectiveSoreness = if (recentExercises.isNotEmpty()) {
+                recentExercises.map { it.subjectiveSoreness }.average().toInt()
+            } else {
+                5 // Default neutral value
+            }
 
             sorenessMap[muscle] = MuscleSorenessData(
                 sorenessLevel = determineSorenessLevel(
