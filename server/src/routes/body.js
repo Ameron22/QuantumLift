@@ -618,7 +618,7 @@ router.post('/sync', authenticateToken, async (req, res) => {
 
           let result;
           if (id) {
-            // Update existing
+            // Try to update existing first
             result = await query(
               `UPDATE body_measurements 
                SET measurement_type = $2, value = $3, unit = $4, updated_at = CURRENT_TIMESTAMP
@@ -626,6 +626,18 @@ router.post('/sync', authenticateToken, async (req, res) => {
                RETURNING id, measurement_type, value, unit, created_at, updated_at`,
               [id, measurementType, value, unit, parametersId]
             );
+            
+            // If no rows were updated, the measurement doesn't exist on server yet - INSERT it
+            if (result.rows.length === 0) {
+              console.log(`[BODY_SYNC] 📝 Measurement ${id} not found on server, creating new record`);
+              result = await query(
+                `INSERT INTO body_measurements 
+                 (parameters_id, measurement_type, value, unit) 
+                 VALUES ($1, $2, $3, $4)
+                 RETURNING id, measurement_type, value, unit, created_at, updated_at`,
+                [parametersId, measurementType, value, unit]
+              );
+            }
           } else {
             // Create new
             result = await query(
