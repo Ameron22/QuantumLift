@@ -316,16 +316,18 @@ class MainActivity : ComponentActivity(), LifecycleObserver {
                                                                  composable(Screen.Feed.route) {
                                      FeedScreen(navController, authViewModel)
                                  }
-                                                                 composable(Screen.AddMeasurement.route) {
-                                     val database = AppDatabase.getDatabase(applicationContext)
-                                     val physicalParametersDao = database.physicalParametersDao()
-                                     val physicalParametersViewModel =
-                                         PhysicalParametersViewModel(physicalParametersDao)
-                                     AddMeasurementScreen(
-                                         navController,
-                                         physicalParametersViewModel
-                                     )
-                                 }
+                                composable(Screen.AddMeasurement.route) {
+                                    val database = AppDatabase.getDatabase(applicationContext)
+                                    val physicalParametersDao = database.physicalParametersDao()
+                                    val physicalParametersViewModel =
+                                        PhysicalParametersViewModel(physicalParametersDao, applicationContext)
+                                    val userId = authViewModel.authState.value.user?.id ?: "current_user"
+                                    AddMeasurementScreen(
+                                        navController,
+                                        physicalParametersViewModel,
+                                        userId
+                                    )
+                                }
                                                                  composable(
                                      Screen.Routes.WORKOUT_DETAILS,
                                      arguments = listOf(navArgument("workoutId") {

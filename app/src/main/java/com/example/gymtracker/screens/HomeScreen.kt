@@ -95,13 +95,17 @@ fun HomeScreen(
     var selectedTabIndex by remember { mutableStateOf(0) }
     val tabs = listOf("Welcome", "Body")
 
+    // Get authenticated user ID
+    val authState by authViewModel.authState.collectAsState()
+    val userId = authState.user?.id ?: "current_user" // Fallback to "current_user" if not authenticated
+
     // Load physical parameters when Body tab is selected
-    LaunchedEffect(selectedTabIndex) {
+    LaunchedEffect(selectedTabIndex, userId) {
         if (selectedTabIndex == 1) {
-            Log.d("HomeScreen", "Body tab selected, loading physical parameters")
+            Log.d("HomeScreen", "Body tab selected, loading physical parameters for userId: $userId")
             physicalParametersViewModel.debugCheckTable() // Debug table existence
-            physicalParametersViewModel.loadPhysicalParameters("current_user")
-            physicalParametersViewModel.loadAllBodyMeasurements("current_user")
+            physicalParametersViewModel.loadPhysicalParameters(userId)
+            physicalParametersViewModel.loadAllBodyMeasurements(userId)
         }
     }
 
@@ -149,7 +153,7 @@ fun HomeScreen(
             }
             1 -> {
                 Log.d("HomeScreen", "Rendering BodyScreen")
-                BodyScreen(navController = navController, viewModel = physicalParametersViewModel, paddingValues = paddingValues)
+                BodyScreen(navController = navController, viewModel = physicalParametersViewModel, paddingValues = paddingValues, userId = userId)
             }
         }
     }
@@ -177,6 +181,9 @@ fun WelcomeTabWithMuscles(navController: NavController, selectedTabIndex: Int, p
             isLoading = false
         }
     }
+    
+    // Get authenticated user ID from AuthViewModel (passed from HomeScreen)
+    // Note: This is now available from HomeScreen's context
     
     // Create HistoryViewModel instance for muscle soreness data
     val dao = remember { db.exerciseDao() }
