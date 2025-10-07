@@ -297,6 +297,13 @@ class PhysicalParametersViewModel(
             try {
                 Log.d("PhysicalParametersViewModel", "Starting sync from cloud for userId: $userId")
                 
+                // Clear all local data for this user before syncing from cloud
+                // This ensures cloud data is the source of truth
+                Log.d("PhysicalParametersViewModel", "Clearing local data for user: $userId")
+                physicalParametersDao.deleteAllBodyMeasurementsForUser(userId)
+                physicalParametersDao.deleteAllPhysicalParametersForUser(userId)
+                Log.d("PhysicalParametersViewModel", "Local data cleared successfully")
+                
                 // Sync physical parameters from cloud
                 val parametersResult = repository.getPhysicalParameters()
                 if (parametersResult.isSuccess) {

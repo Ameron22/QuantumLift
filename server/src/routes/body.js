@@ -509,20 +509,37 @@ router.post('/sync', authenticateToken, async (req, res) => {
           );
 
           if (existingCheck.rows.length > 0) {
-            // Update existing record - use the NEWER timestamp
+            // Update existing record - ONLY if the new timestamp is newer
             const existingId = existingCheck.rows[0].id;
-            result = await query(
-              `UPDATE physical_parameters 
-               SET date = CASE 
-                 WHEN date < $2 THEN $2  -- Use newer timestamp
-                 ELSE date  -- Keep existing if it's newer
-               END,
-               weight = $3, height = $4, bmi = $5, 
-               body_fat_percentage = $6, muscle_mass = $7, notes = $8, updated_at = CURRENT_TIMESTAMP
-               WHERE id = $1
-               RETURNING id, date, weight, height, bmi, body_fat_percentage, muscle_mass, notes, created_at, updated_at`,
-              [existingId, dateObj, param.weight, param.height, param.bmi, param.bodyFatPercentage, param.muscleMass, param.notes || '']
+            
+            // First, get the existing record to compare timestamps
+            const existingRecord = await query(
+              `SELECT date FROM physical_parameters WHERE id = $1`,
+              [existingId]
             );
+            
+            const existingDate = existingRecord.rows[0].date;
+            
+            // Only update if the new data is newer
+            if (dateObj > existingDate) {
+              console.log(`[BODY_SYNC] 📅 Updating with newer data: ${dateObj} > ${existingDate}`);
+              result = await query(
+                `UPDATE physical_parameters 
+                 SET date = $2, weight = $3, height = $4, bmi = $5, 
+                 body_fat_percentage = $6, muscle_mass = $7, notes = $8, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = $1
+                 RETURNING id, date, weight, height, bmi, body_fat_percentage, muscle_mass, notes, created_at, updated_at`,
+                [existingId, dateObj, param.weight, param.height, param.bmi, param.bodyFatPercentage, param.muscleMass, param.notes || '']
+              );
+            } else {
+              console.log(`[BODY_SYNC] ⏭️ Skipping update - existing data is newer: ${existingDate} >= ${dateObj}`);
+              // Return existing record without updating
+              result = await query(
+                `SELECT id, date, weight, height, bmi, body_fat_percentage, muscle_mass, notes, created_at, updated_at
+                 FROM physical_parameters WHERE id = $1`,
+                [existingId]
+              );
+            }
           } else {
             // Insert new record
             result = await query(
