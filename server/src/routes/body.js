@@ -73,22 +73,42 @@ function validateBodyMeasurement(data) {
 router.get('/parameters', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
-    const { limit = 50, offset = 0 } = req.query;
+    const { limit = 50, offset = 0, since } = req.query;
 
     console.log('[BODY_PARAMETERS] 📊 Fetching physical parameters:', {
       userId,
       limit,
-      offset
+      offset,
+      since: since ? new Date(parseInt(since)) : null
     });
 
-    const result = await query(
-      `SELECT id, date, weight, height, bmi, body_fat_percentage, muscle_mass, notes, created_at, updated_at
-       FROM physical_parameters 
-       WHERE user_id = $1 
-       ORDER BY date DESC 
-       LIMIT $2 OFFSET $3`,
-      [userId, limit, offset]
-    );
+    // Delta sync: if 'since' timestamp is provided, only return data updated after that time
+    let result;
+    if (since) {
+      const sinceDate = new Date(parseInt(since));
+      console.log('[BODY_PARAMETERS] 🔄 Delta sync requested - fetching data since:', sinceDate);
+      
+      result = await query(
+        `SELECT id, date, weight, height, bmi, body_fat_percentage, muscle_mass, notes, created_at, updated_at
+         FROM physical_parameters 
+         WHERE user_id = $1 AND updated_at > $2
+         ORDER BY date DESC 
+         LIMIT $3 OFFSET $4`,
+        [userId, sinceDate, limit, offset]
+      );
+    } else {
+      // Full sync: return all data
+      console.log('[BODY_PARAMETERS] 📥 Full sync requested - fetching all data');
+      
+      result = await query(
+        `SELECT id, date, weight, height, bmi, body_fat_percentage, muscle_mass, notes, created_at, updated_at
+         FROM physical_parameters 
+         WHERE user_id = $1 
+         ORDER BY date DESC 
+         LIMIT $2 OFFSET $3`,
+        [userId, limit, offset]
+      );
+    }
 
     const parameters = result.rows.map(row => ({
       id: row.id,

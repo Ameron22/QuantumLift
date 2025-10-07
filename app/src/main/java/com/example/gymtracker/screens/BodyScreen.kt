@@ -86,13 +86,21 @@ fun BodyScreen(
     var selectedTabIndex by remember { mutableStateOf(0) }
     val tabs = listOf("Overview & History", "Measurements")
 
+    // Auto-sync from cloud when entering the Body tab
+    LaunchedEffect(Unit) {
+        if (viewModel.isCloudSyncAvailable()) {
+            Log.d("BodyScreen", "Auto-requesting updates from cloud for userId: $userId")
+            viewModel.syncFromCloud(userId)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(paddingValues)
             .padding(16.dp)
     ) {
-        // Header with sync buttons
+        // Header with sync indicator
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -106,43 +114,14 @@ fun BodyScreen(
                 fontWeight = FontWeight.Bold
             )
             
-            // Sync buttons (only show if cloud sync is available)
-            if (viewModel.isCloudSyncAvailable()) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Sync from cloud button
-                    IconButton(
-                        onClick = { viewModel.syncFromCloud(userId) },
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CloudDownload,
-                            contentDescription = "Sync from cloud",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    
-                    // Sync to cloud button
-                    IconButton(
-                        onClick = { viewModel.syncToCloud(userId) },
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CloudUpload,
-                            contentDescription = "Sync to cloud",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
         }
         
         // Sync status and error display
         val isSyncing by viewModel.isSyncing.collectAsState()
         val syncError by viewModel.syncError.collectAsState()
         
-        if (isSyncing) {
+        // Sync indicator (only show if cloud sync is available)
+        if (viewModel.isCloudSyncAvailable() && isSyncing) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -151,7 +130,8 @@ fun BodyScreen(
             ) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(16.dp),
-                    strokeWidth = 2.dp
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
