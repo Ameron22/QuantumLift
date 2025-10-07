@@ -494,7 +494,8 @@ class PhysicalParametersViewModel(
             val cloudParameters = parametersResult.getOrNull() ?: emptyList()
             
             if (cloudParameters.isEmpty()) {
-                Log.d("PhysicalParametersViewModel", "✨ No new data since last sync - everything up to date!")
+                Log.d("PhysicalParametersViewModel", "✨ No new/updated parameters since last sync - everything up to date!")
+                // Note: Body measurements are auto-synced individually when added, so no need to check here
                 loadPhysicalParameters(userId)
                 loadAllBodyMeasurements(userId)
                 return
