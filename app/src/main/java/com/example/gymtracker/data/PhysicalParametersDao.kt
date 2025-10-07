@@ -58,6 +58,14 @@ interface PhysicalParametersDao {
 
     @Query("SELECT AVG(weight) FROM physical_parameters WHERE userId = :userId AND weight IS NOT NULL")
     suspend fun getAverageWeight(userId: String): Float?
+    
+    // Delete all physical parameters for a user (for cloud sync replacement)
+    @Query("DELETE FROM physical_parameters WHERE userId = :userId")
+    suspend fun deleteAllPhysicalParametersForUser(userId: String)
+    
+    // Delete all body measurements for a user (cascade will happen via foreign key, but this is explicit)
+    @Query("DELETE FROM body_measurements WHERE parametersId IN (SELECT id FROM physical_parameters WHERE userId = :userId)")
+    suspend fun deleteAllBodyMeasurementsForUser(userId: String)
 }
 
 // Data class to combine physical parameters with body measurements
