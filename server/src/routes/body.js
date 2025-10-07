@@ -509,12 +509,16 @@ router.post('/sync', authenticateToken, async (req, res) => {
           );
 
           if (existingCheck.rows.length > 0) {
-            // Update existing record
+            // Update existing record - use the NEWER timestamp
             const existingId = existingCheck.rows[0].id;
             result = await query(
               `UPDATE physical_parameters 
-               SET date = $2, weight = $3, height = $4, bmi = $5, 
-                   body_fat_percentage = $6, muscle_mass = $7, notes = $8, updated_at = CURRENT_TIMESTAMP
+               SET date = CASE 
+                 WHEN date < $2 THEN $2  -- Use newer timestamp
+                 ELSE date  -- Keep existing if it's newer
+               END,
+               weight = $3, height = $4, bmi = $5, 
+               body_fat_percentage = $6, muscle_mass = $7, notes = $8, updated_at = CURRENT_TIMESTAMP
                WHERE id = $1
                RETURNING id, date, weight, height, bmi, body_fat_percentage, muscle_mass, notes, created_at, updated_at`,
               [existingId, dateObj, param.weight, param.height, param.bmi, param.bodyFatPercentage, param.muscleMass, param.notes || '']

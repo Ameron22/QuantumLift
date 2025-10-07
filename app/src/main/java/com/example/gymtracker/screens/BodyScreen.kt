@@ -80,7 +80,8 @@ object BMIColors {
 fun BodyScreen(
     navController: NavController,
     viewModel: PhysicalParametersViewModel,
-    paddingValues: PaddingValues
+    paddingValues: PaddingValues,
+    userId: String = "current_user"
 ) {
     var selectedTabIndex by remember { mutableStateOf(0) }
     val tabs = listOf("Overview & History", "Measurements")
@@ -112,7 +113,7 @@ fun BodyScreen(
                 ) {
                     // Sync from cloud button
                     IconButton(
-                        onClick = { viewModel.syncFromCloud("current_user") },
+                        onClick = { viewModel.syncFromCloud(userId) },
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
@@ -124,7 +125,7 @@ fun BodyScreen(
                     
                     // Sync to cloud button
                     IconButton(
-                        onClick = { viewModel.syncToCloud("current_user") },
+                        onClick = { viewModel.syncToCloud(userId) },
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
@@ -207,14 +208,14 @@ fun BodyScreen(
 
         // Tab Content
         when (selectedTabIndex) {
-            0 -> OverviewAndHistoryTab(navController, viewModel, paddingValues)
-            1 -> MeasurementsTab(viewModel, paddingValues)
+            0 -> OverviewAndHistoryTab(navController, viewModel, paddingValues, userId)
+            1 -> MeasurementsTab(viewModel, paddingValues, userId)
         }
     }
 }
 
 @Composable
-fun OverviewAndHistoryTab(navController: NavController, viewModel: PhysicalParametersViewModel, paddingValues: PaddingValues) {
+fun OverviewAndHistoryTab(navController: NavController, viewModel: PhysicalParametersViewModel, paddingValues: PaddingValues, userId: String) {
     val latestParameters by viewModel.latestParameters.collectAsState()
     val physicalParameters by viewModel.physicalParameters.collectAsState()
     var showWeightDialog by remember { mutableStateOf(false) }
@@ -461,7 +462,7 @@ fun OverviewAndHistoryTab(navController: NavController, viewModel: PhysicalParam
                 Log.d("BodyScreen", "Weight confirmed: $newValue")
                 viewModel.viewModelScope.launch {
                     viewModel.addPhysicalParameters(
-                        userId = "current_user",
+                        userId = userId,
                         weight = newValue,
                         height = latestParameters?.height,
                         bodyFatPercentage = latestParameters?.bodyFatPercentage
@@ -485,7 +486,7 @@ fun OverviewAndHistoryTab(navController: NavController, viewModel: PhysicalParam
                 Log.d("BodyScreen", "Height confirmed: $newHeight")
                 viewModel.viewModelScope.launch {
                     viewModel.addPhysicalParameters(
-                        userId = "current_user",
+                        userId = userId,
                         weight = latestParameters?.weight,
                         height = newHeight,
                         bodyFatPercentage = latestParameters?.bodyFatPercentage
@@ -509,7 +510,7 @@ fun OverviewAndHistoryTab(navController: NavController, viewModel: PhysicalParam
                 Log.d("BodyScreen", "Body fat confirmed: $newValue")
                 viewModel.viewModelScope.launch {
                     viewModel.addPhysicalParameters(
-                        userId = "current_user",
+                        userId = userId,
                         weight = latestParameters?.weight,
                         height = latestParameters?.height,
                         bodyFatPercentage = newValue
@@ -522,7 +523,7 @@ fun OverviewAndHistoryTab(navController: NavController, viewModel: PhysicalParam
 }
 
 @Composable
-fun MeasurementsTab(viewModel: PhysicalParametersViewModel, paddingValues: PaddingValues) {
+fun MeasurementsTab(viewModel: PhysicalParametersViewModel, paddingValues: PaddingValues, userId: String) {
     val latestParameters by viewModel.latestParameters.collectAsState()
     val bodyMeasurements by viewModel.bodyMeasurements.collectAsState()
     
@@ -552,7 +553,8 @@ fun MeasurementsTab(viewModel: PhysicalParametersViewModel, paddingValues: Paddi
             ExpandableMeasurementCard(
                 measurementType = measurementType,
                 bodyMeasurements = bodyMeasurements,
-                viewModel = viewModel
+                viewModel = viewModel,
+                userId = userId
             )
         }
     }
@@ -562,7 +564,8 @@ fun MeasurementsTab(viewModel: PhysicalParametersViewModel, paddingValues: Paddi
 fun ExpandableMeasurementCard(
     measurementType: String,
     bodyMeasurements: List<BodyMeasurement>,
-    viewModel: PhysicalParametersViewModel
+    viewModel: PhysicalParametersViewModel,
+    userId: String
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     var showDialog by remember { mutableStateOf(false) }
@@ -645,7 +648,7 @@ fun ExpandableMeasurementCard(
                 
                 if (measurementsForType.isNotEmpty()) {
                     // Chart
-                    val allMeasurementsWithDates = viewModel.getBodyMeasurementsWithDates("current_user")
+                    val allMeasurementsWithDates = viewModel.getBodyMeasurementsWithDates(userId)
                     val chartData = allMeasurementsWithDates.filter { it.type == measurementType }
                     
                     Log.d("BodyScreen", "Chart data for $measurementType: $chartData")
@@ -713,7 +716,8 @@ fun ExpandableMeasurementCard(
                     viewModel.addBodyMeasurement(
                         parametersId = latestParams.id,
                         measurementType = measurementType,
-                        value = newValue
+                        value = newValue,
+                        userId = userId
                     )
                 } else {
                     Log.e("BodyScreen", "No latest parameters found, cannot add body measurement")

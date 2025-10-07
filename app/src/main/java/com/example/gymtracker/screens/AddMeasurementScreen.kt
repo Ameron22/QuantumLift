@@ -23,7 +23,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun AddMeasurementScreen(
     navController: NavController,
-    viewModel: PhysicalParametersViewModel
+    viewModel: PhysicalParametersViewModel,
+    userId: String = "current_user"
 ) {
     val scope = rememberCoroutineScope()
     var weight by remember { mutableStateOf("") }
@@ -160,8 +161,6 @@ fun AddMeasurementScreen(
             onClick = {
                 Log.d("AddMeasurementScreen", "Save button clicked")
                 Log.d("AddMeasurementScreen", "Form data - Weight: '$weight', Height: '$height', BodyFat: '$bodyFatPercentage', MuscleMass: '$muscleMass'")
-                
-                val userId = "current_user" // This should come from auth
                 Log.d("AddMeasurementScreen", "Using userId: $userId")
                 
                 // Validate input
