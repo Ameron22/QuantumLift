@@ -660,6 +660,15 @@ router.post('/sync', authenticateToken, async (req, res) => {
               createdAt: row.created_at.getTime(),
               updatedAt: row.updated_at.getTime()
             });
+            
+            // Touch the parent physical_parameters record to trigger delta sync on other devices
+            await query(
+              `UPDATE physical_parameters 
+               SET updated_at = CURRENT_TIMESTAMP 
+               WHERE id = $1`,
+              [parametersId]
+            );
+            console.log(`[BODY_SYNC] 🔔 Touched parent physical_parameters ${parametersId} to trigger delta sync`);
           }
         } catch (error) {
           syncResults.errors.push(`Failed to sync measurement: ${error.message}`);
